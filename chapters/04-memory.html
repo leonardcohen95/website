@@ -78,16 +78,19 @@ load_dotenv()                      # 加载 .env 文件
 dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")  # 设置 API Key
 
 
-class Agent:  # 定义一个 Agent 类，相当于一张"设计图纸"
-    # __init__ 是"出厂设置"函数：每次用这张图纸造一个新 Agent 时，自动执行一次
+class Agent:  # 定义一个 Agent 类，相当于一张"空白表格模板"
+    # __init__ 是"出厂设置"函数：每次用这张模板复印一张新表格时，自动执行一次
     # 前面和后面的双下划线 __ 是 Python 规定的特殊写法，表示这是内置方法
     def __init__(self, system_prompt="你是一个乐于助人的助手。"):
-        # self 就是"正在被制造的这个新 Agent 自己"
-        # self.messages 是给这个 Agent 装一个"记忆芯片"（消息列表），初始放入一条 system 消息
+        # self = "这张新复印出来的表格自己"（也就是刚创建的这个 Agent）
+        # self.messages = 在这张表格的"记忆"栏里填上内容
+        # 这里给新 Agent 装一个记忆列表，初始放入一条 system 消息
         self.messages = [{"role": "system", "content": system_prompt}]
 
     # chat 方法：接收用户输入，返回模型回答
+    # 注意第一个参数必须是 self，Python 会自动把"调用者"传进来
     def chat(self, user_input: str) -> str:
+        # self.messages.append 意思是"往我自己的记忆列表里加一条"
         # 1. 把用户输入加入记忆（messages 列表末尾追加一条 user 消息）
         self.messages.append({"role": "user", "content": user_input})
 
@@ -99,13 +102,13 @@ class Agent:  # 定义一个 Agent 类，相当于一张"设计图纸"
         )
         answer = response.output.choices[0].message.content  # 取出回答
 
-        # 3. 把模型回答也加入记忆，这样下一轮对话模型能看到自己说过的话
+        # 3. 把模型回答也加入我自己的记忆，这样下一轮对话模型能看到自己说过的话
         self.messages.append({"role": "assistant", "content": answer})
         return answer
 
 
 if __name__ == "__main__":
-    agent = Agent()  # 创建一个 Agent 实例
+    agent = Agent()  # 用 Agent 模板复印一张新表格（创建一个实例），此时 __init__ 自动运行
     print(agent.chat("我叫小明，今年 10 岁。"))  # 第一轮对话
     print(agent.chat("我叫什么名字？"))  # 第二轮，模型能记得上一轮的「小明」</code></pre>
 
@@ -167,30 +170,30 @@ def save_memory(data: dict):  # 把字典保存到文件
 
 
 class Agent:
-    def __init__(self):  # 出厂设置：造一个新 Agent 时自动运行
-        # 装短期记忆：消息列表，初始放一条 system 消息
+    def __init__(self):  # 出厂设置：每复印一张新表格时自动运行
+        # 装短期记忆：在这张表格的"记忆"栏填上消息列表，初始放一条 system 消息
         self.messages = [{"role": "system", "content": "你是一个乐于助人的助手。"}]
         # 装长期记忆：从 memory.json 文件读取之前保存的信息（相当于读取存档）
         self.long_term = load_memory()
 
-    def chat(self, user_input: str) -> str:
+    def chat(self, user_input: str) -> str:  # self = 调用这个方法的那个 Agent 自己
         # 把长期记忆拼接到 system 提示中，让模型知道用户的背景信息
-        if self.long_term:  # 如果长期记忆不为空
+        if self.long_term:  # 如果我自己的长期记忆不为空
             context = "已知用户信息：" + json.dumps(self.long_term, ensure_ascii=False)  # 把字典转成字符串
-            self.messages[0]["content"] = "你是一个乐于助人的助手。" + context  # 更新 system 消息
+            self.messages[0]["content"] = "你是一个乐于助人的助手。" + context  # 更新我自己的 system 消息
 
-        self.messages.append({"role": "user", "content": user_input})  # 加入用户输入
+        self.messages.append({"role": "user", "content": user_input})  # 往我自己的记忆里加用户输入
         response = dashscope.Generation.call(
             model="qwen-turbo", messages=self.messages, result_format="message"
         )
         answer = response.output.choices[0].message.content
-        self.messages.append({"role": "assistant", "content": answer})  # 加入模型回答
+        self.messages.append({"role": "assistant", "content": answer})  # 往我自己的记忆里加模型回答
 
-        # 如果用户提到了姓名，提取并保存到长期记忆
+        # 如果用户提到了姓名，提取并保存到我自己的长期记忆
         if "我叫" in user_input:  # 判断字符串中是否包含"我叫"
             # split("我叫")[-1] 取"我叫"后面的部分，strip 去掉句末标点
             name = user_input.split("我叫")[-1].strip("。.！!")
-            self.long_term["name"] = name  # 存入长期记忆字典
+            self.long_term["name"] = name  # 存入我自己的长期记忆字典
             save_memory(self.long_term)  # 写入文件，持久化保存
 
         return answer</code></pre>
