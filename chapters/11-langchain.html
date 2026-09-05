@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第11章 LangChain 入门 | AI Agent 搭建教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="11-langchain">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 11 章</span>
+          <span class="meta-tag">框架实战</span>
+          <span class="meta-tag">约 30 分钟</span>
+        </div>
+        <h1>LangChain 入门：用框架快速搭 Agent</h1>
+        <p>
+          前面我们手写了记忆、工具调用、ReAct，理解了原理。但实际项目中手写容易出 bug、
+          重复造轮子。这一章开始我们学习主流框架，先从最流行的
+          <strong>LangChain</strong> 入手，看看它如何把我们手写的逻辑封装成一行行简洁的调用。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 LangChain 是什么、解决了什么问题</li>
+          <li>掌握 LangChain 的核心组件：Model、Prompt、Chain、Tool、Agent</li>
+          <li>学会用 LangChain 调用大模型和构造 Prompt 模板</li>
+          <li>用 LangChain 快速实现一个带工具的 Agent</li>
+          <li>了解 LCEL（LangChain 表达式语言）</li>
+        </ul>
+
+        <h2>1. 什么是 LangChain</h2>
+        <p>
+          <strong>LangChain</strong> 是一个开源的 LLM 应用开发框架。
+          它把「调用模型、管理提示词、串联多步骤、接入工具、对话记忆」等常见能力
+          封装成标准化组件，让你不用每次都从零写。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">大白话理解</div>
+          <p>
+            手写 Agent 就像自己用零件拼一台电脑；LangChain 像品牌整机，
+            它把内存、硬盘、CPU 都按标准接口装好了，你只需接上显示器就能用。
+            当然，你也可以随时打开机箱换零件。
+          </p>
+        </div>
+
+        <p>安装 LangChain（同时装 OpenAI 兼容客户端，用来连通义千问）：</p>
+        <pre><code>pip install langchain langchain-openai</code></pre>
+
+        <h2>2. LangChain 的核心组件</h2>
+        <div class="term-card">
+          <div class="term-name">Model（模型）</div>
+          <p>封装大模型调用。<code>ChatOpenAI</code> 是最常用的类，通义千问兼容 OpenAI 接口，可以直接用它。</p>
+        </div>
+        <div class="term-card">
+          <div class="term-name">Prompt Template（提示词模板）</div>
+          <p>带占位符的提示词，如「你是一个{role}，请回答{question}」，运行时填入变量。</p>
+        </div>
+        <div class="term-card">
+          <div class="term-name">Chain（链）</div>
+          <p>把多个步骤串起来，比如「模板 → 模型 → 输出解析器」就是一条链。</p>
+        </div>
+        <div class="term-card">
+          <div class="term-name">Tool &amp; Agent（工具与智能体）</div>
+          <p>Tool 是可调用的外部函数，Agent 能自主决定调用哪些 Tool 来完成任务。</p>
+        </div>
+        <div class="term-card">
+          <div class="term-name">Memory（记忆）</div>
+          <p>管理对话历史，让多轮对话保持上下文。</p>
+        </div>
+
+        <h2>3. 用 LangChain 调用模型</h2>
+        <p>
+          通义千问兼容 OpenAI 的接口格式，我们用 <code>ChatOpenAI</code> 指向通义的地址即可。
+          创建 <code>langchain_demo.py</code>：
+        </p>
+        <pre><code>import os
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+load_dotenv()
+
+# 通义千问兼容 OpenAI 接口，所以用 ChatOpenAI，改 base_url 即可
+model = ChatOpenAI(
+    model="qwen-turbo",
+    api_key=os.getenv("DASHSCOPE_API_KEY"),
+    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",  # 通义的兼容地址
+)
+
+# 定义一个提示词模板：{role} 和 {question} 是占位符，运行时替换
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "你是一个{role}，回答要简洁。"),
+    ("user", "{question}"),
+])
+
+# StrOutputParser 把模型输出的消息对象转成纯字符串
+parser = StrOutputParser()
+
+# 用 | 把「模板 → 模型 → 解析器」串成一条链（LCEL 语法）
+chain = prompt | model | parser
+
+# invoke 执行链，传入占位符的值
+result = chain.invoke({"role": "数学老师", "question": "1+1等于几？"})
+print(result)  # 输出：1+1等于2。</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">LCEL 是什么？</div>
+          <p>
+            LCEL（LangChain Expression Language）就是用管道符 <code>|</code> 把组件串起来，
+            像 Unix 管道一样。左边的输出作为右边的输入。
+            <code>prompt | model | parser</code> 表示：模板生成消息 → 模型处理 → 解析器取文本。
+          </p>
+        </div>
+
+        <h2>4. 用 LangChain 定义工具和 Agent</h2>
+        <p>
+          手写 Function Calling 要写一堆 JSON Schema。LangChain 用 <code>@tool</code> 装饰器，
+          直接把普通 Python 函数变成工具，自动生成 schema。
+        </p>
+
+        <pre><code>from langchain_core.tools import tool
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+
+
+@tool
+def get_weather(city: str) -> str:
+    """查询指定城市的当前天气。参数 city 是城市名称，如北京、上海。"""
+    weather_db = {"北京": "晴，25°C", "上海": "多云，22°C", "广州": "小雨，28°C"}
+    return weather_db.get(city, f"暂无{city}的天气数据")
+
+
+@tool
+def calculate(expression: str) -> str:
+    """计算数学表达式，如 2+3*4。参数 expression 是要计算的表达式字符串。"""
+    try:
+        return str(eval(expression))
+    except Exception as e:
+        return f"计算错误：{e}"
+
+
+# 把两个工具放进列表
+tools = [get_weather, calculate]
+
+# 定义 Agent 的提示词
+agent_prompt = ChatPromptTemplate.from_messages([
+    ("system", "你是一个智能助手，必要时调用工具来回答问题。"),
+    ("placeholder", "{chat_history}"),  # 对话历史占位符
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}"),  # Agent 中间思考过程，固定写法
+])
+
+# create_tool_calling_agent 自动处理「模型选工具 → 执行 → 回传 → 再调用」的循环
+agent = create_tool_calling_agent(model, tools, agent_prompt)
+
+# AgentExecutor 负责驱动 Agent 循环执行，max_iterations 防止死循环
+executor = AgentExecutor(agent=agent, tools=tools, verbose=True, max_iterations=5)
+
+# 调用 Agent 执行任务
+result = executor.invoke({"input": "北京今天天气怎么样？适合出门吗？"})
+print(result["output"])</code></pre>
+
+        <h2>5. 运行结果示意</h2>
+        <pre><code>> Entering AgentExecutor...
+> 模型决定调用 get_weather("北京")
+> Tool 返回：晴，25°C
+> 模型根据结果生成回答：北京今天晴，气温25°C，天气不错，适合出门。
+> Finished chain.
+北京今天晴，气温25°C，天气不错，适合出门。</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">对比手写代码</div>
+          <p>
+            回想第 5 章，我们手写 Function Calling 需要自己解析 <code>tool_calls</code>、
+            执行函数、拼 <code>role: "tool"</code> 消息、再调用模型。
+            用 LangChain，<code>AgentExecutor</code> 把这些全自动化了，
+            我们只需定义工具和提示词。这就是框架的价值。
+          </p>
+        </div>
+
+        <h2>6. 给 Agent 加对话记忆</h2>
+        <p>
+          LangChain 提供 <code>ChatMessageHistory</code> 管理对话历史，
+          实现多轮对话只需把历史传进 <code>chat_history</code>。
+        </p>
+        <pre><code>from langchain_community.chat_message_histories import ChatMessageHistory
+
+# 用一个列表存放对话历史（生产环境可换成 Redis、SQLite 等）
+history = ChatMessageHistory()
+
+def chat_with_history(user_input: str) -> str:
+    result = executor.invoke({
+        "input": user_input,
+        "chat_history": history.messages,  # 把已有历史传给 Agent
+    })
+    # 把这一轮的用户输入和助手回答加入历史
+    history.add_user_message(user_input)
+    history.add_ai_message(result["output"])
+    return result["output"]
+
+
+if __name__ == "__main__":
+    print(chat_with_history("我叫小明"))
+    print(chat_with_history("我叫什么名字？"))  # Agent 能记得上一轮的「小明」</code></pre>
+
+        <h2>7. LangChain 的优缺点</h2>
+        <ul>
+          <li><strong>优点</strong>：组件丰富、生态大、和各种模型/向量库集成好、省掉大量胶水代码</li>
+          <li><strong>缺点</strong>：版本更新快、API 经常变、抽象层级多导致报错时难调试</li>
+        </ul>
+
+        <div class="callout warn">
+          <div class="callout-title">学习建议</div>
+          <p>
+            用框架的前提是理解原理。如果你跳过前几章直接学 LangChain，出了问题会不知道是模型、
+            提示词还是工具的问题。建议先掌握第 3~6 章的手写实现，再来用框架，效率最高。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>LangChain 把模型、提示词、工具、记忆等封装成标准化组件</li>
+          <li>核心组件：Model、Prompt Template、Chain、Tool、Agent、Memory</li>
+          <li>用 <code>@tool</code> 装饰器把普通函数变成工具，自动生成 schema</li>
+          <li><code>AgentExecutor</code> 自动驱动「选工具 → 执行 → 回传」的循环</li>
+          <li>LCEL 用 <code>|</code> 管道符串联组件</li>
+        </ul>
+
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="@tool 装饰器可以把一个普通 Python 函数转换成 LangChain 的工具，自动根据函数签名和文档字符串生成 JSON Schema。">
+            <div class="quiz-question">1. （单选）在 LangChain 中，如何把一个普通 Python 函数变成工具？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 用 def_tool 关键字</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 用 @tool 装饰器</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 继承 Tool 类并重写 run</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 自动识别所有函数</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="LCEL|表达式语言|管道"
+               data-explain="LCEL（LangChain Expression Language）用管道符 | 串联各个组件，左边的输出作为右边的输入，如 prompt | model | parser。">
+            <div class="quiz-question">2. （填空）LangChain 中用管道符 | 串联组件的语法叫什么？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="AgentExecutor 的作用是驱动 Agent 循环执行：模型选工具、执行工具、结果回传，直到任务完成，并通过 max_iterations 防止死循环。">
+            <div class="quiz-question">3. （单选）LangChain 中 AgentExecutor 的主要作用是什么？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. 只是调用一次模型</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. 存储对话历史</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. 驱动 Agent 循环执行选工具和调用工具的过程</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. 定义提示词模板</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 第 11 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

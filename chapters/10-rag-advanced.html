@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第10章 RAG 进阶与优化 | AI Agent 搭建教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="10-rag-advanced">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 10 章</span>
+          <span class="meta-tag">RAG 实战</span>
+          <span class="meta-tag">约 35 分钟</span>
+        </div>
+        <h1>RAG 进阶：向量库与检索优化</h1>
+        <p>
+          上一章我们用「暴力遍历」做相似度检索，文档一多就慢。这一章我们引入
+          <strong>向量数据库</strong>（Milvus / Qdrant）来加速，
+          并学习<strong>多路召回、重排序、上下文压缩</strong>三大优化手段，
+          让 RAG 检索又快又准。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解为什么需要向量数据库，了解 Milvus、Qdrant 等主流选型</li>
+          <li>用 Qdrant 搭建本地向量库并完成检索</li>
+          <li>掌握多路召回：向量检索 + 关键词检索结合</li>
+          <li>理解重排序（Reranking）对准确率的提升</li>
+          <li>学会上下文压缩，减少无效 token 消耗</li>
+        </ul>
+
+        <h2>1. 为什么需要向量数据库</h2>
+        <p>
+          上一章的 <code>retrieve</code> 函数要把问题向量和<strong>每一个</strong>块向量都算一遍相似度。
+          如果有 10 万块，就要算 10 万次，查询可能要好几秒。
+          <strong>向量数据库</strong>通过特殊的索引结构（如 HNSW 图），
+          能在百万级数据中毫秒级找到最相似的向量。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">类比理解</div>
+          <p>
+            暴力遍历就像在一本没有目录的书里逐页找内容；向量数据库就像书末的「索引」，
+            直接告诉你相关内容在第几页。索引是预先建好的，查询时直接定位，非常快。
+          </p>
+        </div>
+
+        <h2>2. 主流向量数据库对比</h2>
+        <pre><code>数据库        特点                              适用场景
+----------------------------------------------------------
+Milvus        功能最全、分布式、支持十亿级        企业级大规模
+Qdrant        Rust 编写、性能好、API 简洁        中小规模、追求性能
+Chroma        轻量、Python 友好、可嵌入式        原型开发、个人项目
+FAISS         Meta 开源、只是库不是数据库        本地快速实验
+Weaviate      自带 GraphQL 接口                  复杂查询需求</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">本章用哪个？</div>
+          <p>
+            我们用 <strong>Qdrant</strong>，因为它可以在内存中直接运行（不需要先装 Docker），
+            同时性能和 API 设计都很优秀，和生产环境用法一致。
+            安装：<code>pip install qdrant-client</code>。
+          </p>
+        </div>
+
+        <h2>3. 用 Qdrant 搭建向量库</h2>
+        <p>
+          Qdrant 的核心概念是 <strong>Collection（集合）</strong>，类似数据库里的「表」。
+          每个集合里存很多 <strong>Point（点）</strong>，每个点包含一个向量和对应的元数据（原文、来源等）。
+        </p>
+
+        <pre><code>import os
+from dotenv import load_dotenv
+import dashscope
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams, PointStruct
+
+load_dotenv()
+dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
+
+
+def embed(text: str) -> list[float]:
+    """文本转向量（复用第 9 章的函数）"""
+    resp = dashscope.TextEmbedding.call(model="text-embedding-v3", input=text)
+    return resp.output.embeddings[0].embedding
+
+
+# QdrantClient(":memory:") 表示在内存中运行，不写磁盘，适合快速实验
+client = QdrantClient(":memory:")
+
+# 向量维度：text-embedding-v3 默认输出 1024 维
+VECTOR_SIZE = 1024
+
+# 创建一个集合（collection），指定向量维度和距离度量方式（余弦）
+client.create_collection(
+    collection_name="my_kb",
+    vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
+)</code></pre>
+
+        <p>把文本块写入向量库：</p>
+        <pre><code>def upsert_chunks(chunks: list[str]):
+    """把一批文本块转成向量并写入 Qdrant"""
+    points = []
+    for i, text in enumerate(chunks):
+        vec = embed(text)                       # 每块转成向量
+        # PointStruct 是 Qdrant 的数据单元：id + vector + payload（元数据）
+        points.append(PointStruct(
+            id=i,
+            vector=vec,
+            payload={"text": text},             # 把原文存在 payload 里，方便取回
+        ))
+    # upsert = update + insert：有则更新，无则插入
+    client.upsert(collection_name="my_kb", points=points)
+
+
+def search_kb(question: str, top_k: int = 3) -> list[str]:
+    """在 Qdrant 中检索最相关的 top_k 个文本块"""
+    q_vec = embed(question)                     # 问题向量化
+    hits = client.search(
+        collection_name="my_kb",
+        query_vector=q_vec,
+        limit=top_k,                            # 返回最相似的 top_k 个
+    )
+    # 从命中结果里取出原文（payload.text）
+    return [hit.payload["text"] for hit in hits]</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">生产环境怎么部署 Qdrant？</div>
+          <p>
+            生产环境用 <code>docker run -p 6333:6333 qdrant/qdrant</code> 启动服务，
+            然后把 <code>QdrantClient(":memory:")</code> 换成
+            <code>QdrantClient("http://localhost:6333")</code> 即可，代码其余部分不变。
+            Milvus 用法类似，也是启动服务后用客户端连接。
+          </p>
+        </div>
+
+        <h2>4. 多路召回（Multi-path Retrieval）</h2>
+        <p>
+          只用向量检索有个缺点：它按「语义相似」找，可能漏掉关键词完全匹配的结果。
+          比如用户搜「保修期」，向量检索可能找到「售后政策」，却漏了直接写着「保修期一年」的块。
+          <strong>多路召回</strong>就是同时用多种方式检索，再合并去重，覆盖率更高。
+        </p>
+
+        <pre><code>def keyword_search(chunks: list[str], question: str, top_k: int = 3) -> list[str]:
+    """简单的关键词检索：把问题拆成词，统计每个块命中了多少个词"""
+    keywords = question.replace("？", "").replace("?", "").split()  # 简单按空格分词
+    scored = []
+    for c in chunks:
+        score = sum(1 for kw in keywords if kw in c)  # 统计命中关键词个数
+        scored.append((score, c))
+    scored.sort(key=lambda x: x[0], reverse=True)     # 命中越多排越前
+    return [c for s, c in scored[:top_k] if s > 0]    # 只返回有命中的
+
+
+def multi_retrieve(chunks: list[str], question: str, top_k: int = 3) -> list[str]:
+    """多路召回：向量检索 + 关键词检索，结果合并去重"""
+    vec_results = search_kb(question, top_k)            # 第 1 路：向量检索
+    kw_results = keyword_search(chunks, question, top_k)  # 第 2 路：关键词检索
+    # 合并两路结果并去重（保持顺序）
+    merged = []
+    for c in vec_results + kw_results:
+        if c not in merged:
+            merged.append(c)
+    return merged[:top_k]  # 最终只取 top_k 个</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">多路召回的常见组合</div>
+          <ul>
+            <li><strong>稠密向量检索</strong>（Dense）：语义相似，上一章的做法</li>
+            <li><strong>稀疏关键词检索</strong>（Sparse）：BM25、Elasticsearch，精确匹配</li>
+            <li><strong>混合检索</strong>（Hybrid）：两者结合，互相补全</li>
+          </ul>
+        </div>
+
+        <h2>5. 重排序（Reranking）</h2>
+        <p>
+          多路召回可能拿回一堆结果，但排序未必准确。<strong>重排序</strong>就是用一个更精准的模型，
+          对召回的结果重新打分排序，把真正相关的排到前面。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">为什么不直接用重排模型检索全部？</div>
+          <p>
+            重排模型虽然准，但慢、贵。所以策略是：先用<strong>快但粗</strong>的向量检索召回 top 50，
+            再用<strong>慢但精</strong>的重排模型对这 50 个排序，取 top 3。这样兼顾速度和精度。
+          </p>
+        </div>
+
+        <p>通义提供了 rerank 模型，直接调用：</p>
+        <pre><code>def rerank(question: str, docs: list[str], top_k: int = 3) -> list[str]:
+    """用重排模型对检索结果重新排序"""
+    resp = dashscope.TextReRank.call(
+        model="gte-rerank",                       # 通义的重排模型
+        query=question,                           # 用户问题
+        documents=docs,                           # 待排序的文本列表
+        top_n=top_k,                              # 返回前 top_k 个
+    )
+    # output.results 按相关性从高到低排列，.text 取出原文
+    return [item.text for item in resp.output.results]</code></pre>
+
+        <h2>6. 上下文压缩（Context Compression）</h2>
+        <p>
+          检索回来的文本块可能很长，里面有很多和问题无关的内容。直接塞进 prompt 会浪费 token、
+          还可能干扰模型。<strong>上下文压缩</strong>就是从每个块里只提取和问题相关的句子，
+          让上下文更精炼。
+        </p>
+
+        <p>最简单的压缩方式：让模型从每个块里摘出相关句子。</p>
+        <pre><code>def compress(question: str, docs: list[str]) -> list[str]:
+    """用大模型压缩上下文，只保留和问题相关的内容"""
+    compressed = []
+    for doc in docs:
+        prompt = f"""用户问题：{question}
+下面是一段参考资料：
+{doc}
+请从参考资料中提取与用户问题相关的句子，无关内容直接删除。如果整段都不相关，回复「无」。"""
+        resp = dashscope.Generation.call(
+            model="qwen-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            result_format="message",
+        )
+        result = resp.output.choices[0].message.content.strip()
+        if result != "无":
+            compressed.append(result)           # 只保留压缩后有内容的块
+    return compressed</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">压缩的代价</div>
+          <p>
+            上下文压缩本身要多次调用模型，会增加延迟和成本。一般在<strong>文档块很长、
+            或 top_k 较大</strong>时才用。如果你的块本来就很短（如 200 字），可能不需要压缩。
+          </p>
+        </div>
+
+        <h2>7. 完整的优化版 RAG</h2>
+        <p>把上面所有优化串起来，就是一个生产级 RAG 的检索流程：</p>
+        <pre><code>def ask_rag_advanced(chunks: list[str], question: str) -> str:
+    # 1. 多路召回：向量 + 关键词，扩大覆盖面
+    recalled = multi_retrieve(chunks, question, top_k=10)
+    # 2. 重排序：用精准模型把最相关的排前面
+    reranked = rerank(question, recalled, top_k=3)
+    # 3. 上下文压缩：只保留相关句子
+    context_docs = compress(question, reranked)
+    # 4. 拼 prompt 生成答案
+    context = "\n---\n".join(context_docs)
+    prompt = f"""请根据以下参考资料回答问题。
+
+参考资料：
+{context}
+
+问题：{question}"""
+    resp = dashscope.Generation.call(
+        model="qwen-turbo",
+        messages=[{"role": "user", "content": prompt}],
+        result_format="message",
+    )
+    return resp.output.choices[0].message.content</code></pre>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>向量数据库（Milvus、Qdrant）通过索引实现毫秒级相似检索</li>
+          <li>多路召回 = 向量检索 + 关键词检索，提升召回覆盖率</li>
+          <li>重排序用更精准的模型对召回结果二次排序，提升准确率</li>
+          <li>上下文压缩只保留相关内容，减少 token 浪费和干扰</li>
+          <li>生产级 RAG 流程：多路召回 → 重排序 → 压缩 → 生成</li>
+        </ul>
+
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="向量数据库通过建立索引（如 HNSW）来加速相似向量检索，避免暴力遍历所有向量，从而在百万级数据中实现毫秒级查询。">
+            <div class="quiz-question">1. （单选）向量数据库相比暴力遍历检索，最大的优势是什么？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 完全免费</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 不需要向量化</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 通过索引实现快速相似检索</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 自动生成回答</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="多路召回|多路检索|多路径召回"
+               data-explain="同时使用向量检索和关键词检索等多种方式并合并结果，叫做多路召回，可以提升检索的覆盖率。">
+            <div class="quiz-question">2. （填空）同时使用向量检索和关键词检索并合并结果，这种策略叫什么？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="重排序（Reranking）的作用是用更精准的模型对初步召回的结果重新打分排序，把真正相关的内容排到前面，提升最终准确率。">
+            <div class="quiz-question">3. （单选）重排序（Reranking）在 RAG 中的主要作用是什么？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. 加快检索速度</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. 对召回结果重新打分，提升排序准确率</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. 压缩文本长度</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. 生成最终答案</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 第 10 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

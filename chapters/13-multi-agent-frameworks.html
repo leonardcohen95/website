@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第13章 多智能体框架：AutoGen 与 CrewAI | AI Agent 搭建教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="13-multi-agent-frameworks">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 13 章</span>
+          <span class="meta-tag">框架实战</span>
+          <span class="meta-tag">约 35 分钟</span>
+        </div>
+        <h1>多智能体框架：AutoGen 与 CrewAI</h1>
+        <p>
+          第 7 章我们手写了「作家 + 编辑」的多 Agent 协作，靠手动调用函数串联。
+          实际项目中多智能体协作更复杂：谁先发言、谁有决策权、何时结束、如何反思迭代……
+          这一章学习两个主流框架：微软的 <strong>AutoGen</strong> 和
+          以「角色扮演」为核心的 <strong>CrewAI</strong>，它们把协作逻辑都封装好了。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 AutoGen 的核心概念：ConversableAgent、GroupChat</li>
+          <li>用 AutoGen 实现多 Agent 群聊协作</li>
+          <li>理解 CrewAI 的 Agent / Task / Crew 三层结构</li>
+          <li>用 CrewAI 实现角色分工的任务流水线</li>
+          <li>了解两个框架的适用场景差异</li>
+        </ul>
+
+        <h2>1. 为什么需要多智能体框架</h2>
+        <p>
+          手写多 Agent 协作时，要自己处理：消息转发、角色切换、终止条件、工具调用、反思循环。
+          框架把这些通用逻辑封装好，你只需定义每个 Agent 的角色和能力，剩下的交给框架调度。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">两个框架的定位</div>
+          <ul>
+            <li><strong>AutoGen</strong>：微软出品，以「对话」为核心，灵活度高，适合群聊式协作</li>
+            <li><strong>CrewAI</strong>：以「船员」比喻，角色 + 任务 + 流程，适合流水线式任务</li>
+          </ul>
+        </div>
+
+        <h2>2. AutoGen 实战：群聊协作</h2>
+        <p>AutoGen 的核心是 <code>ConversableAgent</code>（可对话的智能体），
+          多个 Agent 可以组成 <code>GroupChat</code>（群聊），由一个管理器调度发言顺序。</p>
+
+        <p>安装：</p>
+        <pre><code>pip install pyautogen</code></pre>
+
+        <p>创建 <code>autogen_demo.py</code>：</p>
+        <pre><code>import os
+from dotenv import load_dotenv
+import autogen
+
+load_dotenv()
+
+# 配置 LLM，通义千问兼容 OpenAI 接口
+llm_config = {
+    "config_list": [{
+        "model": "qwen-turbo",
+        "api_key": os.getenv("DASHSCOPE_API_KEY"),
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    }]
+}
+
+# ---- 定义三个角色 ----
+# AssistantAgent 是 AutoGen 内置的智能体类，会自动调用 LLM
+writer = autogen.AssistantAgent(
+    name="作家",
+    llm_config=llm_config,
+    system_message="你是一位科普作家，擅长用生动的语言写短文。",  # 角色设定
+)
+
+editor = autogen.AssistantAgent(
+    name="编辑",
+    llm_config=llm_config,
+    system_message="你是一位严格的编辑，负责审稿并给出修改意见。",
+)
+
+# UserProxyAgent 代表用户，负责发起对话和接收结果（不需要 LLM）
+user_proxy = autogen.UserProxyAgent(
+    name="用户",
+    human_input_mode="NEVER",           # NEVER 表示完全自动，不需要人工输入
+    code_execution_config=False,         # 不允许执行代码
+)
+
+# ---- 把三个 Agent 放进群聊 ----
+groupchat = autogen.GroupChat(
+    agents=[user_proxy, writer, editor],  # 群成员
+    messages=[],                           # 初始消息为空
+    max_round=6,                           # 最多对话 6 轮，防止无限循环
+)
+
+# GroupChatManager 是群聊的管理器，负责决定下一个发言的 Agent
+manager = autogen.GroupChatManager(
+    groupchat=groupchat,
+    llm_config=llm_config,
+)
+
+# 用户发起任务，群聊自动开始协作
+user_proxy.initiate_chat(
+    manager,
+    message="请围绕「为什么天空是蓝色的」写一篇科普短文，并由编辑审稿后给出最终版本。",
+)</code></pre>
+
+        <h2>3. AutoGen 运行流程</h2>
+        <pre><code>用户：请围绕「为什么天空是蓝色的」写一篇科普短文……
+作家：天空之所以是蓝色，是因为阳光穿过大气层时……（写出初稿）
+编辑：文章整体不错，但建议补充瑞利散射的概念……（给出意见）
+作家：根据编辑意见修改后……（修订稿）
+编辑：修改后的版本事实准确、语言通顺，可以定稿。
+（对话结束，最终稿即为作家最后一条消息）</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">AutoGen 的优势</div>
+          <p>
+            群聊模式非常灵活，Agent 之间可以自由对话、互相追问。
+            管理器会根据上下文决定谁该发言，适合需要<strong>头脑风暴、讨论决策</strong>的场景。
+            也可以自定义发言顺序，实现严格的流水线。
+          </p>
+        </div>
+
+        <h2>4. CrewAI 实战：角色 + 任务流水线</h2>
+        <p>
+          CrewAI 把协作建模成「船员（Agent）+ 任务（Task）+ 船队（Crew）」。
+          每个 Agent 有明确的角色、目标、背景故事；每个 Task 指定由谁执行、期望产出什么；
+          Crew 按顺序执行所有 Task。
+        </p>
+
+        <p>安装：</p>
+        <pre><code>pip install crewai</code></pre>
+
+        <p>创建 <code>crewai_demo.py</code>：</p>
+        <pre><code>import os
+from dotenv import load_dotenv
+from crewai import Agent, Task, Crew
+from langchain_openai import ChatOpenAI
+
+load_dotenv()
+
+# 配置 LLM（CrewAI 底层用 LangChain 的模型类）
+llm = ChatOpenAI(
+    model="qwen-turbo",
+    api_key=os.getenv("DASHSCOPE_API_KEY"),
+    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+)
+
+# ---- 定义 Agent：每个 Agent 有 role、goal、backstory ----
+researcher = Agent(
+    role="资料研究员",
+    goal="搜集并整理与主题相关的核心事实",
+    backstory="你是一位严谨的研究员，善于从权威来源提炼关键信息。",
+    llm=llm,
+    allow_delegation=False,  # 不允许把任务委托给其他 Agent
+)
+
+writer = Agent(
+    role="科普作家",
+    goal="根据资料写出通俗易懂的科普短文",
+    backstory="你是一位擅长把复杂科学讲得生动有趣的作家。",
+    llm=llm,
+    allow_delegation=False,
+)
+
+# ---- 定义 Task：description 是任务描述，agent 指定谁来做 ----
+task_research = Task(
+    description="搜集「为什么天空是蓝色的」相关的科学事实，列出 3-5 个关键点。",
+    expected_output="3-5 条关于天空呈蓝色原因的关键科学事实。",
+    agent=researcher,
+)
+
+task_write = Task(
+    description="根据研究员提供的事实，写一篇 200 字左右的科普短文。",
+    expected_output="一篇 200 字左右、语言生动的科普短文。",
+    agent=writer,
+)
+
+# ---- 定义 Crew：按顺序执行 tasks ----
+crew = Crew(
+    agents=[researcher, writer],
+    tasks=[task_research, task_write],  # 任务按列表顺序执行
+    verbose=True,
+)
+
+# kickoff 启动整个船队
+result = crew.kickoff()
+print(result)</code></pre>
+
+        <h2>5. CrewAI 的执行流程</h2>
+        <pre><code>[1/2] 资料研究员 执行任务：
+  搜集「为什么天空是蓝色的」相关事实
+  → 输出：1. 阳光是复合光 2. 瑞利散射 3. 蓝光波长最短……
+
+[2/2] 科普作家 执行任务：
+  根据研究员的事实写短文
+  → 输出：你是否好奇过，为什么晴朗的天空总是蓝色的？……</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">CrewAI 和 AutoGen 的区别</div>
+          <ul>
+            <li><strong>流程控制</strong>：CrewAI 是<strong>有序流水线</strong>，Task 按顺序执行；AutoGen 是<strong>自由群聊</strong>，谁发言由管理器决定</li>
+            <li><strong>角色定义</strong>：CrewAI 强调 role/goal/backstory，角色感更强；AutoGen 用 system_message 设定</li>
+            <li><strong>适用场景</strong>：CrewAI 适合流程清晰的任务（如内容生产）；AutoGen 适合需要讨论、决策的开放任务</li>
+          </ul>
+        </div>
+
+        <h2>6. 多智能体的反思与迭代</h2>
+        <p>
+          任职资格里提到「反思与迭代优化」。在多智能体系统中，可以通过加入一个
+          <strong>评审 Agent</strong> 来实现：它不直接产出，而是审查其他人的工作，
+          不合格就打回重做。
+        </p>
+        <p>以 CrewAI 为例，加一个评审 Agent 和修订任务：</p>
+        <pre><code>reviewer = Agent(
+    role="审稿人",
+    goal="审查文章质量，提出修改意见",
+    backstory="你是一位挑剔的审稿人，只认可事实准确、逻辑清晰的稿件。",
+    llm=llm,
+    allow_delegation=False,
+)
+
+# 审稿任务
+task_review = Task(
+    description="审阅作家写的短文，从事实准确性、逻辑、语言三方面给出评分（1-10）和意见。",
+    expected_output="三项评分和具体修改意见。",
+    agent=reviewer,
+)
+
+# 修订任务：作家根据审稿意见修改
+task_revise = Task(
+    description="根据审稿人的意见修改短文，输出最终版本。",
+    expected_output="修改后的最终短文。",
+    agent=writer,
+)
+
+# 把新任务按顺序加入 Crew
+crew = Crew(
+    agents=[researcher, writer, reviewer],
+    tasks=[task_research, task_write, task_review, task_revise],
+    verbose=True,
+)
+result = crew.kickoff()</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">控制成本和轮次</div>
+          <p>
+            多智能体协作会多次调用模型，成本和延迟都不低。务必设置
+            <code>max_round</code>（AutoGen）或限制任务数量（CrewAI），
+            避免无限讨论。对于复杂任务，可以先做小范围实验再扩大规模。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>AutoGen 以群聊为核心，灵活度高，适合讨论和决策类协作</li>
+          <li>CrewAI 以 Agent/Task/Crew 三层结构建模，适合流程清晰的流水线任务</li>
+          <li>AutoGen 用 GroupChat + GroupChatManager 调度多 Agent 对话</li>
+          <li>CrewAI 用 role/goal/backstory 定义角色，tasks 按顺序执行</li>
+          <li>加入评审 Agent 可实现反思与迭代优化</li>
+        </ul>
+
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="AutoGen 的核心协作模式是 GroupChat（群聊），多个 ConversableAgent 在群里自由对话，由 GroupChatManager 调度发言顺序。">
+            <div class="quiz-question">1. （单选）AutoGen 中多个 Agent 协作的核心模式是什么？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 主从模式（Boss-Worker）</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 群聊模式（GroupChat）</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 严格流水线</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 并行执行所有任务</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="Crew|船队"
+               data-explain="CrewAI 中，把多个 Agent 和多个 Task 组织在一起、按顺序执行任务的对象叫做 Crew（船队）。">
+            <div class="quiz-question">2. （填空）CrewAI 中，把多个 Agent 和 Task 组织在一起执行的对象叫什么？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="CrewAI 的任务（Task）默认按列表顺序依次执行，是有序的流水线；而 AutoGen 是自由群聊。这是两者最核心的区别之一。">
+            <div class="quiz-question">3. （单选）关于 CrewAI 和 AutoGen 的区别，下列说法正确的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. 两者都只支持自由群聊</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. 两者都只支持严格流水线</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. CrewAI 是有序流水线，AutoGen 是自由群聊</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. 两者完全一样，只是名字不同</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 第 13 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

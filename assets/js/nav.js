@@ -61,6 +61,48 @@ window.SITE_CONFIG = {
       group: "进阶",
       desc: "把 Agent 放到公网，并回顾学习路线",
     },
+    {
+      id: "09-rag-basics",
+      file: "chapters/09-rag-basics.html",
+      title: "RAG 入门",
+      group: "RAG 实战",
+      desc: "文档解析、分块、Embedding 与向量检索基础",
+    },
+    {
+      id: "10-rag-advanced",
+      file: "chapters/10-rag-advanced.html",
+      title: "RAG 进阶与优化",
+      group: "RAG 实战",
+      desc: "Milvus/Qdrant 向量库、多路召回、重排序、上下文压缩",
+    },
+    {
+      id: "11-langchain",
+      file: "chapters/11-langchain.html",
+      title: "LangChain 入门",
+      group: "框架实战",
+      desc: "用框架快速搭建带工具和记忆的 Agent",
+    },
+    {
+      id: "12-llamaindex",
+      file: "chapters/12-llamaindex.html",
+      title: "LlamaIndex 实战",
+      group: "框架实战",
+      desc: "专业 RAG 框架，三步搭建知识库问答",
+    },
+    {
+      id: "13-multi-agent-frameworks",
+      file: "chapters/13-multi-agent-frameworks.html",
+      title: "多智能体框架",
+      group: "框架实战",
+      desc: "AutoGen 与 CrewAI：角色分工、协同决策、反思迭代",
+    },
+    {
+      id: "14-langgraph",
+      file: "chapters/14-langgraph.html",
+      title: "LangGraph 图编排",
+      group: "框架实战",
+      desc: "用图实现 Plan-and-Solve 与 ReAct 复杂工作流",
+    },
   ],
 };
 

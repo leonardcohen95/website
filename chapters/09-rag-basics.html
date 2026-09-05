@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第9章 RAG 入门 | AI Agent 搭建教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="09-rag-basics">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 9 章</span>
+          <span class="meta-tag">RAG 实战</span>
+          <span class="meta-tag">约 30 分钟</span>
+        </div>
+        <h1>RAG 入门：让 Agent 拥有知识库</h1>
+        <p>
+          大模型虽然聪明，但它的知识是「训练时」固化的，不知道你公司的内部文档、最新产品资料。
+          这一章我们学习 <strong>RAG（检索增强生成）</strong>：
+          先从你的文档里找到相关内容，再让模型基于这些内容回答问题，从而让 Agent 拥有「私人知识库」。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解什么是 RAG，它解决了什么问题</li>
+          <li>学会解析 PDF / Word 文档</li>
+          <li>掌握文本分块（Chunking）的基本策略</li>
+          <li>理解 Embedding（向量化）并调用向量模型</li>
+          <li>用相似度检索实现一个最简 RAG 问答</li>
+        </ul>
+
+        <h2>1. 为什么需要 RAG</h2>
+        <p>
+          直接问大模型，有两个痛点：<strong>知识过时</strong>（训练数据有截止日期）和
+          <strong>不知道私有信息</strong>（你的内部文档它没见过）。RAG 的思路是：
+          先把你的文档切碎、转成向量存起来；用户提问时，先从文档里检索相关片段，
+          再把这些片段连同问题一起交给模型，让模型「照本宣科」地回答。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">大白话理解</div>
+          <p>
+            大模型像一个「博学但不了解你公司的顾问」。RAG 相当于在问它之前，
+            先把你的产品手册翻到相关页，塞到它手里说：「请根据这几页内容回答用户问题。」
+            这样回答就不会胡编乱造了。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">RAG</div>
+          <p>Retrieval-Augmented Generation，检索增强生成。核心流程：<strong>检索</strong>相关文档 → <strong>增强</strong> Prompt → <strong>生成</strong>答案。</p>
+        </div>
+
+        <h2>2. RAG 的完整流程</h2>
+        <pre><code>【离线阶段：建库】
+PDF/Word 文档 → 解析文本 → 分块(Chunk) → 向量化(Embedding) → 存入向量数据库
+
+【在线阶段：问答】
+用户问题 → 向量化 → 在向量库中检索相似 Chunk → 把 Chunk 拼进 Prompt → 大模型生成答案</code></pre>
+
+        <h2>3. 解析文档：读取 PDF 和 Word</h2>
+        <p>
+          首先要把文档里的文字读出来。PDF 用 <code>pypdf</code>，Word 用 <code>python-docx</code>。
+        </p>
+        <p>安装依赖：</p>
+        <pre><code>pip install pypdf python-docx</code></pre>
+
+        <p>创建 <code>rag.py</code>，先写文档解析函数：</p>
+        <pre><code>from pypdf import PdfReader           # 导入 PDF 读取器
+from docx import Document             # 导入 Word 文档读取器
+
+
+def parse_pdf(path: str) -> str:
+    """读取 PDF 文件，返回全部文本"""
+    reader = PdfReader(path)               # 创建 PDF 读取器对象
+    text = ""
+    for page in reader.pages:              # 遍历每一页
+        text += page.extract_text() + "\n"  # 提取当前页文本，拼到 text 后面
+    return text
+
+
+def parse_docx(path: str) -> str:
+    """读取 Word 文件，返回全部文本"""
+    doc = Document(path)                   # 打开 Word 文档
+    # 列表推导式：遍历每个段落，取出文字，最后用换行符连接
+    return "\n".join([p.text for p in doc.paragraphs])</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">纯文本怎么办？</div>
+          <p>
+            如果是 <code>.txt</code> 或 <code>.md</code> 文件，直接用 Python 内置的
+            <code>open(path, encoding="utf-8").read()</code> 就能读取，不需要第三方库。
+          </p>
+        </div>
+
+        <h2>4. 文本分块（Chunking）</h2>
+        <p>
+          文档可能很长，不能整段塞给模型（超出上下文窗口、检索也不精准）。
+          我们把长文本切成一段段的「块（Chunk）」。最简单的策略是按固定字符数切。
+        </p>
+
+        <pre><code>def split_text(text: str, chunk_size: int = 300, overlap: int = 50) -> list[str]:
+    """
+    把长文本切成若干块。
+    chunk_size: 每块的最大字符数
+    overlap: 相邻两块重叠的字符数，防止一句话被切断丢失上下文
+    """
+    chunks = []                           # 存放切好的文本块
+    start = 0                             # 起始位置，从 0 开始
+    n = len(text)                         # 文本总长度
+    while start < n:                      # 只要还没切到末尾就继续
+        end = start + chunk_size          # 结束位置 = 起始 + 块大小
+        chunks.append(text[start:end])    # 切片取出一块，加入列表
+        start = end - overlap             # 下一块的起始位置往前退 overlap，制造重叠
+    return chunks</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">为什么要重叠（overlap）？</div>
+          <p>
+            假设一句话刚好被切成两半：前一块末尾是「今天天气很」，后一块开头是「好，适合跑步」。
+            单独看哪一块都不完整。加了 overlap 后，两块会共享一部分内容，
+            保证关键信息不会因为切分而丢失。
+          </p>
+        </div>
+
+        <h2>5. 向量化：把文字变成数字</h2>
+        <p>
+          模型无法直接比较两段文字的相似度，我们需要把文字转换成一串数字（向量）。
+          语义相近的文字，向量在空间中距离也近。这个转换过程叫 <strong>Embedding（嵌入）</strong>。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">Embedding 向量</div>
+          <p>
+            一段文字会被转换成一个由浮点数组成的列表，比如 1536 维的向量。
+            「猫咪」和「小猫」的向量距离很近，「猫咪」和「汽车」的向量距离很远。
+            常见的向量模型：OpenAI text-embedding-3、通义 text-embedding-v3、BGE 等。
+          </p>
+        </div>
+
+        <p>我们用通义千问的向量模型（和前面用同一个 API Key）：</p>
+        <pre><code>import os
+from dotenv import load_dotenv
+import dashscope
+
+load_dotenv()
+dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
+
+
+def embed(text: str) -> list[float]:
+    """把一段文本转成向量（浮点数列表）"""
+    resp = dashscope.TextEmbedding.call(
+        model="text-embedding-v3",      # 通义的向量模型
+        input=text,                     # 要向量化的文本
+    )
+    # output.embeddings[0].embedding 就是文本对应的向量
+    return resp.output.embeddings[0].embedding</code></pre>
+
+        <h2>6. 相似度检索</h2>
+        <p>
+          有了向量后，怎么找「和问题最相关的文本块」？用<strong>余弦相似度</strong>：
+          两个向量方向越一致，相似度越接近 1；越相反，越接近 -1。
+        </p>
+
+        <pre><code>import math  # 导入数学模块，用里面的 sqrt 开平方
+
+
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    """计算两个向量的余弦相似度，返回 0~1 之间的数（越大越相似）"""
+    # 点积 = 对应位置相乘再相加
+    dot = sum(x * y for x, y in zip(a, b))
+    # 向量 a 的长度 = 各分量平方和再开平方
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(x * x for x in b))
+    if norm_a == 0 or norm_b == 0:  # 防止除零
+        return 0.0
+    return dot / (norm_a * norm_b)  # 余弦相似度公式</code></pre>
+
+        <h2>7. 组装最简 RAG</h2>
+        <p>
+          现在把前面的步骤串起来：解析文档 → 分块 → 全部向量化存起来；
+          提问时，把问题也向量化，找出最相似的几块，拼进 prompt 让模型回答。
+        </p>
+
+        <pre><code># ---- 建库：把文档变成向量列表 ----
+def build_knowledge_base(file_path: str) -> list[dict]:
+    """读取文档、分块、向量化，返回知识库"""
+    if file_path.endswith(".pdf"):
+        text = parse_pdf(file_path)            # 解析 PDF
+    elif file_path.endswith(".docx"):
+        text = parse_docx(file_path)           # 解析 Word
+    else:
+        with open(file_path, encoding="utf-8") as f:
+            text = f.read()                    # 读取纯文本
+
+    chunks = split_text(text)                  # 分块
+    # 每块变成一个字典：包含原文和对应的向量
+    return [{"text": c, "vector": embed(c)} for c in chunks]
+
+
+# ---- 检索：找最相似的 top_k 块 ----
+def retrieve(kb: list[dict], question: str, top_k: int = 3) -> list[str]:
+    q_vec = embed(question)                    # 把问题也向量化
+    # 计算问题向量和每个块向量的相似度
+    scored = [(cosine_similarity(q_vec, item["vector"]), item["text"]) for item in kb]
+    scored.sort(key=lambda x: x[0], reverse=True)  # 按相似度从高到低排序
+    # 取前 top_k 个，只要文本不要分数
+    return [text for _, text in scored[:top_k]]</code></pre>
+
+        <p>最后写回答函数，把检索到的内容拼进 prompt：</p>
+        <pre><code>def ask_rag(kb: list[dict], question: str) -> str:
+    """基于知识库回答问题"""
+    docs = retrieve(kb, question)               # 检索相关文本块
+    context = "\n---\n".join(docs)              # 用分隔线把多块拼起来
+    prompt = f"""请根据以下参考资料回答用户问题。如果资料中没有相关内容，请回答「根据现有资料无法回答」。
+
+参考资料：
+{context}
+
+用户问题：{question}"""
+    # 调用通义千问生成回答
+    resp = dashscope.Generation.call(
+        model="qwen-turbo",
+        messages=[{"role": "user", "content": prompt}],
+        result_format="message",
+    )
+    return resp.output.choices[0].message.content
+
+
+if __name__ == "__main__":
+    kb = build_knowledge_base("产品手册.pdf")  # 建库（只需做一次）
+    print(ask_rag(kb, "这款产品的保修期是多久？"))  # 提问</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">性能提醒</div>
+          <p>
+            上面的检索是「暴力遍历」每个块算相似度。文档少的时候没问题，
+            当文档有成千上万块时会很慢。下一章我们会学习用专门的<strong>向量数据库</strong>
+            （如 Milvus、Qdrant）来加速检索。
+          </p>
+        </div>
+
+        <h2>8. 运行流程示意</h2>
+        <pre><code>建库阶段：
+  产品手册.pdf → 解析出 5000 字 → 切成 20 块 → 每块生成向量 → 存为 kb 列表
+
+提问阶段：
+  问题：保修期多久？
+   → 问题转成向量
+   → 和 20 个块向量分别算相似度
+   → 取出最相关的 3 块
+   → 拼进 prompt 交给模型
+   → 模型回答：本产品保修期为 1 年……</code></pre>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>RAG = 检索 + 增强 + 生成，解决大模型知识过时和不知道私有信息的问题</li>
+          <li>建库流程：文档解析 → 分块 → 向量化 → 存储</li>
+          <li>问答流程：问题向量化 → 相似度检索 → 拼 Prompt → 模型生成</li>
+          <li>文本分块需要 overlap 防止信息被切断</li>
+          <li>相似度最常用余弦相似度</li>
+        </ul>
+
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="RAG 的核心是先从知识库中检索相关内容，再把这些内容作为上下文交给模型生成答案，从而减少幻觉、引入私有知识。">
+            <div class="quiz-question">1. （单选）RAG 的核心思想是什么？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 把整个文档一次性塞给模型</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 先检索相关内容，再让模型基于这些内容回答</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 让模型自己联网搜索</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 把文档转成图片再识别</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="Embedding|向量化|向量"
+               data-explain="Embedding（嵌入/向量化）是把文本转换成数字向量的过程，语义相近的文本向量距离更近，便于做相似度检索。">
+            <div class="quiz-question">2. （填空）把一段文字转换成一串数字向量，这个过程叫什么？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D"
+               data-explain="分块时加 overlap（重叠）是为了让相邻两块共享一部分内容，避免一句话被切断导致关键信息丢失。">
+            <div class="quiz-question">3. （单选）文本分块时设置 overlap 的主要目的是什么？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. 让文件更小</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. 加快检索速度</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. 减少向量维度</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. 避免一句话被切断导致信息丢失</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 第 9 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>
