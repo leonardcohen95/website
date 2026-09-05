@@ -78,10 +78,12 @@ load_dotenv()                      # 加载 .env 文件
 dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")  # 设置 API Key
 
 
-class Agent:  # 定义一个 Agent 类，把对话相关的功能封装在一起
-    # __init__ 是构造方法，创建 Agent 实例时自动调用
+class Agent:  # 定义一个 Agent 类，相当于一张"设计图纸"
+    # __init__ 是"出厂设置"函数：每次用这张图纸造一个新 Agent 时，自动执行一次
+    # 前面和后面的双下划线 __ 是 Python 规定的特殊写法，表示这是内置方法
     def __init__(self, system_prompt="你是一个乐于助人的助手。"):
-        # self.messages 是实例的消息列表（短期记忆），初始放入一条 system 消息
+        # self 就是"正在被制造的这个新 Agent 自己"
+        # self.messages 是给这个 Agent 装一个"记忆芯片"（消息列表），初始放入一条 system 消息
         self.messages = [{"role": "system", "content": system_prompt}]
 
     # chat 方法：接收用户输入，返回模型回答
@@ -165,9 +167,11 @@ def save_memory(data: dict):  # 把字典保存到文件
 
 
 class Agent:
-    def __init__(self):
-        self.messages = [{"role": "system", "content": "你是一个乐于助人的助手。"}]  # 短期记忆
-        self.long_term = load_memory()  # 启动时从文件加载长期记忆
+    def __init__(self):  # 出厂设置：造一个新 Agent 时自动运行
+        # 装短期记忆：消息列表，初始放一条 system 消息
+        self.messages = [{"role": "system", "content": "你是一个乐于助人的助手。"}]
+        # 装长期记忆：从 memory.json 文件读取之前保存的信息（相当于读取存档）
+        self.long_term = load_memory()
 
     def chat(self, user_input: str) -> str:
         # 把长期记忆拼接到 system 提示中，让模型知道用户的背景信息
