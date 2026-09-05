@@ -81,14 +81,15 @@ Action: finish("北京今天晴，25°C，空气质量优，非常适合户外�
           （Thought / Action / Observation），然后我们的代码解析 Action 并执行。
         </p>
 
-        <pre><code>import os
-import json
-from dotenv import load_dotenv
-import dashscope
+        <pre><code>import os                        # os 模块
+import json                      # json 模块
+from dotenv import load_dotenv   # 读取 .env
+import dashscope                 # 通义千问 SDK
 
-load_dotenv()
-dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
+load_dotenv()                    # 加载 .env
+dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")  # 设置 API Key
 
+# 三引号字符串可以跨行，这里用来写 system prompt，规定模型的输出格式
 SYSTEM_PROMPT = """你是一个会思考的 AI 助手。解决问题时，请严格按照以下格式输出：
 
 Thought: （你对当前问题的思考，下一步要做什么）
@@ -105,59 +106,68 @@ Final Answer: （最终答案）
 注意：每次只输出一个 Thought 和一个 Action，不要输出 Observation。"""
 
 
-def get_weather(city):
+def get_weather(city):  # 定义查天气工具
+    # 用字典.get() 查询，找不到返回"未知"
     return {"北京": "晴 25°C", "上海": "小雨 18°C"}.get(city, "未知")
 
 
-def calculate(expr):
+def calculate(expr):  # 定义计算器工具
     try:
-        return str(eval(expr))
+        return str(eval(expr))   # eval 执行表达式，str 转字符串
     except:
-        return "计算错误"
+        return "计算错误"         # 出错返回提示
 
 
+# TOOLS 字典把函数名映射到函数对象，方便通过名字调用
 TOOLS = {"get_weather": get_weather, "calculate": calculate}</code></pre>
 
         <p>接下来写循环执行的核心逻辑：</p>
 
         <pre><code>def run_react(question: str, max_steps: int = 5) -> str:
+    # max_steps 默认 5，限制最多思考 5 步，防止死循环
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": question},
+        {"role": "system", "content": SYSTEM_PROMPT},  # 系统提示，规定输出格式
+        {"role": "user", "content": question},          # 用户的问题
     ]
 
+    # for 循环执行最多 max_steps 次（一步 = 一次思考+行动）
     for step in range(max_steps):
+        # 调用模型，让它输出 Thought 和 Action
         response = dashscope.Generation.call(
             model="qwen-turbo",
             messages=messages,
             result_format="message",
         )
-        text = response.output.choices[0].message.content
-        messages.append({"role": "assistant", "content": text})
-        print(f"--- 第 {step + 1} 步 ---\n{text}\n")
+        text = response.output.choices[0].message.content  # 取出模型输出文本
+        messages.append({"role": "assistant", "content": text})  # 加入对话历史
+        print(f"--- 第 {step + 1} 步 ---\n{text}\n")  # 打印当前步
 
-        # 如果已经给出最终答案，结束
+        # 如果模型输出了 Final Answer，说明任务完成，返回答案
         if "Final Answer:" in text:
-            return text.split("Final Answer:")[-1].strip()
+            return text.split("Final Answer:")[-1].strip()  # 取 Final Answer: 后面的内容
 
-        # 解析 Action，执行工具
+        # 解析 Action 行，执行对应工具
         if "Action:" in text:
+            # 列表推导式：把文本按行拆分，找出以 "Action:" 开头的那一行
             action_line = [l for l in text.split("\n") if l.startswith("Action:")][0]
-            action = action_line.replace("Action:", "").strip()
-            # 解析 函数名(参数)
+            action = action_line.replace("Action:", "").strip()  # 去掉 "Action:" 前缀
+            # 解析函数名：取 "(" 前面的部分
             func_name = action.split("(")[0].strip()
+            # 解析参数：取 "(" 和 ")" 之间的内容
             args_str = action[action.index("(") + 1 : action.rindex(")")]
+            # 按逗号分割参数，去掉引号和空格
             args = [a.strip().strip('"\'') for a in args_str.split(",")]
 
-            if func_name in TOOLS:
-                result = TOOLS[func_name](*args)
+            if func_name in TOOLS:  # 如果工具存在
+                result = TOOLS[func_name](*args)  # *args 把列表拆开作为参数传入
             else:
                 result = f"未知工具：{func_name}"
 
-            obs = f"Observation: {result}"
-            messages.append({"role": "user", "content": obs})
+            obs = f"Observation: {result}"  # 构造观察结果
+            messages.append({"role": "user", "content": obs})  # 把观察结果发给模型
             print(obs + "\n")
 
+    # 超过最大步数还没完成，返回提示
     return "未能在规定步数内完成任务。"
 
 
@@ -194,15 +204,16 @@ Final Answer: 北京今天晴，25°C，非常适合户外跑步！
         </p>
         <pre><code>def reflect(question: str, answer: str) -> bool:
     """让模型反思答案是否正确，返回 True 表示需要重做"""
+    # f-string 把 question 和 answer 拼进提示词
     prompt = f"问题：{question}\n我的答案：{answer}\n请判断这个答案是否正确、完整。如果有问题，说明问题在哪；如果正确，回复「OK」。"
     resp = dashscope.Generation.call(
         model="qwen-turbo",
         messages=[{"role": "user", "content": prompt}],
         result_format="message",
     )
-    result = resp.output.choices[0].message.content
+    result = resp.output.choices[0].message.content  # 取出反思结果
     print("反思结果：", result)
-    return "OK" not in result  # 不是 OK 就需要重做</code></pre>
+    return "OK" not in result  # 如果结果不含"OK"，说明有问题，返回 True 需要重做</code></pre>
 
         <h2>6. ReAct 的优缺点</h2>
         <ul>

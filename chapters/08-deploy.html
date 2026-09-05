@@ -57,41 +57,46 @@
         <pre><code>pip install flask flask-cors</code></pre>
 
         <p>创建 <code>app.py</code>：</p>
-        <pre><code>import os
-from dotenv import load_dotenv
-import dashscope
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+        <pre><code>import os                              # os 模块
+from dotenv import load_dotenv         # 读取 .env
+import dashscope                       # 通义千问 SDK
+from flask import Flask, request, jsonify  # 导入 Flask 框架的组件
+from flask_cors import CORS            # 导入跨域支持
 
-load_dotenv()
-dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
+load_dotenv()                          # 加载 .env
+dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")  # 设置 API Key
 
-app = Flask(__name__)
-CORS(app)  # 允许跨域请求
+app = Flask(__name__)  # 创建 Flask 应用实例，__name__ 是当前模块名
+CORS(app)              # 允许跨域请求（前端网页可以调用这个接口）
 
 
+# @app.route 是装饰器，把下面的函数绑定到指定的 URL 路径
+# methods=["POST"] 表示只接受 POST 请求
 @app.route("/chat", methods=["POST"])
-def chat():
-    data = request.get_json()
-    user_input = data.get("message", "")
-    if not user_input:
-        return jsonify({"error": "请输入消息"}), 400
+def chat():  # 处理 /chat 请求的函数
+    data = request.get_json()  # 从请求中取出 JSON 数据
+    user_input = data.get("message", "")  # 取出 message 字段，没有就用空字符串
+    if not user_input:  # 如果用户没输入内容
+        return jsonify({"error": "请输入消息"}), 400  # 返回错误，400 是 HTTP 状态码表示请求有误
 
+    # 调用通义千问
     response = dashscope.Generation.call(
         model="qwen-turbo",
         messages=[{"role": "user", "content": user_input}],
         result_format="message",
     )
-    answer = response.output.choices[0].message.content
-    return jsonify({"reply": answer})
+    answer = response.output.choices[0].message.content  # 取出回答
+    return jsonify({"reply": answer})  # 把回答以 JSON 格式返回
 
 
-@app.route("/")
+@app.route("/")  # 绑定根路径 /
 def index():
-    return "AI Agent 运行中！"
+    return "AI Agent 运行中！"  # 访问根路径时返回这句话
 
 
 if __name__ == "__main__":
+    # host="0.0.0.0" 表示监听所有网络接口（允许外部访问）
+    # port=5000 表示使用 5000 端口
     app.run(host="0.0.0.0", port=5000)</code></pre>
 
         <p>本地测试：</p>
@@ -165,20 +170,20 @@ gunicorn</code></pre>
 &lt;html&gt;
 &lt;body&gt;
   &lt;h1&gt;我的 AI Agent&lt;/h1&gt;
-  &lt;div id="chat"&gt;&lt;/div&gt;
-  &lt;input id="msg" placeholder="输入消息..." /&gt;
-  &lt;button onclick="send()"&gt;发送&lt;/button&gt;
+  &lt;div id="chat"&gt;&lt;/div&gt;                          &lt;!-- 聊天记录显示区域 --&gt;
+  &lt;input id="msg" placeholder="输入消息..." /&gt;     &lt;!-- 输入框 --&gt;
+  &lt;button onclick="send()"&gt;发送&lt;/button&gt;          &lt;!-- 点击触发 send 函数 --&gt;
   &lt;script&gt;
-    const API = "https://你的地址.onrender.com/chat";
-    async function send() {
-      const text = document.getElementById("msg").value;
-      const resp = await fetch(API, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({message: text})
+    const API = "https://你的地址.onrender.com/chat";  // 后端接口地址
+    async function send() {                            // async 表示这是异步函数
+      const text = document.getElementById("msg").value;  // 获取输入框的文字
+      const resp = await fetch(API, {                   // fetch 发送 HTTP 请求，await 等待结果
+        method: "POST",                                 // POST 请求
+        headers: {"Content-Type": "application/json"},  // 告诉服务器发送的是 JSON
+        body: JSON.stringify({message: text})           // 把消息转成 JSON 字符串
       });
-      const data = await resp.json();
-      document.getElementById("chat").innerHTML +=
+      const data = await resp.json();                   // 把响应解析成 JSON 对象
+      document.getElementById("chat").innerHTML +=      // 把对话追加到页面
         "&lt;p&gt;&lt;b&gt;你：&lt;/b&gt;" + text + "&lt;/p&gt;" +
         "&lt;p&gt;&lt;b&gt;Agent：&lt;/b&gt;" + data.reply + "&lt;/p&gt;";
     }

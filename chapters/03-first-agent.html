@@ -81,27 +81,29 @@
 
         <h2>2. 调用通义千问 API</h2>
         <p>创建 <code>agent.py</code>，写入以下代码：</p>
-        <pre><code>import os
-from dotenv import load_dotenv
-import dashscope
+        <pre><code>import os                          # 导入 os 模块，用于读取环境变量
+from dotenv import load_dotenv     # 导入 load_dotenv，用于读取 .env 文件
+import dashscope                   # 导入阿里云的通义千问 SDK
 
-load_dotenv()
-dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
+load_dotenv()                      # 加载 .env 文件中的环境变量
+dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")  # 从环境变量读取 API Key，设置给 dashscope
 
 
 def ask_llm(prompt: str) -> str:
     """调用通义千问，返回模型回答"""
+    # dashscope.Generation.call 是调用模型的方法
     response = dashscope.Generation.call(
-        model="qwen-turbo",
-        messages=[{"role": "user", "content": prompt}],
-        result_format="message",
+        model="qwen-turbo",                                       # 指定使用的模型名称
+        messages=[{"role": "user", "content": prompt}],           # messages 是消息列表，这里只有一条用户消息
+        result_format="message",                                  # 返回结果的格式，message 格式便于解析
     )
+    # response.output.choices[0].message.content 取出模型生成的回答文本
     return response.output.choices[0].message.content
 
 
-if __name__ == "__main__":
-    answer = ask_llm("用一句话解释什么是人工智能")
-    print("回答:", answer)</code></pre>
+if __name__ == "__main__":  # 当直接运行这个文件时执行下面的代码（被导入时不执行）
+    answer = ask_llm("用一句话解释什么是人工智能")  # 调用函数，传入问题
+    print("回答:", answer)  # 打印结果</code></pre>
 
         <p>运行：</p>
         <pre><code>python agent.py</code></pre>
@@ -109,24 +111,25 @@ if __name__ == "__main__":
 
         <h2>3. 调用 OpenAI API（备选）</h2>
         <p>如果你用的是 OpenAI，代码如下：</p>
-        <pre><code>import os
-from dotenv import load_dotenv
-from openai import OpenAI
+        <pre><code>import os                          # 导入 os 模块
+from dotenv import load_dotenv     # 导入读取 .env 的函数
+from openai import OpenAI          # 从 openai 库导入 OpenAI 客户端类
 
-load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+load_dotenv()                      # 加载 .env 文件
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))  # 创建 OpenAI 客户端，传入 API Key
 
 
 def ask_llm(prompt: str) -> str:
+    # 调用 chat.completions.create 创建一次对话请求
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
+        model="gpt-4o-mini",                              # 指定模型
+        messages=[{"role": "user", "content": prompt}],   # 消息列表
     )
-    return response.choices[0].message.content
+    return response.choices[0].message.content            # 取出回答文本
 
 
 if __name__ == "__main__":
-    print("回答:", ask_llm("用一句话解释什么是人工智能"))</code></pre>
+    print("回答:", ask_llm("用一句话解释什么是人工智能"))  # 调用并打印</code></pre>
 
         <div class="callout tip">
           <div class="callout-title">两种 API 的区别</div>
@@ -142,12 +145,13 @@ if __name__ == "__main__":
           目前我们只发了一条 <code>user</code> 消息。如果想让模型扮演某种角色，
           可以加一条 <code>system</code> 消息：
         </p>
-        <pre><code>def ask_llm(prompt: str, system_prompt: str = "你是一个乐于助人的助手。") -> str:
+        <pre><code># system_prompt 有默认值 "你是一个乐于助人的助手。"，调用时可以不传
+def ask_llm(prompt: str, system_prompt: str = "你是一个乐于助人的助手。") -> str:
     response = dashscope.Generation.call(
         model="qwen-turbo",
         messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt},
+            {"role": "system", "content": system_prompt},  # system 消息：设定模型身份
+            {"role": "user", "content": prompt},            # user 消息：用户的问题
         ],
         result_format="message",
     )
@@ -155,6 +159,7 @@ if __name__ == "__main__":
 
 
 if __name__ == "__main__":
+    # 调用 ask_llm，第一个位置参数是 prompt，第二个用关键字参数传 system_prompt
     ans = ask_llm(
         "我该怎么学习编程？",
         system_prompt="你是一位经验丰富的编程导师，回答要简洁实用。",

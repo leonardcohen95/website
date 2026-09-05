@@ -128,13 +128,16 @@ __pycache__/
 *.pyc</code></pre>
 
         <p>测试一下能否读取到密钥。创建 <code>test_env.py</code>：</p>
-        <pre><code>import os
-from dotenv import load_dotenv
+        <pre><code>import os                        # 导入 Python 内置的 os 模块，用来和操作系统交互（比如读环境变量）
+from dotenv import load_dotenv   # 从 python-dotenv 库导入 load_dotenv 函数，它能读取 .env 文件
 
-load_dotenv()  # 加载 .env 文件中的变量
+load_dotenv()                    # 调用 load_dotenv()，把 .env 文件里的键值对加载到环境变量中
 
-api_key = os.getenv("DASHSCOPE_API_KEY")
-print("API Key 前 8 位:", api_key[:8] if api_key else "未找到")</code></pre>
+api_key = os.getenv("DASHSCOPE_API_KEY")  # os.getenv() 从环境变量中读取名为 DASHSCOPE_API_KEY 的值，赋给变量 api_key
+print("API Key 前 8 位:", api_key[:8] if api_key else "未找到")
+# print() 是打印函数，把内容输出到屏幕
+# api_key[:8] 表示取字符串的前 8 个字符（切片，从第 0 位到第 7 位）
+# if api_key else "未找到" 是三元表达式：如果 api_key 不为空就显示前 8 位，否则显示"未找到"</code></pre>
 
         <p>运行：</p>
         <pre><code>python test_env.py</code></pre>

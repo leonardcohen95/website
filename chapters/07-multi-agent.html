@@ -78,33 +78,40 @@
         <h2>3. 实现：作家 + 编辑</h2>
         <p>我们用「流水线」模式实现：一个 Agent 写短文，另一个 Agent 审稿并修改。</p>
 
-        <pre><code>import os
-from dotenv import load_dotenv
-import dashscope
+        <pre><code>import os                          # os 模块
+from dotenv import load_dotenv     # 读取 .env
+import dashscope                   # 通义千问 SDK
 
-load_dotenv()
-dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
+load_dotenv()                      # 加载 .env
+dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")  # 设置 API Key
 
 
+# 这就是你问的那行代码！
+# def 定义函数，llm 是函数名
+# system_prompt: str 表示第一个参数 system_prompt 是字符串类型
+# user_prompt: str 表示第二个参数 user_prompt 也是字符串
+# -> str 表示函数返回值是字符串
 def llm(system_prompt: str, user_prompt: str) -> str:
     """通用 LLM 调用"""
+    # 调用通义千问，传入 system 和 user 两条消息
     response = dashscope.Generation.call(
         model="qwen-turbo",
         messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
+            {"role": "system", "content": system_prompt},  # system 消息：设定角色
+            {"role": "user", "content": user_prompt},      # user 消息：具体任务
         ],
         result_format="message",
     )
-    return response.output.choices[0].message.content
+    return response.output.choices[0].message.content  # 返回模型回答
 
 
 # ---- 角色 1：作家 ----
+# 常量（全大写）定义作家的人设
 WRITER_SYSTEM = "你是一位才华横溢的科普作家，擅长用生动有趣的语言讲解科技知识。"
 
-def writer(topic: str) -> str:
-    prompt = f"请围绕「{topic}」写一篇 200 字左右的科普短文。"
-    return llm(WRITER_SYSTEM, prompt)
+def writer(topic: str) -> str:  # 作家函数：接收主题，返回文章
+    prompt = f"请围绕「{topic}」写一篇 200 字左右的科普短文。"  # 构造写作指令
+    return llm(WRITER_SYSTEM, prompt)  # 调用 llm，传入作家人设和指令
 
 
 # ---- 角色 2：编辑 ----
@@ -114,25 +121,25 @@ EDITOR_SYSTEM = """你是一位严格的资深编辑，审稿时关注：
 3. 语言是否通顺易懂
 请直接输出修改后的最终版本，不要解释修改了什么。"""
 
-def editor(draft: str) -> str:
-    prompt = f"请审阅并润色以下文章：\n\n{draft}"
+def editor(draft: str) -> str:  # 编辑函数：接收草稿，返回修改稿
+    prompt = f"请审阅并润色以下文章：\n\n{draft}"  # \n 是换行符
     return llm(EDITOR_SYSTEM, prompt)
 
 
 # ---- 流水线协作 ----
 def publish(topic: str) -> str:
     print("【作家】正在写作...")
-    draft = writer(topic)
-    print(draft, "\n")
+    draft = writer(topic)  # 第一步：作家写初稿
+    print(draft, "\n")  # \n 打印一个空行
 
     print("【编辑】正在审稿...")
-    final = editor(draft)
+    final = editor(draft)  # 第二步：编辑修改初稿
     print(final, "\n")
-    return final
+    return final  # 返回最终版本
 
 
 if __name__ == "__main__":
-    publish("为什么天空是蓝色的")</code></pre>
+    publish("为什么天空是蓝色的")  # 运行流水线</code></pre>
 
         <h2>4. 运行结果示意</h2>
         <pre><code>【作家】正在写作...
@@ -150,23 +157,24 @@ if __name__ == "__main__":
         <pre><code>def editor_feedback(draft: str) -> str:
     """编辑只提修改意见，不直接改写"""
     prompt = f"请审阅以下文章，给出具体的修改意见（不超过 3 条）：\n\n{draft}"
-    return llm(EDITOR_SYSTEM, prompt)
+    return llm(EDITOR_SYSTEM, prompt)  # 用编辑人设调用模型，返回意见
 
 
 def writer_revise(topic: str, draft: str, feedback: str) -> str:
     """作家根据反馈修改"""
+    # 把主题、原文、编辑意见都放进 prompt
     prompt = f"主题：{topic}\n原文：{draft}\n编辑意见：{feedback}\n请根据意见修改文章。"
-    return llm(WRITER_SYSTEM, prompt)
+    return llm(WRITER_SYSTEM, prompt)  # 用作家人设调用模型，返回修改稿
 
 
 def publish_with_revision(topic: str, rounds: int = 2):
-    draft = writer(topic)
-    for i in range(rounds):
+    draft = writer(topic)  # 作家先写初稿
+    for i in range(rounds):  # 循环 rounds 次审稿修改
         print(f"=== 第 {i+1} 轮审稿 ===")
-        feedback = editor_feedback(draft)
+        feedback = editor_feedback(draft)  # 编辑提意见
         print("编辑意见：", feedback)
-        draft = writer_revise(topic, draft, feedback)
-    return draft</code></pre>
+        draft = writer_revise(topic, draft, feedback)  # 作家根据意见修改
+    return draft  # 返回最终稿</code></pre>
 
         <h2>6. 主流多 Agent 框架</h2>
         <p>
