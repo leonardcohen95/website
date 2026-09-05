@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第4章 给 Agent 加记忆 | AI Agent 搭建教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="04-memory">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 4 章</span>
+          <span class="meta-tag">核心能力</span>
+          <span class="meta-tag">约 20 分钟</span>
+        </div>
+        <h1>给 Agent 加记忆</h1>
+        <p>
+          上一章的 <code>ask_llm</code> 只能一问一答，模型记不住上一轮说了什么。
+          这一章我们给 Agent 加上「记忆」，让它能进行连贯的多轮对话。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解上下文窗口的含义</li>
+          <li>用消息列表实现对话记忆</li>
+          <li>写出一个能多轮对话的 Agent</li>
+          <li>了解记忆的分类（短期/长期）</li>
+        </ul>
+
+        <h2>1. 为什么需要记忆</h2>
+        <p>
+          大模型本身是「无状态」的——它不会记得上次对话的内容。每次调用 API，
+          都是一次全新的请求。所以如果我们想让模型记住之前聊了什么，
+          就必须<strong>把历史对话一并发给它</strong>。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">类比理解</div>
+          <p>
+            把大模型想象成一个「每次见面都失忆的人」。你想让它理解上下文，
+            就得每次见面都把之前的聊天记录念给它听。这个「聊天记录」就是记忆。
+          </p>
+        </div>
+
+        <h2>2. 用消息列表实现记忆</h2>
+        <p>
+          原理很简单：维护一个 <code>messages</code> 列表，每轮对话都把用户问题和模型回答追加进去，
+          下次调用时把整个列表发给模型。
+        </p>
+
+        <pre><code>import os
+from dotenv import load_dotenv
+import dashscope
+
+load_dotenv()
+dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
+
+
+class Agent:
+    def __init__(self, system_prompt="你是一个乐于助人的助手。"):
+        self.messages = [{"role": "system", "content": system_prompt}]
+
+    def chat(self, user_input: str) -> str:
+        # 1. 把用户输入加入记忆
+        self.messages.append({"role": "user", "content": user_input})
+
+        # 2. 调用模型（传入完整历史）
+        response = dashscope.Generation.call(
+            model="qwen-turbo",
+            messages=self.messages,
+            result_format="message",
+        )
+        answer = response.output.choices[0].message.content
+
+        # 3. 把模型回答也加入记忆
+        self.messages.append({"role": "assistant", "content": answer})
+        return answer
+
+
+if __name__ == "__main__":
+    agent = Agent()
+    print(agent.chat("我叫小明，今年 10 岁。"))
+    print(agent.chat("我叫什么名字？"))  # 模型会回答「小明」</code></pre>
+
+        <p>运行试试，第二个问题模型能答出「小明」，说明记忆生效了！</p>
+
+        <h2>3. 对话流程图</h2>
+        <pre><code>第一轮：
+  messages = [system, user("我叫小明")]
+  → 模型回答 → messages = [system, user, assistant]
+
+第二轮：
+  messages = [system, user, assistant, user("我叫什么")]
+  → 模型根据历史回答「小明」</code></pre>
+
+        <h2>4. 记忆的分类</h2>
+
+        <div class="term-card">
+          <div class="term-name">短期记忆（上下文窗口）</div>
+          <p>
+            就是上面代码里的 <code>messages</code> 列表。它存在于一次会话中，
+            关掉程序就没了。受限于模型的上下文窗口大小（如 8K、32K token）。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">长期记忆（持久化存储）</div>
+          <p>
+            把重要信息存到数据库或文件中，下次启动程序还能读取。
+            比如记住用户的姓名、偏好等。常见方案：SQLite、向量数据库。
+          </p>
+        </div>
+
+        <h2>5. 实现长期记忆</h2>
+        <p>
+          我们用一个 JSON 文件来保存用户信息，实现简单的长期记忆。
+          创建 <code>memory.json</code>：
+        </p>
+        <pre><code>import os
+import json
+from dotenv import load_dotenv
+import dashscope
+
+load_dotenv()
+dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
+
+MEMORY_FILE = "memory.json"
+
+
+def load_memory() -> dict:
+    if os.path.exists(MEMORY_FILE):
+        with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+
+def save_memory(data: dict):
+    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+class Agent:
+    def __init__(self):
+        self.messages = [{"role": "system", "content": "你是一个乐于助人的助手。"}]
+        self.long_term = load_memory()
+
+    def chat(self, user_input: str) -> str:
+        # 把长期记忆拼接到 system 提示中
+        if self.long_term:
+            context = "已知用户信息：" + json.dumps(self.long_term, ensure_ascii=False)
+            self.messages[0]["content"] = "你是一个乐于助人的助手。" + context
+
+        self.messages.append({"role": "user", "content": user_input})
+        response = dashscope.Generation.call(
+            model="qwen-turbo", messages=self.messages, result_format="message"
+        )
+        answer = response.output.choices[0].message.content
+        self.messages.append({"role": "assistant", "content": answer})
+
+        # 如果用户提到了姓名，保存到长期记忆
+        if "我叫" in user_input:
+            name = user_input.split("我叫")[-1].strip("。.！!")
+            self.long_term["name"] = name
+            save_memory(self.long_term)
+
+        return answer</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">进阶方向</div>
+          <p>
+            真实项目中，长期记忆常用<strong>向量数据库</strong>（如 Chroma、FAISS）来存储。
+            它能把文字转成向量，通过相似度检索找到相关的历史信息，而不是把所有记录都塞给模型。
+            感兴趣的同学可以课后研究。
+          </p>
+        </div>
+
+        <h2>6. 上下文窗口溢出怎么办</h2>
+        <p>
+          对话越来越长，<code>messages</code> 会超出模型的上下文窗口限制。
+          常见处理方式：
+        </p>
+        <ul>
+          <li><strong>截断</strong>：只保留最近 N 轮对话，丢掉最早的</li>
+          <li><strong>摘要</strong>：让模型把历史对话总结成一段话，替换原始记录</li>
+          <li><strong>检索</strong>：用向量数据库只取回相关的历史记录</li>
+        </ul>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>大模型是无状态的，记忆需要我们自己维护 <code>messages</code> 列表</li>
+          <li>短期记忆 = 内存中的消息列表，关闭程序即丢失</li>
+          <li>长期记忆 = 持久化存储（文件/数据库），重启后仍在</li>
+          <li>对话过长时需要截断、摘要或检索来避免溢出上下文窗口</li>
+        </ul>
+
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="大模型本身是无状态的，不会自动记住上一轮对话，必须由我们把历史消息一起发送。">
+            <div class="quiz-question">1. （单选）大模型为什么记不住上一轮对话？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 因为模型是无状态的，每次请求都是独立的</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 因为模型故意忘记</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 因为网络太慢</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 因为 API Key 过期</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="messages|消息列表"
+               data-explain="我们通过维护一个 messages 列表，把每轮的 user 和 assistant 消息都保存下来，下次调用时一起发送，从而实现记忆。">
+            <div class="quiz-question">2. （填空）在我们的代码中，用什么数据结构来保存对话历史从而实现记忆？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="对话过长会超出模型的上下文窗口（token 限制），需要截断、摘要或检索来处理。">
+            <div class="quiz-question">3. （单选）当对话历史越来越长时，最可能遇到什么问题？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. 电脑死机</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. API Key 自动失效</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. 超出模型的上下文窗口限制</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. Python 崩溃</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 第 4 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

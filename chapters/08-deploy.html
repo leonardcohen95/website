@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第8章 部署与总结 | AI Agent 搭建教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="08-deploy">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 8 章</span>
+          <span class="meta-tag">进阶</span>
+          <span class="meta-tag">约 25 分钟</span>
+        </div>
+        <h1>部署到公网 & 学习总结</h1>
+        <p>
+          前面几章我们已经能在本地跑一个 Agent 了。这一章我们把它放到公网上，
+          让任何人都能通过浏览器访问。我们还会回顾整个学习路线，给你下一步的方向。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>把本地 Agent 封装成 Web 接口</li>
+          <li>使用免费平台部署到公网</li>
+          <li>获取免费域名让访问更方便</li>
+          <li>回顾 AI Agent 的完整知识体系</li>
+        </ul>
+
+        <h2>1. 把 Agent 做成 Web 接口</h2>
+        <p>
+          我们用 <code>Flask</code> 把 Agent 封装成一个 HTTP 接口，这样前端网页就能调用它。
+        </p>
+        <p>先安装 Flask：</p>
+        <pre><code>pip install flask flask-cors</code></pre>
+
+        <p>创建 <code>app.py</code>：</p>
+        <pre><code>import os
+from dotenv import load_dotenv
+import dashscope
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+
+load_dotenv()
+dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
+
+app = Flask(__name__)
+CORS(app)  # 允许跨域请求
+
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.get_json()
+    user_input = data.get("message", "")
+    if not user_input:
+        return jsonify({"error": "请输入消息"}), 400
+
+    response = dashscope.Generation.call(
+        model="qwen-turbo",
+        messages=[{"role": "user", "content": user_input}],
+        result_format="message",
+    )
+    answer = response.output.choices[0].message.content
+    return jsonify({"reply": answer})
+
+
+@app.route("/")
+def index():
+    return "AI Agent 运行中！"
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)</code></pre>
+
+        <p>本地测试：</p>
+        <pre><code>python app.py
+# 另开一个终端测试
+curl -X POST http://localhost:5000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"你好"}'</code></pre>
+
+        <h2>2. 免费部署到公网</h2>
+        <p>有几个完全免费的平台可以部署 Python 后端：</p>
+
+        <h3>方案 A：Render（推荐，最简单）</h3>
+        <ol>
+          <li>注册 <a href="https://render.com" target="_blank">render.com</a>（免费）</li>
+          <li>把代码推到 GitHub 仓库</li>
+          <li>在 Render 上点「New → Web Service」，连接你的 GitHub 仓库</li>
+          <li>配置：
+            <ul>
+              <li>Build Command: <code>pip install -r requirements.txt</code></li>
+              <li>Start Command: <code>gunicorn app:app</code></li>
+              <li>环境变量：添加 <code>DASHSCOPE_API_KEY</code></li>
+            </ul>
+          </li>
+          <li>点击部署，几分钟后得到一个 <code>https://xxx.onrender.com</code> 的公网地址</li>
+        </ol>
+
+        <p>需要创建 <code>requirements.txt</code>：</p>
+        <pre><code>flask
+flask-cors
+dashscope
+python-dotenv
+gunicorn</code></pre>
+
+        <h3>方案 B：Hugging Face Spaces</h3>
+        <ol>
+          <li>注册 <a href="https://huggingface.co" target="_blank">huggingface.co</a></li>
+          <li>创建一个 Space，SDK 选 Docker 或 Gradio</li>
+          <li>上传代码，设置环境变量中的 API Key</li>
+          <li>得到 <code>https://xxx.hf.space</code> 的公网地址</li>
+        </ol>
+
+        <h3>方案 C：Railway / Fly.io</h3>
+        <p>同样提供免费额度，支持 Docker 部署，操作类似 Render。</p>
+
+        <h2>3. 免费域名</h2>
+        <p>
+          上面的平台会给你一个免费的二级域名（如 <code>xxx.onrender.com</code>），已经可以公网访问。
+          如果你想要更个性化的域名，有以下免费选择：
+        </p>
+        <ul>
+          <li><strong><a href="https://www.is-a.dev" target="_blank">is-a.dev</a></strong>：免费子域名，如 <code>yourname.is-a.dev</code></li>
+          <li><strong><a href="https://js.org" target="_blank">js.org</a></strong>：面向 JS 项目的免费子域名</li>
+          <li><strong>GitHub Pages</strong>：<code>yourname.github.io</code>（适合纯静态网站）</li>
+          <li><strong>Cloudflare Pages</strong>：免费托管 + 可绑定自定义域名</li>
+        </ul>
+
+        <div class="callout tip">
+          <div class="callout-title">本教程网站的部署</div>
+          <p>
+            这个教程网站本身是纯静态 HTML，可以直接用
+            <strong>GitHub Pages</strong> 免费部署，还能获得
+            <code>你的用户名.github.io/仓库名</code> 的免费域名。
+            部署方法见本仓库的 README。
+          </p>
+        </div>
+
+        <h2>4. 做一个简单的聊天界面</h2>
+        <p>创建 <code>index.html</code> 作为前端，调用我们的接口：</p>
+        <pre><code>&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;body&gt;
+  &lt;h1&gt;我的 AI Agent&lt;/h1&gt;
+  &lt;div id="chat"&gt;&lt;/div&gt;
+  &lt;input id="msg" placeholder="输入消息..." /&gt;
+  &lt;button onclick="send()"&gt;发送&lt;/button&gt;
+  &lt;script&gt;
+    const API = "https://你的地址.onrender.com/chat";
+    async function send() {
+      const text = document.getElementById("msg").value;
+      const resp = await fetch(API, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({message: text})
+      });
+      const data = await resp.json();
+      document.getElementById("chat").innerHTML +=
+        "&lt;p&gt;&lt;b&gt;你：&lt;/b&gt;" + text + "&lt;/p&gt;" +
+        "&lt;p&gt;&lt;b&gt;Agent：&lt;/b&gt;" + data.reply + "&lt;/p&gt;";
+    }
+  &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre>
+
+        <h2>5. 学习路线总结</h2>
+        <p>回顾我们走过的路：</p>
+        <pre><code>第1章 认识 Agent       → 理解概念
+第2章 环境准备         → 搭好工具
+第3章 调用 LLM         → 大脑（核心）
+第4章 记忆             → 上下文（多轮对话）
+第5章 工具调用         → 手脚（Function Calling）
+第6章 规划与反思       → 思考（ReAct）
+第7章 多 Agent 协作    → 团队
+第8章 部署             → 上线</code></pre>
+
+        <h2>6. 下一步可以学什么</h2>
+        <ul>
+          <li><strong>向量数据库与 RAG</strong>：让 Agent 能查询私有知识库</li>
+          <li><strong>LangChain / LlamaIndex</strong>：用框架快速搭建复杂 Agent</li>
+          <li><strong>本地大模型</strong>：用 Ollama 跑开源模型，不花 API 费用</li>
+          <li><strong>Agent 评估</strong>：如何衡量 Agent 的好坏</li>
+          <li><strong>安全与对齐</strong>：防止 Agent 做出危险操作</li>
+        </ul>
+
+        <div class="callout tip">
+          <div class="callout-title">恭喜你！</div>
+          <p>
+            学到这里，你已经掌握了独立搭建一个 AI Agent 的全部核心能力。
+            接下来就是多动手、多折腾。AI 领域变化很快，保持好奇心和实践是最好的学习方式。
+            祝你在 AI Agent 的世界里玩得开心！
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>用 Flask 把 Agent 封装成 HTTP 接口</li>
+          <li>Render / Hugging Face / Railway 等平台可免费部署到公网</li>
+          <li>免费域名可选 is-a.dev、GitHub Pages、Cloudflare Pages 等</li>
+          <li>Agent 核心知识体系：LLM + 记忆 + 工具 + 规划 + 部署</li>
+        </ul>
+
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="本教程网站是纯静态 HTML，可以直接用 GitHub Pages 免费部署，获得 用户名.github.io/仓库名 的访问地址。">
+            <div class="quiz-question">1. （单选）本教程网站（纯静态 HTML）最适合用哪种方式免费部署？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. GitHub Pages</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 买一台服务器</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 用 Word 文档分享</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 刻成光盘邮寄</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="flask|Flask"
+               data-explain="我们用 Flask 这个轻量级 Web 框架把 Agent 封装成 HTTP 接口，供前端调用。">
+            <div class="quiz-question">2. （填空）教程中用哪个 Python 框架把 Agent 封装成 Web 接口？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入框架名" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D"
+               data-explain="Render 部署时需要配置 Build Command（安装依赖）、Start Command（启动服务）和环境变量（API Key），不需要配置银行卡号。">
+            <div class="quiz-question">3. （单选）在 Render 上部署 Python 服务，以下哪项不是必需的配置？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. Build Command</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. Start Command</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. 环境变量（API Key）</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. 银行卡号</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 第 8 章 · 完结</p>
+  </footer>
+
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

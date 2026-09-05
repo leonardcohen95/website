@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第5章 让 Agent 会用工具 | AI Agent 搭建教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="05-tools">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 5 章</span>
+          <span class="meta-tag">核心能力</span>
+          <span class="meta-tag">约 25 分钟</span>
+        </div>
+        <h1>让 Agent 会用工具</h1>
+        <p>
+          这是 Agent 区别于普通聊天机器人的关键一步！本章我们学习
+          <strong>Function Calling（函数调用）</strong>，让 Agent 能调用外部工具，
+          比如查天气、做计算、读文件。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Function Calling 的原理</li>
+          <li>学会定义工具（函数）的 schema</li>
+          <li>实现一个能查天气的 Agent</li>
+          <li>掌握「模型选择工具 → 执行工具 → 结果回传」的完整流程</li>
+        </ul>
+
+        <h2>1. 什么是 Function Calling</h2>
+        <p>
+          <strong>Function Calling</strong> 是大模型提供的一种能力：你告诉模型有哪些函数可用、
+          每个函数的参数是什么，模型会根据用户问题<strong>自动决定</strong>是否调用某个函数、
+          以及传什么参数。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">工作流程</div>
+          <pre><code>用户：北京今天天气怎么样？
+   │
+   ▼ 模型判断需要调用「查天气」工具，返回函数名和参数
+   ▼ { "name": "get_weather", "arguments": {"city": "北京"} }
+   │
+   ▼ 你的代码执行 get_weather("北京")，拿到结果
+   ▼ { "temp": "25°C", "condition": "晴" }
+   │
+   ▼ 把结果回传给模型
+   ▼
+模型：北京今天晴，气温 25°C。</code></pre>
+        </div>
+
+        <h2>2. 定义工具</h2>
+        <p>
+          首先，我们写一个真实的函数（工具），再用 JSON Schema 描述它的参数，
+          让模型知道怎么调用。
+        </p>
+
+        <pre><code>import json
+import os
+from dotenv import load_dotenv
+import dashscope
+
+load_dotenv()
+dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
+
+
+def get_weather(city: str) -> str:
+    """查询指定城市的天气（模拟数据，实际可对接天气 API）"""
+    weather_db = {
+        "北京": "晴，25°C",
+        "上海": "多云，22°C",
+        "广州": "小雨，28°C",
+    }
+    return weather_db.get(city, f"暂无 {city} 的天气数据")
+
+
+# 工具描述（JSON Schema 格式）
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "查询指定城市的当前天气",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "city": {
+                        "type": "string",
+                        "description": "城市名称，如北京、上海",
+                    }
+                },
+                "required": ["city"],
+            },
+        },
+    }
+]</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">JSON Schema 是什么</div>
+          <p>
+            JSON Schema 是一种用 JSON 描述数据结构的格式。这里我们用它告诉模型：
+            <code>get_weather</code> 函数需要一个 <code>city</code> 字符串参数。
+            模型会按照这个格式生成参数，我们再解析出来执行函数。
+          </p>
+        </div>
+
+        <h2>3. 实现带工具调用的 Agent</h2>
+        <pre><code>def chat_with_tools(user_input: str) -> str:
+    messages = [
+        {"role": "system", "content": "你是一个助手，必要时调用工具。"},
+        {"role": "user", "content": user_input},
+    ]
+
+    response = dashscope.Generation.call(
+        model="qwen-turbo",
+        messages=messages,
+        tools=tools,
+        result_format="message",
+    )
+
+    msg = response.output.choices[0].message
+
+    # 如果模型要求调用工具
+    if hasattr(msg, "tool_calls") and msg.tool_calls:
+        for call in msg.tool_calls:
+            func_name = call.function.name
+            args = json.loads(call.function.arguments)
+            print(f"模型调用了 {func_name}，参数：{args}")
+
+            # 执行对应的函数
+            if func_name == "get_weather":
+                result = get_weather(args["city"])
+
+            # 把工具结果回传给模型
+            messages.append(msg)
+            messages.append({
+                "role": "tool",
+                "tool_call_id": call.id,
+                "content": result,
+            })
+
+        # 再次调用模型，让它根据工具结果生成最终回答
+        response = dashscope.Generation.call(
+            model="qwen-turbo",
+            messages=messages,
+            tools=tools,
+            result_format="message",
+        )
+        return response.output.choices[0].message.content
+
+    # 不需要工具，直接返回模型回答
+    return msg.content
+
+
+if __name__ == "__main__":
+    print(chat_with_tools("北京今天天气怎么样？"))
+    print(chat_with_tools("1+1等于几？"))  # 不需要工具，直接回答</code></pre>
+
+        <h2>4. 执行流程拆解</h2>
+        <ol>
+          <li>用户提问 → 发给模型，同时附带可用工具列表</li>
+          <li>模型判断：这个问题需要工具吗？</li>
+          <li>如果需要，返回 <code>tool_calls</code>（函数名 + 参数）</li>
+          <li>我们的代码根据函数名执行对应 Python 函数</li>
+          <li>把函数结果以 <code>role: "tool"</code> 的消息发回模型</li>
+          <li>模型基于工具结果，生成自然语言回答</li>
+        </ol>
+
+        <h2>5. 再多加一个工具：计算器</h2>
+        <p>工具可以有多个，模型会自己选择用哪个：</p>
+        <pre><code>def calculate(expression: str) -> str:
+    """计算一个数学表达式"""
+    try:
+        return str(eval(expression))
+    except Exception as e:
+        return f"计算错误：{e}"
+
+
+# 在 tools 列表中追加
+tools.append({
+    "type": "function",
+    "function": {
+        "name": "calculate",
+        "description": "计算数学表达式，如 2+3*4",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "expression": {"type": "string", "description": "数学表达式"}
+            },
+            "required": ["expression"],
+        },
+    },
+})</code></pre>
+
+        <p>然后在 <code>chat_with_tools</code> 中加上分支：</p>
+        <pre><code>if func_name == "get_weather":
+    result = get_weather(args["city"])
+elif func_name == "calculate":
+    result = calculate(args["expression"])</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">安全提醒</div>
+          <p>
+            上面的 <code>eval()</code> 能执行任意代码，在真实项目中<strong>非常危险</strong>。
+            这里只是演示，生产环境请用 <code>ast.literal_eval</code> 或专门的表达式解析库。
+          </p>
+        </div>
+
+        <h2>6. 工具描述的重要性</h2>
+        <p>
+          模型是否调用工具、传什么参数，完全取决于你写的 <code>description</code>。
+          描述越清晰，模型调用越准确。
+        </p>
+        <ul>
+          <li><strong>函数名</strong>：见名知意，如 <code>get_weather</code></li>
+          <li><strong>函数描述</strong>：说明这个函数什么时候该用</li>
+          <li><strong>参数描述</strong>：说明每个参数的含义和格式</li>
+        </ul>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Function Calling 让模型能决定调用哪个外部函数</li>
+          <li>流程：模型返回函数调用 → 代码执行 → 结果回传 → 模型生成最终回答</li>
+          <li>工具需要用 JSON Schema 描述名称、参数和用途</li>
+          <li>可以同时定义多个工具，模型自动选择</li>
+        </ul>
+
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="Function Calling 的流程是：模型决定调用函数并返回参数，我们的代码执行函数，再把结果回传给模型生成最终回答。函数不是模型自己执行的。">
+            <div class="quiz-question">1. （单选）Function Calling 中，真正执行函数的是谁？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 大模型自己执行</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 我们的 Python 代码执行</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 操作系统执行</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 浏览器执行</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="tool|工具"
+               data-explain="工具执行结果以 role 为 tool 的消息回传给模型，模型据此生成最终回答。">
+            <div class="quiz-question">2. （填空）把工具执行结果回传给模型时，消息的 role 应该是什么？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="模型根据工具的 name、description、parameters 等描述信息来判断是否调用以及传什么参数，所以描述越清晰越准确。">
+            <div class="quiz-question">3. （单选）模型能否正确调用工具，主要取决于什么？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. 网络速度</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. 电脑性能</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. 工具的描述是否清晰准确</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. API Key 的长度</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 第 5 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# 环境自动生成的打包文件
+.trae-html-share-packages/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.egg-info/
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store
+
+# 系统
+Thumbs.db

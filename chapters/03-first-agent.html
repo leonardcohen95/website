@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第3章 第一个 Agent | AI Agent 搭建教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="03-first-agent">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 3 章</span>
+          <span class="meta-tag">核心能力</span>
+          <span class="meta-tag">约 20 分钟</span>
+        </div>
+        <h1>第一个 Agent：调用大模型</h1>
+        <p>
+          这一章我们正式写代码！你将学会如何用 Python 调用大语言模型（LLM）的 API，
+          让程序生成文字回答。这是构建 Agent 的第一步——先让「大脑」转起来。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 prompt（提示词）的概念</li>
+          <li>学会调用通义千问 / OpenAI 的 API</li>
+          <li>理解 system、user、assistant 三种消息角色</li>
+          <li>写出第一个能回答问题的 Python 程序</li>
+        </ul>
+
+        <h2>1. 关键概念</h2>
+
+        <div class="term-card">
+          <div class="term-name">LLM（大语言模型）</div>
+          <p>Large Language Model，能理解和生成人类语言的 AI 模型，比如 GPT、通义千问、文心一言等。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Prompt（提示词）</div>
+          <p>你发给模型的文字指令。模型根据 prompt 生成回答。prompt 的质量直接决定回答质量。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Token</div>
+          <p>
+            模型处理文字的最小单位。大约 1 个汉字 ≈ 1-2 个 token，1 个英文单词 ≈ 1 个 token。
+            模型有「上下文窗口」限制，比如 8K token，意味着输入+输出加起来不能超过约 8000 个 token。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">消息角色（Role）</div>
+          <p>
+            对话中的每条消息都有角色：<br />
+            - <code>system</code>：系统提示，设定模型的行为和身份<br />
+            - <code>user</code>：用户说的话<br />
+            - <code>assistant</code>：模型的回复
+          </p>
+        </div>
+
+        <h2>2. 调用通义千问 API</h2>
+        <p>创建 <code>agent.py</code>，写入以下代码：</p>
+        <pre><code>import os
+from dotenv import load_dotenv
+import dashscope
+
+load_dotenv()
+dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
+
+
+def ask_llm(prompt: str) -> str:
+    """调用通义千问，返回模型回答"""
+    response = dashscope.Generation.call(
+        model="qwen-turbo",
+        messages=[{"role": "user", "content": prompt}],
+        result_format="message",
+    )
+    return response.output.choices[0].message.content
+
+
+if __name__ == "__main__":
+    answer = ask_llm("用一句话解释什么是人工智能")
+    print("回答:", answer)</code></pre>
+
+        <p>运行：</p>
+        <pre><code>python agent.py</code></pre>
+        <p>如果一切正常，你会看到模型生成的一句话解释。恭喜，你已经调用了 LLM！</p>
+
+        <h2>3. 调用 OpenAI API（备选）</h2>
+        <p>如果你用的是 OpenAI，代码如下：</p>
+        <pre><code>import os
+from dotenv import load_dotenv
+from openai import OpenAI
+
+load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
+def ask_llm(prompt: str) -> str:
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.choices[0].message.content
+
+
+if __name__ == "__main__":
+    print("回答:", ask_llm("用一句话解释什么是人工智能"))</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">两种 API 的区别</div>
+          <p>
+            通义千问用 <code>dashscope</code> 库，OpenAI 用 <code>openai</code> 库。
+            它们的调用方式非常相似，核心都是「发送 messages 列表，拿到 content」。
+            后续章节的代码以通义千问为例，用 OpenAI 的同学只需替换 <code>ask_llm</code> 函数内部即可。
+          </p>
+        </div>
+
+        <h2>4. 加入 system 提示</h2>
+        <p>
+          目前我们只发了一条 <code>user</code> 消息。如果想让模型扮演某种角色，
+          可以加一条 <code>system</code> 消息：
+        </p>
+        <pre><code>def ask_llm(prompt: str, system_prompt: str = "你是一个乐于助人的助手。") -> str:
+    response = dashscope.Generation.call(
+        model="qwen-turbo",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ],
+        result_format="message",
+    )
+    return response.output.choices[0].message.content
+
+
+if __name__ == "__main__":
+    ans = ask_llm(
+        "我该怎么学习编程？",
+        system_prompt="你是一位经验丰富的编程导师，回答要简洁实用。",
+    )
+    print(ans)</code></pre>
+
+        <h2>5. 理解整个调用过程</h2>
+        <pre><code>你的代码
+   │  发送 POST 请求（含 API Key 和 messages）
+   ▼
+大模型服务器
+   │  处理 prompt，生成回答
+   ▼
+返回 JSON 响应（含生成的文字）
+   │
+   ▼
+你的代码解析出 content 并打印</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">常见错误</div>
+          <ul>
+            <li><code>API Key 无效</code>：检查 .env 文件和变量名是否正确</li>
+            <li><code>余额不足</code>：去控制台充值或换用免费额度的模型</li>
+            <li><code>模型不存在</code>：确认模型名称拼写正确（如 qwen-turbo）</li>
+            <li><code>网络超时</code>：国内用户用通义千问更稳定</li>
+          </ul>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>LLM 通过 API 调用，核心是发送 <code>messages</code> 列表</li>
+          <li>消息有三种角色：<code>system</code>、<code>user</code>、<code>assistant</code></li>
+          <li>Prompt 质量决定回答质量，system 消息可以设定模型人设</li>
+          <li>现在的 <code>ask_llm</code> 函数就是 Agent 的「大脑」，后面我们会给它加记忆和工具</li>
+        </ul>
+
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="system 角色用于设定模型的身份和行为规则，user 是用户输入，assistant 是模型回复。">
+            <div class="quiz-question">1. （单选）想让模型扮演「编程导师」的角色，应该用哪种消息？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. user 消息</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. system 消息</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. assistant 消息</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 不需要消息</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="prompt|提示词"
+               data-explain="发给模型的文字指令叫做 prompt（提示词），它的质量直接影响模型的输出。">
+            <div class="quiz-question">2. （填空）你发给大模型的文字指令，专业术语叫什么？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="Token 是模型处理文字的最小单位，上下文窗口限制了一次请求能处理的 token 总数。">
+            <div class="quiz-question">3. （单选）关于 Token 的说法，哪个是正确的？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. Token 就是一个汉字</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. Token 数量没有限制</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. Token 是模型处理文字的最小单位</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. Token 是一种编程语言</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 第 3 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

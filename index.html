@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Agent 搭建教程 | 从零开始，手把手教你做一个 AI Agent</title>
+  <meta name="description" content="面向 Python 初学者的 AI Agent 搭建教程，从概念到代码，从本地到公网部署，一步一步带你独立完成一个 AI Agent。" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body data-page="home">
+
+  <!-- 顶部导航 -->
+  <header class="site-header">
+    <div class="container">
+      <a href="index.html" class="brand">
+        <span class="brand-logo">A</span>
+        <span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <!-- 英雄区 -->
+  <section class="hero">
+    <div class="hero-badges">
+      <span class="badge">Python 初学者友好</span>
+      <span class="badge">8 章分步教学</span>
+      <span class="badge">含互动测验</span>
+      <span class="badge">公网部署指南</span>
+    </div>
+    <h1>从零开始，搭建你的第一个 AI Agent</h1>
+    <p>
+      如果你会一点 Python 语法，本教程将带你用 8 个章节，从「什么是 Agent」一路走到「把 Agent 部署到公网」。
+      每一步都讲清楚概念、给出可运行的代码，并配有互动测验帮你巩固。
+    </p>
+    <a href="chapters/01-intro.html" class="btn btn-primary">开始学习 →</a>
+  </section>
+
+  <!-- 特性 -->
+  <section class="section">
+    <div class="features">
+      <div class="feature-card">
+        <div class="icon">📖</div>
+        <h3>概念讲透</h3>
+        <p>LLM、Token、Function Calling、ReAct……每个术语都用大白话解释。</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">💻</div>
+        <h3>代码可跑</h3>
+        <p>每章都有完整可运行的 Python 代码，复制粘贴即可在本地跑通。</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">❓</div>
+        <h3>互动测验</h3>
+        <p>单选 + 简答，每题都有答案解析，学完立即检验掌握程度。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 章节目录 -->
+  <section class="section">
+    <h2 class="section-title">课程目录</h2>
+    <p class="section-sub">共 8 章，建议按顺序学习</p>
+    <div class="chapter-grid" id="chapter-grid"></div>
+  </section>
+
+  <!-- 学习路径 -->
+  <section class="section">
+    <h2 class="section-title">你将学会什么</h2>
+    <p class="section-sub">学完后，你能独立搭建并部署一个 AI Agent</p>
+    <div class="container" style="max-width: 720px;">
+      <div class="content-card">
+        <ul>
+          <li>理解 AI Agent 的核心概念与工作原理</li>
+          <li>掌握调用大语言模型（LLM）API 的方法</li>
+          <li>为 Agent 添加记忆能力，实现多轮对话</li>
+          <li>使用 Function Calling 让 Agent 调用外部工具</li>
+          <li>理解 ReAct 模式，让 Agent 具备规划与反思能力</li>
+          <li>了解多 Agent 协作的基本思路</li>
+          <li>把 Agent 部署到公网，免费让全世界访问</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 面向 Python 初学者 · 用 ❤️ 制作</p>
+    <p style="margin-top:6px;">本教程可免费用于学习，欢迎分享给更多想学 AI 的朋友。</p>
+  </footer>
+
+  <script src="assets/js/nav.js"></script>
+  <script>
+    // 首页章节目录渲染
+    document.addEventListener("DOMContentLoaded", function () {
+      var grid = document.getElementById("chapter-grid");
+      if (!grid) return;
+      var chapters = window.SITE_CONFIG.chapters;
+      grid.innerHTML = chapters
+        .map(function (c, i) {
+          return (
+            '<a href="' +
+            c.file +
+            '" class="chapter-card">' +
+            '<div class="chapter-card-head">' +
+            '<span class="num">' +
+            (i + 1) +
+            "</span>" +
+            "<h3>" +
+            c.title +
+            "</h3>" +
+            "</div>" +
+            "<p>" +
+            c.desc +
+            "</p>" +
+            "</a>"
+          );
+        })
+        .join("");
+    });
+  </script>
+</body>
+</html>
