@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第20章 中间件运维实战 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="20-middleware">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 20 章</span>
+          <span class="meta-tag">中间件</span>
+          <span class="meta-tag">约 40 分钟</span>
+        </div>
+        <h1>中间件运维实战</h1>
+        <p>
+          岗位要求具备 Redis、Elasticsearch、Kafka、Zookeeper、ClickHouse 实践经验。
+          本章逐个讲这些中间件的核心原理、部署要点和常见故障排查。
+          每个中间件你都要能说清「它解决什么问题」「怎么部署」「出问题怎么查」。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>掌握 Redis 的部署、持久化、集群和内存管理</li>
+          <li>掌握 Elasticsearch 集群部署、索引管理和性能调优</li>
+          <li>理解 Kafka 的架构、生产消费和常见故障</li>
+          <li>了解 Zookeeper 的作用和运维要点</li>
+          <li>了解 ClickHouse 的列存储特点和查询优化</li>
+        </ul>
+
+        <h2>1. Redis 运维</h2>
+        <p>Redis 是内存型 KV 数据库，常用于缓存、计数器、分布式锁。面试高频考点。</p>
+
+        <h3>1.1 安装与配置</h3>
+        <pre><code># 安装
+yum install -y redis
+# 或源码编译
+wget https://download.redis.io/releases/redis-7.2.tar.gz
+tar xzf redis-7.2.tar.gz && cd redis-7.2 && make && make install
+
+# 关键配置 redis.conf
+bind 0.0.0.0                # 监听地址，生产不要 0.0.0.0，绑内网IP
+port 6379
+requirepass 强密码            # 必须设密码
+maxmemory 4gb                # 最大内存，设物理内存 60%~70%
+maxmemory-policy allkeys-lru  # 内存满时淘汰策略
+appendonly yes                # 开启 AOF 持久化
+appendfsync everysec          # 每秒刷盘，性能和安全折中
+daemonize yes                 # 后台运行</code></pre>
+
+        <h3>1.2 持久化机制</h3>
+        <div class="callout">
+          <div class="callout-title">RDB vs AOF</div>
+          <p>
+            <strong>RDB</strong>：定时快照，文件紧凑，恢复快，但可能丢最后一次快照后的数据。
+            <strong>AOF</strong>：记录每条写命令，数据安全，但文件大、恢复慢。
+            <strong>生产建议</strong>：两者都开（Redis 4.0+ 支持混合持久化，AOF 文件里前面是 RDB 快照，后面是增量命令）。
+          </p>
+        </div>
+
+        <h3>1.3 集群模式</h3>
+        <pre><code># Redis Cluster（至少 3 主 3 从）
+# 每个节点配置 cluster-enabled yes
+redis-cli --cluster create \
+  192.168.1.10:6379 192.168.1.11:6379 192.168.1.12:6379 \
+  192.168.1.13:6379 192.168.1.14:6379 192.168.1.15:6379 \
+  --cluster-replicas 1
+
+# 查看集群状态
+redis-cli -c cluster info
+redis-cli -c cluster nodes</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">16384 个槽位</div>
+          <p>
+            Redis Cluster 把数据分到 <strong>16384 个 hash slot</strong> 中，主节点分摊槽位。
+            key 通过 <code>CRC16(key) % 16384</code> 定位槽位。
+            集群模式下多 key 操作（如 mget）要求 key 在同一槽位，可用 <code>{}</code> 哈希标签。
+          </p>
+        </div>
+
+        <h3>1.4 常见故障排查</h3>
+        <pre><code># 看内存使用
+redis-cli info memory
+# used_memory_human：实际使用
+# used_memory_peak_human：峰值
+# mem_fragmentation_ratio：碎片率，>1.5 说明碎片严重
+
+# 看慢查询
+redis-cli slowlog get 10
+
+# 内存满导致写入失败
+# 检查 maxmemory 和淘汰策略
+redis-cli CONFIG GET maxmemory
+redis-cli CONFIG GET maxmemory-policy
+
+# 连接数打满
+redis-cli info clients | grep connected_clients
+# 检查 maxclients 配置
+
+# 主从断连
+redis-cli info replication</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">缓存三大问题</div>
+          <ul>
+            <li><strong>缓存穿透</strong>：查不存在的 key，打到 DB。解决：布隆过滤器 / 缓存空值。</li>
+            <li><strong>缓存击穿</strong>：热点 key 过期瞬间，大量请求打 DB。解决：互斥锁 / 永不过期。</li>
+            <li><strong>缓存雪崩</strong>：大量 key 同时过期。解决：过期时间加随机值 / 多级缓存。</li>
+          </ul>
+        </div>
+
+        <h2>2. Elasticsearch 运维</h2>
+        <p>ES 是分布式搜索引擎，常用于日志检索和全文搜索。</p>
+
+        <h3>2.1 部署要点</h3>
+        <pre><code># 系统参数（必须，否则启动失败）
+# /etc/security/limits.conf
+elasticsearch soft nofile 65536
+elasticsearch hard nofile 65536
+elasticsearch soft memlock unlimited
+elasticsearch hard memlock unlimited
+
+# /etc/sysctl.conf
+vm.max_map_count = 262144
+
+# elasticsearch.yml 关键配置
+cluster.name: my-es
+node.name: node-1
+network.host: 0.0.0.0
+http.port: 9200
+discovery.seed_hosts: ["node1", "node2", "node3"]
+cluster.initial_master_nodes: ["node-1", "node-2", "node-3"]
+xpack.security.enabled: true          # 开启安全（生产必开）
+# 内存：jvm.options 设 -Xms 和 -Xmx 为物理内存一半，但不超过 32G</code></pre>
+
+        <h3>2.2 核心概念</h3>
+        <div class="callout">
+          <div class="callout-title">索引 → 分片 → 副本</div>
+          <p>
+            <strong>Index（索引）</strong>：类似数据库的表。
+            <strong>Shard（分片）</strong>：索引被分成多个分片，分散在不同节点，实现水平扩展。
+            <strong>Replica（副本）</strong>：每个分片的副本，提供高可用和读负载均衡。
+            生产环境副本数至少 1，分片数根据数据量预估，创建后不能改。
+          </p>
+        </div>
+
+        <h3>2.3 常用运维命令</h3>
+        <pre><code># 集群健康
+curl -u elastic:密码 http://localhost:9200/_cluster/health?pretty
+# status: green(正常) / yellow(副本缺失) / red(主分片缺失)
+
+# 节点状态
+curl http://localhost:9200/_cat/nodes?v
+
+# 索引列表
+curl http://localhost:9200/_cat/indices?v
+
+# 看分片分布
+curl http://localhost:9200/_cat/shards?v
+
+# 修改副本数（可动态改）
+curl -X PUT http://localhost:9200/myindex/_settings \
+  -H 'Content-Type: application/json' \
+  -d '{"index": {"number_of_replicas": 2}}'
+
+# 强制合并 segment（降低 segment 数量，提升查询性能）
+curl -X POST http://localhost:9200/myindex/_forcemerge?max_num_segments=1</code></pre>
+
+        <h3>2.4 性能调优</h3>
+        <ul>
+          <li><strong>写入优化</strong>：批量写入（_bulk）、refresh_interval 调大（如 30s）、关闭副本写入完成后再开。</li>
+          <li><strong>查询优化</strong>：避免 <code>*</code> 通配、用 filter 代替 query（不评分可缓存）、合理设置分片数。</li>
+          <li><strong>JVM 内存</strong>：堆内存不超 32G（超过指针压缩失效），堆外内存给 Lucene 用。</li>
+          <li><strong>冷热分离</strong>：热数据用 SSD，冷数据归档到普通盘。</li>
+        </ul>
+
+        <h2>3. Kafka 运维</h2>
+        <p>Kafka 是分布式消息队列，高吞吐、可持久化，常用于日志收集和数据管道。</p>
+
+        <h3>3.1 架构</h3>
+        <div class="callout">
+          <div class="callout-title">Kafka 核心概念</div>
+          <pre><code>Producer → Topic(Partition1, Partition2, ...) → Consumer Group
+                         │
+                         └─ 每个 Partition 有 Leader + Follower 副本</code></pre>
+          <p>
+            <strong>Topic</strong>：消息分类。
+            <strong>Partition</strong>：Topic 分成多个分区，是并发和顺序的基本单位。
+            <strong>Consumer Group</strong>：同一组内消费者分摊分区，一组内一条消息只被一个消费者消费。
+            <strong>Offset</strong>：消息在分区内的偏移量，消费者靠它记录消费进度。
+          </p>
+        </div>
+
+        <h3>3.2 部署与常用命令</h3>
+        <pre><code># Kafka 依赖 Zookeeper（或 KRaft 模式不用 ZK）
+# 启动 Zookeeper
+bin/zookeeper-server-start.sh config/zookeeper.properties &
+# 启动 Kafka
+bin/kafka-server-start.sh config/server.properties &
+
+# 创建 Topic（3 分区，2 副本）
+bin/kafka-topics.sh --create --topic mytopic \
+  --bootstrap-server localhost:9092 \
+  --partitions 3 --replication-factor 2
+
+# 查看 Topic 列表
+bin/kafka-topics.sh --list --bootstrap-server localhost:9092
+
+# 查看 Topic 详情
+bin/kafka-topics.sh --describe --topic mytopic --bootstrap-server localhost:9092
+
+# 生产消息
+bin/kafka-console-producer.sh --topic mytopic --bootstrap-server localhost:9092
+
+# 消费消息
+bin/kafka-console-consumer.sh --topic mytopic --from-beginning \
+  --bootstrap-server localhost:9092
+
+# 查看消费者组延迟
+bin/kafka-consumer-groups.sh --describe --group mygroup \
+  --bootstrap-server localhost:9092</code></pre>
+
+        <h3>3.3 常见故障</h3>
+        <ul>
+          <li><strong>消息积压</strong>：消费者处理慢。看 <code>kafka-consumer-groups --describe</code> 的 LAG 列。解决方案：增加消费者数（不超过分区数）、优化消费逻辑、临时扩容分区。</li>
+          <li><strong>Broker 宕机</strong>：Leader 副本所在 broker 挂了，Kafka 自动从 ISR 中选新 Leader。检查 <code>under-replicated-partitions</code>。</li>
+          <li><strong>磁盘满</strong>：消息保留时间过长。调 <code>log.retention.hours</code> 或按大小 <code>log.retention.bytes</code>。</li>
+        </ul>
+
+        <h2>4. Zookeeper 运维</h2>
+        <p>Zookeeper 是分布式协调服务，为 Kafka、Hadoop、Dubbo 等提供配置管理、命名服务、分布式锁。</p>
+
+        <h3>4.1 部署要点</h3>
+        <pre><code># 集群必须奇数个节点（3 或 5），过半存活才能服务
+# zoo.cfg
+tickTime=2000
+initLimit=10
+syncLimit=5
+dataDir=/data/zookeeper
+clientPort=2181
+server.1=zk1:2888:3888
+server.2=zk2:2888:3888
+server.3=zk3:2888:3888
+
+# 每个节点创建 myid 文件，内容为 server.x 中的 x
+echo 1 > /data/zookeeper/myid
+
+# 启动
+bin/zkServer.sh start
+
+# 查看状态
+bin/zkServer.sh status
+# Mode: leader / follower</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">为什么是奇数节点</div>
+          <p>
+            ZK 用 <strong>过半机制（Quorum）</strong> 选举 Leader，需要超过半数节点存活才能对外服务。
+            3 节点容忍 1 个挂掉，5 节点容忍 2 个挂掉。偶数节点（4个）也只容忍 1 个挂掉，
+            浪费资源，所以用奇数。
+          </p>
+        </div>
+
+        <h3>4.2 四字命令运维</h3>
+        <pre><code># 查看状态（需要在 zoo.cfg 开启 4lw.commands.whitelist）
+echo stat | nc localhost 2181     # 服务端状态
+echo ruok | nc localhost 2181     # 是否正常（返回 imok）
+echo mntr | nc localhost 2181     # 监控指标
+echo cons | nc localhost 2181     # 客户端连接</code></pre>
+
+        <h2>5. ClickHouse 运维</h2>
+        <p>ClickHouse 是列式存储的 OLAP 数据库，查询海量数据极快，常用于日志分析和数据仓库。</p>
+
+        <h3>5.1 核心特点</h3>
+        <div class="term-card">
+          <div class="term-name">列存储</div>
+          <p>
+            数据按列存储，查询时只读需要的列，IO 少。同列数据类型一致，压缩率高。
+            适合「宽表 + 大量行 + 少量列」的分析查询，不适合频繁单行更新。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">MergeTree 引擎</div>
+          <p>
+            ClickHouse 的核心引擎家族，支持主键索引、分区、副本、数据合并。
+            常用 <strong>ReplacingMergeTree</strong>（按主键去重）、
+            <strong>SummingMergeTree</strong>（自动汇总）。
+          </p>
+        </div>
+
+        <h3>5.2 部署与基本操作</h3>
+        <pre><code># 安装（CentOS）
+yum install -y yum-utils
+rpm --import https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key
+yum install -y clickhouse-server clickhouse-client
+
+systemctl start clickhouse-server
+systemctl enable clickhouse-server
+
+# 连接
+clickhouse-client
+
+# 建表
+CREATE TABLE hits (
+  EventDate Date,
+  UserID UInt64,
+  URL String,
+  Cost UInt32
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(EventDate)     # 按月分区
+ORDER BY (UserID, EventDate)         # 排序键（也是索引）
+SETTINGS index_granularity = 8192;
+
+# 查询
+SELECT UserID, count() FROM hits GROUP BY UserID ORDER BY count() DESC LIMIT 10;</code></pre>
+
+        <h3>5.3 性能优化</h3>
+        <ul>
+          <li><strong>分区设计</strong>：按时间分区，查询时可跳过不相关分区。</li>
+          <li><strong>排序键</strong>：<code>ORDER BY</code> 的列就是索引，高频过滤列放前面。</li>
+          <li><strong>避免 SELECT *</strong>：只查需要的列，发挥列存储优势。</li>
+          <li><strong>批量写入</strong>：每次写入几千到几万行，不要单条写。</li>
+          <li><strong>物化视图</strong>：预计算常用聚合，提升查询速度。</li>
+        </ul>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Redis：内存 KV，关注持久化（RDB+AOF）、淘汰策略、缓存三大问题。</li>
+          <li>ES：分布式搜索，关注集群健康（green/yellow/red）、分片副本、JVM 内存。</li>
+          <li>Kafka：消息队列，关注 Topic 分区、消费者组 LAG、ISR 副本。</li>
+          <li>ZK：分布式协调，奇数节点集群，过半机制选举 Leader。</li>
+          <li>ClickHouse：列存 OLAP，靠分区和排序键优化查询，适合批量写入。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="缓存击穿是热点 key 过期瞬间大量请求打到数据库；穿透是查不存在的 key；雪崩是大量 key 同时过期。">
+            <div class="quiz-question">1. （单选）某个热点缓存 key 过期瞬间，大量请求打到数据库，这属于什么问题？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 缓存穿透</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 缓存雪崩</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 缓存击穿</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 缓存预热</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="ES 集群 yellow 状态表示主分片正常但副本分片不可用，数据仍可读写但有风险。">
+            <div class="quiz-question">2. （单选）Elasticsearch 集群状态为 yellow，说明什么？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. 主分片缺失，数据不完整</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. 主分片正常，副本分片不可用</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. 集群完全健康</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. 所有节点宕机</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="LAG|lag|延迟"
+               data-explain="消费者组的 LAG（滞后）表示还有多少消息未消费，是判断消息积压的核心指标。">
+            <div class="quiz-question">3. （填空）Kafka 中衡量消费者消息积压程度的核心指标叫什么？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="ClickHouse 是列式存储，只读取查询涉及的列，减少 IO，适合分析型查询。">
+            <div class="quiz-question">4. （单选）ClickHouse 作为 OLAP 数据库查询快的核心原因是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q4" value="A" /> A. 列式存储，只读取需要的列</label></li>
+              <li><label><input type="radio" name="q4" value="B" /> B. 行式存储，读取整行</label></li>
+              <li><label><input type="radio" name="q4" value="C" /> C. 支持事务</label></li>
+              <li><label><input type="radio" name="q4" value="D" /> D. 内存比磁盘大</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 第 20 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

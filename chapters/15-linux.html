@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第15章 Linux 系统与性能调优 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="15-linux">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 15 章</span>
+          <span class="meta-tag">运维实战</span>
+          <span class="meta-tag">约 30 分钟</span>
+        </div>
+        <h1>Linux 系统管理与性能调优</h1>
+        <p>
+          Linux 是运维工程师的基本功。本章从系统安装配置讲起，带你掌握日常故障排查的思路，
+          并对 CPU、内存、磁盘、网络四大子系统做性能调优。学完本章，你能应对面试官关于
+          「系统卡顿怎么办」「CPU 飙高怎么排查」这类高频问题。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>掌握 Linux 系统安装与基础配置要点</li>
+          <li>建立「自上而下、由表及里」的故障排查方法论</li>
+          <li>熟练使用 top、vmstat、iostat、ss 等排查命令</li>
+          <li>理解 CPU、内存、磁盘、网络的调优手段</li>
+        </ul>
+
+        <h2>1. 系统安装与基础配置</h2>
+        <p>
+          生产环境通常使用 <strong>CentOS/RHEL</strong> 或 <strong>Ubuntu Server</strong>。
+          安装时几个关键选项直接影响后续运维：
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">分区规划</div>
+          <p>
+            不要把所有数据丢在一个 <code>/</code> 分区。推荐单独划分：
+            <code>/boot</code>（1G）、<code>swap</code>（内存的 1~2 倍，大内存机器可小些）、
+            <code>/</code>（50G 左右）、<code>/var</code>（日志，给足空间）、
+            <code>/data</code>（业务数据）。这样日志撑满不会导致系统盘写满而宕机。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">文件系统选择</div>
+          <p>
+            通用场景用 <strong>XFS</strong>（RHEL 默认，大文件性能好）；
+            小文件多、需要快照可选 <strong>ext4</strong>；
+            海量数据可考虑 <strong>ZFS</strong>（有校验和、快照）。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">网络与主机名</div>
+          <p>
+            配置静态 IP、设置有意义的主机名（如 <code>db-prod-01</code>）、
+            配置 <code>/etc/hosts</code> 或内网 DNS，避免运维时搞混机器。
+          </p>
+        </div>
+
+        <h3>1.1 安装后的初始化脚本</h3>
+        <p>新机器到手，第一件事不是装业务，而是做安全和性能基线：</p>
+        <pre><code>#!/bin/bash
+# 1. 关闭 SELinux（生产环境按安全策略决定，这里演示）
+setenforce 0
+sed -i 's/^SELINUX=.*/SELINUX=disabled/' /etc/selinux/config
+
+# 2. 关闭防火墙或放行必要端口（按实际情况）
+systemctl stop firewalld
+systemctl disable firewalld
+
+# 3. 时间同步（日志排障全靠时间准确）
+yum install -y chrony
+systemctl enable --now chronyd
+
+# 4. 调整文件描述符上限（高并发必备）
+echo '* soft nofile 65535' >> /etc/security/limits.conf
+echo '* hard nofile 65535' >> /etc/security/limits.conf
+
+# 5. 关闭 swap（数据库和容器场景强烈建议）
+swapoff -a
+sed -i '/ swap / s/^/#/' /etc/fstab
+
+# 6. 优化内核参数
+cat >> /etc/sysctl.conf << 'EOF'
+net.ipv4.tcp_syncookies = 1            # 开启 SYN 洪水保护
+net.ipv4.tcp_tw_reuse = 1              # 允许 TIME_WAIT 套接字重用
+net.ipv4.tcp_fin_timeout = 30          # 缩短 FIN_WAIT2 超时
+net.core.somaxconn = 65535             # 增大监听队列
+vm.swappiness = 0                      # 尽量不用 swap
+vm.overcommit_memory = 1               # 允许过量分配内存（Redis 需要）
+EOF
+sysctl -p</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">注意</div>
+          <p>
+            上面的参数是通用基线，具体值要结合业务调整。比如 <code>tcp_tw_reuse</code>
+            在 NAT 环境下可能有副作用，生产改动前务必在测试环境验证。
+          </p>
+        </div>
+
+        <h2>2. 故障排查方法论</h2>
+        <p>
+          面试官最爱问「线上服务突然变慢，你怎么排查？」。优秀的运维不是靠猜，而是有一套
+          <strong>自上而下的排查路径</strong>：
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">排查四步法</div>
+          <pre><code>① 看现象：什么服务、什么时间、什么错误日志
+② 定范围：是单机还是集群？是网络还是应用？
+③ 查资源：CPU / 内存 / 磁盘 / 网络哪个先异常
+④ 定位根因：结合日志和监控，找到具体进程或代码</code></pre>
+        </div>
+
+        <h3>2.1 一眼看清系统状态</h3>
+        <p>登录机器后，先跑这几条命令建立全局认知：</p>
+        <pre><code>uptime          # 系统运行时间、1/5/15 分钟平均负载
+free -h         # 内存使用
+df -h           # 磁盘使用
+top -b -n 1 | head -20   # CPU 和进程快照
+ss -tnlp        # 监听的端口
+dmesg | tail    # 内核日志（硬件/驱动错误）
+journalctl -xe --since "10 minutes ago"  # 系统日志</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">关于 Load Average</div>
+          <p>
+            <code>uptime</code> 显示的三个数字是 1/5/15 分钟平均负载。
+            它表示「正在运行 + 等待运行 + 不可中断睡眠（D 状态）」的进程数。
+            判断是否过载要看<strong>相对于 CPU 核数</strong>：8 核机器 load 到 8 算满，
+            到 16 就是严重过载。load 持续升高说明系统有瓶颈。
+          </p>
+        </div>
+
+        <h2>3. CPU 排查与调优</h2>
+
+        <h3>3.1 CPU 飙高排查</h3>
+        <p>用 <code>top</code> 找到占用 CPU 最高的进程，然后深入分析线程：</p>
+        <pre><code># 1. top 找到高 CPU 进程，记录 PID（比如 1234）
+top
+
+# 2. 看这个进程的哪些线程占 CPU
+top -Hp 1234
+
+# 3. 把线程 PID 转成 16 进制（jstack 需要）
+printf '%x\n' 线程PID
+
+# 4. 如果是 Java 进程，用 jstack 定位代码行
+jstack 1234 | grep 0x线程ID -A 30
+
+# 5. 如果是 C/C++ 进程，用 perf 或 pstack
+perf top -p 1234
+pstack 1234 | head -50</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">CPU 使用类型</div>
+          <p>
+            <code>top</code> 里 <code>%Cpu(s)</code> 行有几个关键值：
+            <strong>us</strong>（用户态，业务代码）、
+            <strong>sy</strong>（内核态，系统调用多）、
+            <strong>wa</strong>（等待 IO，通常是磁盘瓶颈）、
+            <strong>si</strong>（软中断，网络包多时高）。
+            <code>wa</code> 高别看 CPU，去查磁盘；<code>si</code> 高去查网络。
+          </p>
+        </div>
+
+        <h3>3.2 CPU 调优手段</h3>
+        <ul>
+          <li><strong>进程绑核</strong>：用 <code>taskset -c 0-3 ./app</code> 把进程绑定到指定核，减少缓存失效。</li>
+          <li><strong>关闭节能</strong>：CPU 频率调速器设为 <code>performance</code>，避免降频。</li>
+          <li><strong>减少上下文切换</strong>：线程数不要远超核数，用 <code>vmstat 1</code> 看 <code>cs</code> 列。</li>
+          <li><strong>IRQ 绑核</strong>：网卡中断分散到多核，避免单核被中断打满。</li>
+        </ul>
+
+        <h2>4. 内存排查与调优</h2>
+
+        <h3>4.1 内存不够用了怎么办</h3>
+        <pre><code>free -h
+#              total   used   free  shared  buff/cache  available
+# Mem:          15Gi   12Gi   1.0Gi   0.1Gi        2.0Gi       2.5Gi
+# Swap:         2.0Gi   0Bi   2.0Gi</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">别被 free 骗了</div>
+          <p>
+            Linux 会把空闲内存拿去做 <strong>buff/cache</strong>（文件缓存），这是好事。
+            真正能用的内存看 <code>available</code> 列，它已经算上了可回收的缓存。
+            只有 <code>available</code> 很低且 <code>swap</code> 开始上涨，才是真的内存不足。
+          </p>
+        </div>
+
+        <h3>4.2 定位内存大户</h3>
+        <pre><code># 按内存排序找进程
+ps aux --sort=-%mem | head -10
+
+# 看某个进程的内存详情（RSS 是实际占用物理内存）
+cat /proc/1234/status | grep -E 'VmRSS|VmSize|VmSwap'
+
+# 查 OOM 日志（谁被系统杀掉了）
+dmesg | grep -i 'oom\|killed process'
+journalctl -k | grep -i oom</code></pre>
+
+        <h3>4.3 内存调优</h3>
+        <ul>
+          <li><strong>关闭 swap</strong>：数据库和容器场景，swap 会导致性能剧烈抖动。</li>
+          <li><strong>调整 swappiness</strong>：<code>vm.swappiness=0</code> 尽量用物理内存。</li>
+          <li><strong>内存大页</strong>：数据库开启 HugePages 减少 TLB miss。</li>
+          <li><strong>限制 cgroup</strong>：用 cgroup 给进程设内存上限，防止单个服务吃光内存。</li>
+        </ul>
+
+        <h2>5. 磁盘排查与调优</h2>
+
+        <h3>5.1 磁盘满了</h3>
+        <pre><code># 看哪个分区满
+df -h
+
+# 找大文件（从根目录开始）
+du -h --max-depth=1 / | sort -rh | head -10
+
+# 找超过 1G 的文件
+find / -type f -size +1G -exec ls -lh {} \;
+
+# 常见元凶：日志
+du -sh /var/log/*
+journalctl --disk-usage          # systemd 日志占用
+journalctl --vacuum-size=500M    # 清理到 500M</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">删除文件后空间没释放</div>
+          <p>
+            如果文件被进程打开着，<code>rm</code> 只是删掉了目录项，空间要等进程关闭句柄才释放。
+            用 <code>lsof | grep deleted</code> 找到占用已删除文件的进程，重启或截断它：
+            <code>truncate -s 0 /proc/进程PID/fd/文件描述符</code>。
+          </p>
+        </div>
+
+        <h3>5.2 磁盘慢</h3>
+        <pre><code># 看 IO 等待和读写速度
+iostat -xz 1
+
+# 关键列：%util（设备繁忙度）、await（平均等待毫秒）、r/s w/s（读写次数）
+# %util 接近 100% 说明磁盘打满；await 大于 20ms 说明响应慢
+
+# 看哪个进程在大量读写
+iotop -oP
+
+# 查看 inode 是否耗尽（小文件极多的场景）
+df -i</code></pre>
+
+        <h3>5.3 磁盘调优</h3>
+        <ul>
+          <li><strong>SSD 优化</strong>：开启 TRIM（<code>fstrim</code>），使用 <code>noatime</code> 挂载。</li>
+          <li><strong>IO 调度器</strong>：SSD 用 <code>none</code> 或 <code>noop</code>，机械盘用 <code>deadline</code>。</li>
+          <li><strong>分离读写</strong>：日志盘和数据盘分开，redo log 放高速盘。</li>
+          <li><strong>挂载参数</strong>：<code>defaults,noatime,nodiratime</code> 减少元数据写入。</li>
+        </ul>
+
+        <h2>6. 网络排查与调优</h2>
+
+        <h3>6.1 网络不通</h3>
+        <pre><code># 物理层到应用层逐层排查
+ip addr                      # 网卡是否 up、IP 是否正确
+ip route                     # 路由是否正确
+ping 网关IP                  # 能不能到网关
+telnet/ nc -vz 目标IP 端口    # 端口通不通
+ss -tnlp | grep 端口         # 服务是否在监听
+traceroute 目标IP            # 路由路径
+tcpdump -i eth0 port 80      # 抓包看流量</code></pre>
+
+        <h3>6.2 连接数爆满</h3>
+        <pre><code># 查看各种状态的连接数
+ss -ant | awk '{print $1}' | sort | uniq -c | sort -rn
+
+# TIME_WAIT 过多：开启重用
+# ESTABLISHED 过多：看是不是被攻击或应用没释放连接
+# CLOSE_WAIT 过多：应用没调 close()，是代码 bug
+
+# 查看连接跟踪表是否满
+dmesg | grep 'nf_conntrack: table full'</code></pre>
+
+        <h3>6.3 网络调优</h3>
+        <ul>
+          <li><strong>增大文件描述符</strong>：高并发必备，<code>ulimit -n 65535</code>。</li>
+          <li><strong>TIME_WAIT 重用</strong>：<code>net.ipv4.tcp_tw_reuse=1</code>。</li>
+          <li><strong>增大 backlog</strong>：<code>net.core.somaxconn=65535</code>。</li>
+          <li><strong>网卡多队列</strong>：开启 RSS/RPS，把网络包分散到多核处理。</li>
+        </ul>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>系统安装要做好分区、文件系统、网络、安全基线配置。</li>
+          <li>故障排查遵循「现象 → 范围 → 资源 → 根因」四步法。</li>
+          <li>CPU 看 us/sy/wa/si，<code>wa</code> 高查磁盘，<code>si</code> 高查网络。</li>
+          <li>内存看 <code>available</code> 不是 <code>free</code>，OOM 查 <code>dmesg</code>。</li>
+          <li>磁盘满查大文件和已删除但被占用的文件；磁盘慢看 <code>iostat</code> 的 <code>%util</code>。</li>
+          <li>网络排查从物理层到应用层逐层定位，连接状态分析很重要。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="available 列已经计算了可回收的 buff/cache，是真正可立即使用的内存。free 只算完全空闲的。">
+            <div class="quiz-question">1. （单选）查看 Linux 内存可用情况时，应该重点关注 free 命令中的哪一列？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. free 列</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. available 列</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. buff/cache 列</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. shared 列</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="wa|iowait|IO等待"
+               data-explain="top 中 wa(iowait) 占比高表示 CPU 在等待磁盘 IO，瓶颈在磁盘而非 CPU。">
+            <div class="quiz-question">2. （填空）top 命令中 CPU 行的哪个指标高，说明瓶颈在磁盘 IO？（填两个字母缩写）</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="CLOSE_WAIT 状态表示客户端已关闭连接，但服务端应用没有调用 close() 释放，是应用代码的 bug。">
+            <div class="quiz-question">3. （单选）服务器上 CLOSE_WAIT 状态的连接非常多，最可能的原因是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. 网络不稳定</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. 防火墙拦截</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. 应用代码没有正确关闭连接</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. 磁盘满了</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="lsof|deleted"
+               data-explain="用 lsof | grep deleted 可以找到那些已被删除但仍被进程占用句柄、空间未释放的文件。">
+            <div class="quiz-question">4. （填空）删除文件后磁盘空间没释放，用什么命令加什么关键字可以定位到占用进程？（命令|关键字）</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 第 15 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

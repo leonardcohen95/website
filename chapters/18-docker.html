@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第18章 Docker 容器化实战 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="18-docker">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 18 章</span>
+          <span class="meta-tag">云原生</span>
+          <span class="meta-tag">约 30 分钟</span>
+        </div>
+        <h1>Docker 容器化实战</h1>
+        <p>
+          容器是现代运维的标配。本章从镜像构建、容器网络、数据卷到故障排查和性能优化，
+          覆盖 Docker 运维的方方面面。学完你能熟练把应用容器化，并解决面试中常见的
+          「容器启动失败」「镜像太大」「容器网络不通」等问题。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Docker 镜像、容器、数据卷、网络四大核心概念</li>
+          <li>能编写高效的 Dockerfile 构建镜像</li>
+          <li>掌握 docker-compose 编排多容器应用</li>
+          <li>能排查容器启动、网络、资源类故障</li>
+          <li>了解容器性能调优手段</li>
+        </ul>
+
+        <h2>1. 核心概念</h2>
+
+        <div class="term-card">
+          <div class="term-name">镜像（Image）</div>
+          <p>
+            应用的「模板」，只读。由多层文件系统叠加而成，每一层对应 Dockerfile 的一条指令。
+            镜像可以分层复用，这是 Docker 高效的关键。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">容器（Container）</div>
+          <p>
+            镜像的运行实例。在镜像层之上加了一层可写层。容器删除后可写层数据也没了，
+            所以要持久化的数据必须挂数据卷。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">数据卷（Volume）</div>
+          <p>
+            绕过容器可写层，直接把宿主机目录或 Docker 管理的卷挂载到容器里。
+            数据卷在容器删除后依然存在，用于持久化数据库、日志等数据。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">网络（Network）</div>
+          <p>
+            容器间通信靠网络。默认有 bridge、host、none 三种，生产中常用自定义 bridge
+            或 overlay（跨主机）。
+          </p>
+        </div>
+
+        <h2>2. 安装与基础命令</h2>
+        <pre><code># 安装（CentOS）
+yum install -y yum-utils
+yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+yum install -y docker-ce docker-ce-cli containerd.io
+systemctl start docker
+systemctl enable docker
+
+# 配置国内镜像加速（拉取快很多）
+cat > /etc/docker/daemon.json << 'EOF'
+{
+  "registry-mirrors": ["https://你的加速器地址"],
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "100m", "max-file": "3" }
+}
+EOF
+systemctl restart docker
+
+# 常用命令速查
+docker pull nginx:latest          # 拉镜像
+docker run -d -p 80:80 nginx      # 后台运行并映射端口
+docker ps                         # 查看运行中的容器
+docker ps -a                      # 查看所有容器（含停止的）
+docker logs -f 容器ID             # 看日志（-f 实时）
+docker exec -it 容器ID /bin/bash  # 进入容器
+docker stop/start/restart 容器ID  # 启停
+docker rm 容器ID                  # 删除容器
+docker rmi 镜像名                 # 删除镜像</code></pre>
+
+        <h2>3. Dockerfile 最佳实践</h2>
+        <p>写好 Dockerfile 是容器化的核心。下面是一个 Java 应用的示例，标注了优化点：</p>
+
+        <pre><code># ===== 多阶段构建：编译阶段和运行阶段分离，最终镜像不含编译工具 =====
+FROM maven:3.8-openjdk-11 AS builder
+WORKDIR /app
+COPY pom.xml .
+RUN mvn dependency:go-offline        # 先下载依赖，利用缓存
+COPY src ./src
+RUN mvn package -DskipTests
+
+# ===== 运行阶段：只需要 JRE，镜像小很多 =====
+FROM openjdk:11-jre-slim
+WORKDIR /app
+COPY --from=builder /app/target/myapp.jar .
+
+# 安全：不要用 root 运行
+RUN useradd -r -u 1001 appuser
+USER appuser
+
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "myapp.jar"]</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">镜像瘦身技巧</div>
+          <ul>
+            <li><strong>多阶段构建</strong>：编译环境和运行环境分开，最终镜像只留运行时。</li>
+            <li><strong>用 slim/alpine 基础镜像</strong>：比默认镜像小一半以上。</li>
+            <li><strong>合并 RUN 指令</strong>：每条 RUN 产生一层，合并减少层数并清理缓存。</li>
+            <li><strong>.dockerignore</strong>：排除 .git、node_modules 等不需要的文件。</li>
+            <li><strong>先 COPY 依赖文件再 COPY 源码</strong>：代码变更不会让依赖缓存失效。</li>
+          </ul>
+        </div>
+
+        <h3>3.1 合并 RUN 并清理</h3>
+        <pre><code># 反例：每句一条 RUN，产生多层，且缓存没清
+RUN apt-get update
+RUN apt-get install -y curl
+RUN apt-get install -y vim
+
+# 正例：合并成一条，最后清缓存
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl vim && \
+    rm -rf /var/lib/apt/lists/*</code></pre>
+
+        <h2>4. 数据卷与持久化</h2>
+        <pre><code># 方式一：挂载宿主机目录（Bind Mount）
+docker run -d -v /data/mysql:/var/lib/mysql mysql:8
+
+# 方式二：Docker 管理的卷（Volume，推荐）
+docker volume create mydata
+docker run -d -v mydata:/var/lib/mysql mysql:8
+
+# 查看卷
+docker volume ls
+docker volume inspect mydata
+
+# 容器间共享数据
+docker run -d --name db -v dbdata:/var/lib/mysql mysql:8
+docker run -d --volumes-from db backup sh -c 'tar czf /backup.tar /var/lib/mysql'</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">生产环境不要把数据放容器里</div>
+          <p>
+            容器删除 = 可写层数据丢失。数据库、上传文件、日志等必须挂数据卷。
+            面试时被问「容器删了数据怎么办」，标准答案：数据不放在容器里，用 Volume。
+          </p>
+        </div>
+
+        <h2>5. 容器网络</h2>
+
+        <h3>5.1 网络模式</h3>
+        <pre><code>docker run --network bridge  # 默认，独立网络命名空间，通过 docker0 桥接
+docker run --network host    # 共享宿主机网络，性能好但端口冲突
+docker run --network none    # 无网络
+docker run --network container:容器ID  # 共享另一个容器的网络栈</code></pre>
+
+        <h3>5.2 自定义网络实现容器互联</h3>
+        <pre><code># 创建自定义 bridge 网络（支持容器名 DNS 解析）
+docker network create mynet
+
+# 启动两个容器加入同一网络
+docker run -d --name web --network mynet nginx
+docker run -d --name api --network mynet myapi
+
+# 从 web 容器里可以直接用容器名访问 api
+docker exec web curl http://api:8080
+
+# 暴露端口给宿主机
+docker run -d --name web --network mynet -p 8080:80 nginx</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">端口映射的坑</div>
+          <p>
+            <code>-p 8080:80</code> 前面是宿主机端口，后面是容器端口。
+            如果只写 <code>-p 80</code>，Docker 会随机分配宿主机端口，用 <code>docker ps</code> 查看。
+            默认映射到 <code>0.0.0.0</code>（所有网卡），生产可指定 <code>-p 127.0.0.1:8080:80</code> 只本机访问。
+          </p>
+        </div>
+
+        <h2>6. docker-compose 编排</h2>
+        <p>多容器应用（比如 Web + DB + Redis）用 <code>docker-compose</code> 一键编排：</p>
+
+        <pre><code># docker-compose.yml
+version: "3.8"
+
+services:
+  web:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=db
+      - DB_PASSWORD=${DB_PASSWORD}   # 从 .env 文件读取
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped          # 异常退出自动重启
+
+  db:
+    image: mysql:8
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+    volumes:
+      - dbdata:/var/lib/mysql
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+volumes:
+  dbdata:                             # 声明命名卷</code></pre>
+
+        <p>启动和管理：</p>
+        <pre><code>docker-compose up -d            # 后台启动
+docker-compose ps               # 查看服务状态
+docker-compose logs -f web      # 看某个服务日志
+docker-compose down             # 停止并删除容器（保留卷）
+docker-compose down -v          # 连卷一起删
+docker-compose build            # 重新构建镜像</code></pre>
+
+        <h2>7. 故障排查</h2>
+
+        <h3>7.1 容器启动失败</h3>
+        <pre><code># 1. 看退出码
+docker ps -a
+# Exited (1)  → 应用报错
+# Exited (137) → OOM 被 kill
+# Exited (139) → 段错误
+
+# 2. 看日志
+docker logs 容器ID
+docker logs --tail 100 容器ID
+
+# 3. 看容器详细信息
+docker inspect 容器ID
+# 关注 State、Mounts、NetworkSettings、Config.Cmd
+
+# 4. 启动一个临时容器排查
+docker run --rm -it --entrypoint /bin/sh 镜像名</code></pre>
+
+        <h3>7.2 资源限制与 OOM</h3>
+        <pre><code># 限制内存和 CPU，防止容器吃光宿主机资源
+docker run -d \
+  --memory=512m --memory-swap=512m \    # 内存 512M，禁用 swap
+  --cpus=1 \                             # 最多用 1 核
+  --oom-kill-disable \                   # OOM 时不杀容器（慎用）
+  myapp
+
+# 查看容器资源使用
+docker stats
+
+# 排查 OOM
+dmesg | grep -i oom
+docker inspect 容器ID | grep -i oom</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">退出码速查</div>
+          <ul>
+            <li><code>0</code>：正常退出</li>
+            <li><code>1</code>：应用报错</li>
+            <li><code>137</code>：被 OOM Killer 杀掉（内存不足）</li>
+            <li><code>139</code>：段错误（Segfault）</li>
+            <li><code>143</code>：收到 SIGTERM 正常终止</li>
+          </ul>
+        </div>
+
+        <h3>7.3 镜像体积过大</h3>
+        <pre><code># 查看镜像每层大小
+docker history 镜像名
+
+# 清理无用的镜像、容器、卷
+docker system prune -a
+docker volume prune
+
+# 查看 Docker 占用
+docker system df</code></pre>
+
+        <h2>8. 性能调优</h2>
+        <ul>
+          <li><strong>存储驱动</strong>：用 <code>overlay2</code>（默认），性能最好。</li>
+          <li><strong>日志大小限制</strong>：在 <code>daemon.json</code> 配 <code>max-size</code>，防止日志撑满磁盘。</li>
+          <li><strong>资源限制</strong>：每个容器设 memory 和 cpus，避免互相影响。</li>
+          <li><strong>网络模式</strong>：高性能场景用 <code>--network host</code> 减少网络栈开销。</li>
+          <li><strong>数据卷用本地 SSD</strong>：数据库等 IO 密集型应用，数据卷放高速盘。</li>
+        </ul>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Docker 四大核心：镜像（模板）、容器（实例）、数据卷（持久化）、网络（通信）。</li>
+          <li>Dockerfile 用多阶段构建、合并 RUN、清理缓存来缩小镜像。</li>
+          <li>生产数据必须挂 Volume，容器删除不影响数据。</li>
+          <li>容器互联用自定义 bridge 网络，支持容器名 DNS。</li>
+          <li>多容器编排用 docker-compose，配 depends_on 和 restart 策略。</li>
+          <li>排障：看退出码、看日志、看 inspect；137 是 OOM，要加内存限制。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="退出码 137 表示容器被 OOM Killer 杀掉，因为内存超出限制。">
+            <div class="quiz-question">1. （单选）Docker 容器退出码为 137，最可能的原因是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 应用代码报错</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 内存不足被 OOM Killer 杀掉</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 端口冲突</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 镜像不存在</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="多阶段构建把编译和运行分离，最终镜像只含运行时，显著减小体积。">
+            <div class="quiz-question">2. （单选）下列哪种方式最能有效减小 Docker 镜像体积？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. 使用多阶段构建</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. 增加更多 RUN 指令</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. 用 root 用户运行</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. 增加 EXPOSE 端口</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="Volume|数据卷|卷"
+               data-explain="数据卷（Volume）绕过容器可写层，容器删除后数据仍保留，是持久化的正确方式。">
+            <div class="quiz-question">3. （填空）Docker 中实现数据持久化、容器删除后数据不丢失的机制叫什么？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="docker logs 查看容器标准输出/错误输出，是排查启动失败的第一步。">
+            <div class="quiz-question">4. （单选）容器启动后立即退出，排查原因首先应该执行什么命令？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q4" value="A" /> A. docker restart</label></li>
+              <li><label><input type="radio" name="q4" value="B" /> B. docker rmi</label></li>
+              <li><label><input type="radio" name="q4" value="C" /> C. docker logs</label></li>
+              <li><label><input type="radio" name="q4" value="D" /> D. docker pull</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 第 18 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第21章 大模型部署与 AI+运维 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="21-aiops">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 21 章</span>
+          <span class="meta-tag">AI+运维</span>
+          <span class="meta-tag">约 35 分钟</span>
+        </div>
+        <h1>大模型部署与 AI+运维（AIOps）</h1>
+        <p>
+          岗位要求有大模型部署实践、具备 AI+运维（智能告警、根因分析）经验。
+          本章讲怎么把大模型部署到本地服务器，再看 AI 怎么赋能运维——
+          智能告警降噪、日志根因分析、故障自愈。这一章和前面的 AI Agent 教程呼应，
+          是「AI 能力」和「运维能力」的结合点。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解大模型部署的关键概念（量化、推理引擎、显存估算）</li>
+          <li>能用 Ollama 或 vLLM 快速部署大模型服务</li>
+          <li>理解 AI+运维的典型场景：智能告警、根因分析、故障自愈</li>
+          <li>能设计一个简单的 AIOps 方案</li>
+        </ul>
+
+        <h2>1. 大模型部署基础</h2>
+
+        <h3>1.1 先搞清楚几个概念</h3>
+        <div class="term-card">
+          <div class="term-name">参数规模</div>
+          <p>
+            模型有 7B、13B、70B 等规格，B = Billion（十亿）。参数越多能力越强，
+            但需要的显存越大。粗略估算：FP16 精度下，<strong>1B 参数 ≈ 2GB 显存</strong>。
+            所以 7B 模型 FP16 部署约需 14GB 显存（还要算 KV Cache）。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">量化（Quantization）</div>
+          <p>
+            把模型权重从 FP16（16位浮点）降到 INT8/INT4（8/4位整数），
+            显存占用减半甚至降到 1/4，精度损失可接受。
+            常用量化方法：GGUF（llama.cpp/Ollama 用）、GPTQ、AWQ。
+            7B 模型用 INT4 量化后只需约 4GB 显存，消费级显卡就能跑。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">推理引擎</div>
+          <p>
+            专门优化大模型推理速度的框架，比原生 PyTorch 快很多。
+            <strong>vLLM</strong>：高吞吐，适合服务化部署。
+            <strong>TGI</strong>：HuggingFace 出品。
+            <strong>llama.cpp</strong>：纯 CPU/边缘部署。
+            <strong>Ollama</strong>：最易用，一键部署。
+          </p>
+        </div>
+
+        <h3>1.2 显存估算</h3>
+        <div class="callout">
+          <div class="callout-title">显存 = 权重 + KV Cache + 激活</div>
+          <pre><code>权重显存 = 参数数量 × 每参数字节数
+  FP16: 7B × 2B = 14GB
+  INT8: 7B × 1B = 7GB
+  INT4: 7B × 0.5B = 3.5GB
+
+KV Cache = 2 × num_layers × num_heads × head_dim × seq_len × 2(FP16)
+  7B 模型 8k 上下文，并发 batch=4 时约占 5~10GB
+
+结论：7B INT4 + 8k 上下文，至少准备 8~12GB 显存</code></pre>
+        </div>
+
+        <h2>2. 用 Ollama 快速部署</h2>
+        <p>Ollama 是最简单的大模型部署工具，一条命令搞定，适合快速验证。</p>
+
+        <pre><code># 安装（Linux）
+curl -fsSL https://ollama.com/install.sh | sh
+
+# 启动服务
+systemctl start ollama
+
+# 拉取并运行 7B 模型（自动下载约 4GB）
+ollama run llama3
+
+# 后台运行模型
+ollama serve &
+ollama pull qwen2:7b-instruct
+
+# 调用 API
+curl http://localhost:11434/api/chat -d '{
+  "model": "qwen2:7b-instruct",
+  "messages": [{"role": "user", "content": "你好"}]
+}'
+
+# 自定义模型（用 Modelfile 量化/配置）
+# Modelfile:
+#   FROM qwen2:7b-instruct
+#   PARAMETER temperature 0.7
+#   SYSTEM 你是一个运维助手，擅长分析日志和排查故障
+ollama create ops-assistant -f Modelfile</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">无显卡也能跑</div>
+          <p>
+            Ollama 支持纯 CPU 推理，只是速度慢。7B 模型在 CPU 上大约每秒 5~10 个 token，
+            适合对延迟不敏感的场景。有 NVIDIA 显卡会自动用 GPU 加速。
+          </p>
+        </div>
+
+        <h2>3. 用 vLLM 部署高性能推理服务</h2>
+        <p>生产环境高并发场景，用 vLLM 部署，吞吐比原生 PyTorch 高几倍。</p>
+
+        <pre><code># 安装
+pip install vllm
+
+# 启动 OpenAI 兼容的 API 服务
+python -m vllm.entrypoints.openai.api_server \
+  --model Qwen/Qwen2-7B-Instruct \
+  --quantization awq \              # AWQ 量化
+  --gpu-memory-utilization 0.85 \   # 用 85% 显存
+  --max-model-len 8192 \            # 最大上下文
+  --tensor-parallel-size 1          # 用几张卡（多卡设 2、4）
+
+# 调用（兼容 OpenAI API 格式）
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen/Qwen2-7B-Instruct",
+    "messages": [{"role": "user", "content": "分析这段日志..."}],
+    "temperature": 0.3
+  }'</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">vLLM 的核心技术：PagedAttention</div>
+          <p>
+            vLLM 提出 PagedAttention，把 KV Cache 像操作系统分页内存一样管理，
+            解决了传统框架显存碎片和浪费问题，让高并发下显存利用率大幅提升。
+            面试被问「为什么 vLLM 快」，答 PagedAttention 就对了。
+          </p>
+        </div>
+
+        <h3>3.1 容器化部署</h3>
+        <pre><code># docker-compose.yml
+services:
+  llm:
+    image: vllm/vllm-openai:latest
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    command: >
+      --model Qwen/Qwen2-7B-Instruct
+      --quantization awq
+      --gpu-memory-utilization 0.85
+      --max-model-len 8192
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]</code></pre>
+
+        <h2>4. AI+运维（AIOps）实践</h2>
+        <p>
+          大模型部署好之后，怎么用在运维上？核心思路是：
+          <strong>把运维数据（日志、指标、告警）喂给大模型，让它帮我们分析、决策、甚至自动修复</strong>。
+        </p>
+
+        <h3>4.1 智能告警降噪</h3>
+        <p>
+          传统告警系统一个故障会触发几十上百条告警，运维根本看不过来。
+          用大模型做告警聚合和根因摘要：
+        </p>
+        <pre><code>告警输入：
+  - [CRITICAL] web-01 CPU 95%
+  - [CRITICAL] web-02 CPU 92%
+  - [WARNING]  db-01 响应慢
+  - [CRITICAL] api 网关 5xx 错误率 30%
+  - [WARNING]  redis 内存 85%
+
+大模型输出：
+  【根因分析】web 集群 CPU 飙高导致请求堆积，进而引发网关 5xx 和数据库响应慢。
+  【可能原因】
+    1. 流量突增（建议检查网关 QPS）
+    2. 新版本发布引入性能问题（建议查最近发布记录）
+    3. 某个慢查询/慢接口（建议查应用慢日志）
+  【建议操作】
+    1. 先扩容 web 副本缓解压力
+    2. 抓取 web-01 的进程栈定位高 CPU 函数
+    3. 如果是发布导致，立即回滚</code></pre>
+
+        <h3>4.2 日志根因分析</h3>
+        <p>把异常日志片段发给大模型，让它解释错误并给排查建议：</p>
+        <pre><code>prompt = """
+你是一个资深运维工程师。请分析下面的错误日志，给出：
+1. 错误的含义
+2. 可能的原因
+3. 排查步骤
+4. 解决方案
+
+日志：
+{}
+""".format(error_log)
+
+response = call_llm(prompt)
+print(response)</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">用 RAG 增强准确性</div>
+          <p>
+            通用大模型不一定懂你们公司的架构和历史故障。把内部运维文档、
+            历史故障报告、FAQ 做成知识库（RAG，参考第 9-10 章），
+            大模型回答时先检索相关文档，再生成分析，准确性会高很多。
+          </p>
+        </div>
+
+        <h3>4.3 故障自愈（智能体闭环）</h3>
+        <p>
+          更进一步：让 AI Agent（参考前面 AI Agent 教程）不仅分析，还能执行修复操作。
+          这就是「感知 → 决策 → 执行」的闭环。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">自愈闭环流程</div>
+          <pre><code>监控告警 → 大模型分析根因 → 生成修复方案 → 人工审批/自动执行 → 验证恢复
+   ↑                                                      │
+   └──────────── 结果反馈，持续优化 ←──────────────────────┘</code></pre>
+        </div>
+
+        <pre><code># 伪代码：一个简单的自愈 Agent
+def alert_handler(alert):
+    # 1. 收集上下文：日志、指标、最近变更
+    context = collect_context(alert)
+
+    # 2. 大模型分析并给出修复方案
+    plan = llm.analyze(alert, context)
+    # plan = {
+    #   "root_cause": "Pod 内存超限被 OOMKill",
+    #   "action": "kubectl scale deploy web --replicas=5",
+    #   "risk": "low"
+    # }
+
+    # 3. 低风险操作自动执行，高风险人工审批
+    if plan["risk"] == "low":
+        execute(plan["action"])
+        # 4. 验证是否恢复
+        if verify_recovered(alert):
+            close_alert(alert)
+        else:
+            escalate_to_human(plan)
+    else:
+        notify_human_for_approval(plan)</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">安全红线</div>
+          <p>
+            AI 自动执行操作必须有<strong>权限边界</strong>和<strong>审批机制</strong>。
+            只允许在预定义的操作集合里选择（如扩容、重启、回滚），
+            禁止让大模型自由执行任意命令。高危操作（删库、改网络）必须人工审批。
+          </p>
+        </div>
+
+        <h3>4.4 AIOps 落地建议</h3>
+        <ul>
+          <li><strong>第一步：告警降噪</strong>，投入小、见效快，先让大模型帮你整理告警。</li>
+          <li><strong>第二步：日志分析助手</strong>，作为查询工具，不自动操作，降低风险。</li>
+          <li><strong>第三步：辅助决策</strong>，给出修复建议但不自动执行，人工确认。</li>
+          <li><strong>第四步：有限自愈</strong>，只对低风险、可验证的操作自动化。</li>
+          <li><strong>全程可观测</strong>：AI 的每次决策和操作都要记录，可审计、可回滚。</li>
+        </ul>
+
+        <h2>5. 运维工程师的 AI 能力清单</h2>
+        <p>面试官问「你怎么看 AI+运维」时，可以从这几个维度回答：</p>
+        <ul>
+          <li><strong>会用 AI 工具</strong>：用 Copilot/Cursor 写脚本，用大模型分析日志。</li>
+          <li><strong>懂部署大模型</strong>：知道 Ollama/vLLM 怎么搭，显存怎么估算。</li>
+          <li><strong>能设计 AIOps 方案</strong>：告警降噪、根因分析、故障自愈的闭环。</li>
+          <li><strong>有安全意识</strong>：知道 AI 自动操作的边界，审批和审计不能少。</li>
+          <li><strong>结合本教程的 AI Agent</strong>：用 Agent 框架把运维工具编排起来（参考第 5、6、11、14 章）。</li>
+        </ul>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>大模型部署关键：参数规模 × 量化精度 = 显存需求，7B INT4 约需 8~12GB。</li>
+          <li>Ollama 适合快速验证，vLLM 适合生产高并发（PagedAttention 提吞吐）。</li>
+          <li>AI+运维四大场景：告警降噪、日志根因分析、辅助决策、故障自愈。</li>
+          <li>用 RAG 把内部运维知识库接给大模型，提升分析准确性。</li>
+          <li>自愈闭环要设权限边界和审批，高危操作必须人工确认。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="FP16 下 1B 参数约占 2GB 显存，7B 模型约需 14GB（不含 KV Cache）。">
+            <div class="quiz-question">1. （单选）FP16 精度下，7B 参数的大模型大约需要多少显存存权重？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 2GB</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 14GB</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 50GB</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 100GB</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="PagedAttention"
+               data-explain="PagedAttention 是 vLLM 的核心技术，像操作系统分页一样管理 KV Cache，提升显存利用率。">
+            <div class="quiz-question">2. （填空）vLLM 提升推理吞吐的核心技术叫什么？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="RAG 把内部文档检索出来给大模型，让回答基于企业内部知识，提升准确性。">
+            <div class="quiz-question">3. （单选）为了让大模型分析日志时能结合企业内部运维知识，应该使用什么技术？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. RAG（检索增强生成）</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. 数据分片</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. 负载均衡</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. 灰度发布</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="AI 自愈必须设权限边界，只允许预定义的低风险操作自动执行，高危操作必须人工审批。">
+            <div class="quiz-question">4. （单选）关于 AI 故障自愈，下列做法最安全的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q4" value="A" /> A. 让大模型自由执行任意 shell 命令</label></li>
+              <li><label><input type="radio" name="q4" value="B" /> B. 完全不设审批，全自动处理所有故障</label></li>
+              <li><label><input type="radio" name="q4" value="C" /> C. 限定操作集合，高危操作人工审批，全程可审计</label></li>
+              <li><label><input type="radio" name="q4" value="D" /> D. 只处理数据库删表这类操作</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 第 21 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

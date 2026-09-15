@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第19章 Kubernetes 容器编排 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="19-kubernetes">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 19 章</span>
+          <span class="meta-tag">云原生</span>
+          <span class="meta-tag">约 35 分钟</span>
+        </div>
+        <h1>Kubernetes 容器编排</h1>
+        <p>
+          K8s 是容器编排的事实标准。本章从架构讲起，覆盖核心资源（Pod、Service、Deployment）、
+          集群搭建、故障排查和性能调优。学完你能独立部署应用到 K8s，
+          并能回答面试中「Pod 起不来怎么办」「Service 不通怎么排查」等高频问题。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 K8s 整体架构和核心组件职责</li>
+          <li>掌握 Pod、Service、Deployment、ConfigMap 等核心资源</li>
+          <li>能编写 YAML 部署一个带服务暴露的应用</li>
+          <li>掌握 Pod 启动失败、Service 不通等常见故障排查</li>
+          <li>了解 K8s 性能调优手段</li>
+        </ul>
+
+        <h2>1. 整体架构</h2>
+
+        <div class="callout">
+          <div class="callout-title">K8s 架构一图流</div>
+          <pre><code>                    ┌─────────────────────────┐
+                    │      Master 控制平面      │
+                    │  ┌──────┐ ┌────────────┐ │
+                    │  │API   │ │Controller  │ │
+                    │  │Server│ │  Manager   │ │
+                    │  └──────┘ └────────────┘ │
+                    │  ┌──────┐ ┌────────────┐ │
+                    │  │ Sched│ │  etcd      │ │
+                    │  │ uler │ │ (状态存储)  │ │
+                    │  └──────┘ └────────────┘ │
+                    └────────────┬──────────────┘
+                                 │
+              ┌──────────────────┼──────────────────┐
+              ▼                  ▼                  ▼
+        ┌──────────┐      ┌──────────┐      ┌──────────┐
+        │  Node 1  │      │  Node 2  │      │  Node N  │
+        │ ┌──────┐ │      │ ┌──────┐ │      │ ┌──────┐ │
+        │ │kubelet│ │      │ │kubelet│ │      │ │kubelet│ │
+        │ └──────┘ │      │ └──────┘ │      │ └──────┘ │
+        │ ┌──────┐ │      │ ┌──────┐ │      │ ┌──────┐ │
+        │ │kube- │ │      │ │kube- │ │      │ │kube- │ │
+        │ │proxy │ │      │ │proxy │ │      │ │proxy │ │
+        │ └──────┘ │      │ └──────┘ │      │ └──────┘ │
+        │ ┌──────┐ │      │ ┌──────┐ │      │ ┌──────┐ │
+        │ │Pod   │ │      │ │Pod   │ │      │ │Pod   │ │
+        │ └──────┘ │      │ └──────┘ │      │ └──────┘ │
+        └──────────┘      └──────────┘      └──────────┘</code></pre>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Master 组件</div>
+          <p>
+            <strong>apiserver</strong>：所有请求的入口，REST API，操作 etcd。
+            <strong>etcd</strong>：分布式 KV 存储，保存集群所有状态。
+            <strong>scheduler</strong>：把 Pod 调度到合适的 Node。
+            <strong>controller-manager</strong>：维护集群期望状态（副本数、端点等）。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Node 组件</div>
+          <p>
+            <strong>kubelet</strong>：管理本节点的 Pod，和容器运行时（containerd）交互。
+            <strong>kube-proxy</strong>：维护 Service 的网络规则（iptables/IPVS）。
+            <strong>container runtime</strong>：真正跑容器的，如 containerd、CRI-O。
+          </p>
+        </div>
+
+        <h2>2. 核心资源</h2>
+
+        <h3>2.1 Pod —— 最小调度单元</h3>
+        <p>Pod 是 K8s 中最小的调度单位，一个 Pod 可以包含多个容器，它们共享网络和存储。</p>
+        <pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  labels:
+    app: nginx
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.25
+      ports:
+        - containerPort: 80
+      resources:
+        requests:          # 最小资源保障
+          cpu: 100m
+          memory: 128Mi
+        limits:            # 最大资源限制
+          cpu: 500m
+          memory: 256Mi
+      readinessProbe:      # 就绪探针，通过才接流量
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 5
+      livenessProbe:       # 存活探针，失败就重启容器
+        httpGet:
+          path: /
+          port: 80
+        periodSeconds: 10</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">探针很重要</div>
+          <p>
+            <strong>livenessProbe</strong>：容器是否活着，失败就重启（解决死锁、hang 住）。
+            <strong>readinessProbe</strong>：容器是否就绪，失败就从 Service 摘流量（解决启动慢、过载）。
+            没有探针，K8s 不知道应用真实状态，流量可能打到还没启动完的 Pod。
+          </p>
+        </div>
+
+        <h3>2.2 Deployment —— 管理 Pod 副本</h3>
+        <p>实际生产不会直接创建 Pod，而是用 Deployment 管理副本、滚动升级、回滚。</p>
+        <pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-deploy
+spec:
+  replicas: 3                    # 期望 3 个副本
+  selector:
+    matchLabels:
+      app: web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1                # 升级时最多多 1 个
+      maxUnavailable: 0          # 升级时最多少 0 个（保证不中断）
+  template:                      # Pod 模板
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.25
+          ports:
+            - containerPort: 80</code></pre>
+
+        <h3>2.3 Service —— 服务发现与负载均衡</h3>
+        <p>Pod 是会漂移的，IP 会变。Service 给一组 Pod 提供稳定的访问入口。</p>
+        <pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: web-svc
+spec:
+  type: ClusterIP          # 默认，集群内访问；NodePort 暴露到节点端口；LoadBalancer 云厂商负载均衡
+  selector:
+    app: web               # 选中所有 app=web 的 Pod
+  ports:
+    - port: 80             # Service 端口
+      targetPort: 80       # Pod 端口</code></pre>
+
+        <h3>2.4 ConfigMap & Secret —— 配置管理</h3>
+        <pre><code># ConfigMap：非敏感配置
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  app.env: "production"
+  log.level: "info"
+
+# Secret：敏感信息（base64 编码，不是加密！）
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret
+type: Opaque
+data:
+  password: c2VjcmV0cGFzcw==   # echo -n 'secretpass' | base64
+
+# 在 Pod 中使用
+spec:
+  containers:
+    - name: app
+      image: myapp
+      env:
+        - name: APP_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: app.env
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secret
+              key: password</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">Secret 不是加密</div>
+          <p>
+            K8s 的 Secret 默认只是 base64 编码，不是加密。生产环境应开启
+            <strong>etcd 静态加密</strong>，或使用外部密钥管理服务（如 Vault、云厂商 KMS）。
+          </p>
+        </div>
+
+        <h2>3. 集群搭建</h2>
+        <p>测试环境用 <code>kubeadm</code> 搭建最方便。生产建议用高可用（多 Master + 负载均衡）。</p>
+        <pre><code># === 所有节点 ===
+# 1. 关闭 swap
+swapoff -a
+sed -i '/ swap / s/^/#/' /etc/fstab
+
+# 2. 加载内核模块
+cat <<EOF | tee /etc/modules-load.d/k8s.conf
+overlay
+br_netfilter
+EOF
+modprobe overlay
+modprobe br_netfilter
+
+# 3. 内核参数
+cat <<EOF | tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward = 1
+EOF
+sysctl --system
+
+# 4. 安装 containerd
+yum install -y yum-utils
+yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+yum install -y containerd.io
+containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/' > /etc/containerd/config.toml
+systemctl enable --now containerd
+
+# 5. 安装 kubeadm/kubelet/kubectl
+cat <<EOF | tee /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=1
+EOF
+yum install -y kubelet kubeadm kubectl
+systemctl enable kubelet
+
+# === Master 节点 ===
+kubeadm init --pod-network-cidr=10.244.0.0/16 --image-repository registry.aliyuncs.com/google_containers
+mkdir -p ~/.kube
+cp -i /etc/kubernetes/admin.conf ~/.kube/config
+kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+
+# === Worker 节点 ===
+# 执行 kubeadm join ...（Master init 输出的命令）</code></pre>
+
+        <h2>4. 常用操作命令</h2>
+        <pre><code># 查看资源
+kubectl get nodes
+kubectl get pods -n namespace -o wide
+kubectl get deploy,svc,cm,secret
+
+# 详细信息和事件
+kubectl describe pod 名字
+kubectl logs 名字 [-c 容器名] -f          # 看日志
+kubectl logs --previous 名字              # 看上一个容器的日志（崩溃重启后）
+
+# 进入容器
+kubectl exec -it 名字 -- /bin/sh
+
+# 扩容/缩容
+kubectl scale deploy web-deploy --replicas=5
+
+# 滚动升级和回滚
+kubectl set image deploy/web-deploy web=nginx:1.26
+kubectl rollout status deploy/web-deploy
+kubectl rollout undo deploy/web-deploy
+
+# 临时调试
+kubectl run debug --image=busybox --rm -it -- sh</code></pre>
+
+        <h2>5. 故障排查</h2>
+
+        <h3>5.1 Pod 起不来</h3>
+        <pre><code># 第一步：看 Pod 状态
+kubectl get pods
+# Pending  → 调度失败，看 describe 的 Events
+# ContainerCreating → 镜像拉取或挂载失败
+# CrashLoopBackOff → 容器启动后崩溃
+
+# 第二步：看 Events
+kubectl describe pod 名字
+# 关注底部 Events 部分，常见原因：
+#   FailedScheduling → 资源不足/污点/节点选择器不匹配
+#   ErrImagePull     → 镜像地址错或没权限
+#   ImagePullBackOff → 同上
+#   CrashLoopBackOff → 应用启动失败，看 logs
+
+# 第三步：看日志
+kubectl logs 名字
+kubectl logs --previous 名字   # 容器重启过，看上一次的日志</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">Pod 状态速查</div>
+          <ul>
+            <li><code>Pending</code>：还没调度，资源不足或镜像拉取中</li>
+            <li><code>ContainerCreating</code>：正在创建容器</li>
+            <li><code>Running</code>：正常运行</li>
+            <li><code>CrashLoopBackOff</code>：容器反复崩溃重启</li>
+            <li><code>ImagePullBackOff</code>：镜像拉取失败</li>
+            <li><code>Error</code>：启动出错</li>
+          </ul>
+        </div>
+
+        <h3>5.2 Service 不通</h3>
+        <pre><code># 1. 确认 Service 选中了 Pod
+kubectl get endpoints web-svc
+# 如果是空的，说明 selector 没匹配到 Pod 的 label
+
+# 2. 确认 Pod 本身能访问
+kubectl exec -it 另一个pod -- curl http://podIP:80
+
+# 3. 确认 Service 的 ClusterIP 能通
+kubectl exec -it 另一个pod -- curl http://web-svc:80
+
+# 4. 确认 kube-proxy 正常
+kubectl get pods -n kube-system | grep kube-proxy
+# 看 iptables 规则
+iptables -t nat -L -n | grep web-svc
+
+# 5. NodePort 不通，检查节点安全组/防火墙是否放行端口</code></pre>
+
+        <h3>5.3 节点 NotReady</h3>
+        <pre><code># 看节点状态和原因
+kubectl describe node 节点名
+# 关注 Conditions：MemoryPressure/DiskPressure/PIDPressure
+
+# 登录节点排查
+systemctl status kubelet
+journalctl -u kubelet -f        # 看 kubelet 日志
+crictl ps                       # 看运行的容器
+df -h /var/lib/kubelet          # 磁盘空间
+free -h                         # 内存</code></pre>
+
+        <h2>6. 性能调优</h2>
+        <ul>
+          <li><strong>资源 requests/limits</strong>：每个 Pod 设好，避免资源争抢和 OOM。</li>
+          <li><strong>kube-proxy 用 IPVS</strong>：Service 多时比 iptables 性能好。</li>
+          <li><strong>etcd 用 SSD</strong>：etcd 延迟直接影响整个集群响应。</li>
+          <li><strong>限制每节点 Pod 数</strong>：<code>--max-pods</code> 避免单节点过载。</li>
+          <li><strong>HPA 自动扩缩容</strong>：根据 CPU/内存/自定义指标自动调整副本数。</li>
+          <li><strong>污点与亲和</strong>：把高 IO 应用调度到高性能节点。</li>
+        </ul>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>K8s 分 Master（apiserver/etcd/scheduler/controller）和 Node（kubelet/kube-proxy/runtime）。</li>
+          <li>Pod 是最小调度单元，Deployment 管副本和滚动升级，Service 提供稳定入口。</li>
+          <li>探针（liveness/readiness）让 K8s 感知应用真实状态，必须配置。</li>
+          <li>Pod 起不来：看状态 → describe 看 Events → logs 看日志。</li>
+          <li>Service 不通：先看 endpoints 是否为空，再逐层排查。</li>
+          <li>Secret 只是 base64，生产要开 etcd 加密或用外部 KMS。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="readinessProbe 失败时 Pod 会从 Service 的 endpoints 中摘除，不再接收流量。">
+            <div class="quiz-question">1. （单选）K8s 中哪个探针失败时，Pod 会被从 Service 中摘除流量但不重启？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. livenessProbe</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. startupProbe</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. readinessProbe</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. healthProbe</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="ImagePullBackOff 表示镜像拉取失败，通常是镜像地址错误或没有拉取权限。">
+            <div class="quiz-question">2. （单选）Pod 状态为 ImagePullBackOff，最可能的原因是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. 资源不足调度失败</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. 镜像拉取失败</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. 应用启动崩溃</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. 配置挂载失败</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="endpoints|Endpoints"
+               data-explain="通过 kubectl get endpoints 可以查看 Service 选中了哪些 Pod，如果为空说明 selector 不匹配。">
+            <div class="quiz-question">3. （填空）排查 Service 不通时，用 kubectl get 什么资源来确认 Service 是否选中了 Pod？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D"
+               data-explain="K8s Secret 默认只是 base64 编码，不是加密，生产需要开启 etcd 静态加密或外部 KMS。">
+            <div class="quiz-question">3. （单选）关于 K8s Secret，下列说法正确的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q4" value="A" /> A. Secret 默认是 AES 加密的</label></li>
+              <li><label><input type="radio" name="q4" value="B" /> B. Secret 不能被挂载到 Pod</label></li>
+              <li><label><input type="radio" name="q4" value="C" /> C. Secret 和 ConfigMap 完全一样</label></li>
+              <li><label><input type="radio" name="q4" value="D" /> D. Secret 默认只是 base64 编码，不是加密</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 第 19 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

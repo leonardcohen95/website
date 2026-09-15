@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第17章 数据库运维实战 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="17-database">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 17 章</span>
+          <span class="meta-tag">运维实战</span>
+          <span class="meta-tag">约 30 分钟</span>
+        </div>
+        <h1>数据库运维实战（MySQL / Oracle / 达梦）</h1>
+        <p>
+          岗位要求熟悉 Oracle、MySQL、达梦等数据库的安装配置、故障排除和性能调优。
+          本章以 <strong>MySQL</strong> 为主线（最常考），讲透安装、备份恢复、主从复制和慢查询调优，
+          再对比 Oracle 和达梦（DM）的关键差异点，让你面试时能答得全面。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>掌握 MySQL 的安装、配置和核心参数调优</li>
+          <li>熟练使用 mysqldump 和物理备份，能做恢复演练</li>
+          <li>理解主从复制原理和常见故障排查</li>
+          <li>掌握慢查询分析和索引优化思路</li>
+          <li>了解 Oracle 与达梦数据库的运维差异</li>
+        </ul>
+
+        <h2>1. MySQL 安装与配置</h2>
+
+        <h3>1.1 YUM 安装（CentOS 7/8）</h3>
+        <pre><code># 1. 安装 MySQL 官方 YUM 源
+wget https://dev.mysql.com/get/mysql80-community-release-el7-7.noarch.rpm
+rpm -ivh mysql80-community-release-el7-7.noarch.rpm
+
+# 2. 安装 MySQL 8.0
+yum install -y mysql-community-server
+
+# 3. 启动并设置开机自启
+systemctl start mysqld
+systemctl enable mysqld
+
+# 4. 获取临时密码
+grep 'temporary password' /var/log/mysqld.log
+
+# 5. 安全初始化（设置 root 密码、删除匿名用户、禁止远程 root）
+mysql_secure_installation</code></pre>
+
+        <h3>1.2 核心配置 my.cnf</h3>
+        <p>MySQL 的性能很大程度取决于配置。下面是一个生产级配置模板（按机器内存调整）：</p>
+        <pre><code>[mysqld]
+# ===== 基础 =====
+server-id = 1
+port = 3306
+datadir = /data/mysql
+socket = /var/lib/mysql/mysql.sock
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+
+# ===== 内存调优 =====
+innodb_buffer_pool_size = 8G          # 最重要！物理内存的 60%~70%
+innodb_log_file_size = 2G             # redo log 大小，大事务需要
+innodb_log_buffer_size = 64M          # redo log 缓冲区
+max_connections = 1000                # 最大连接数
+sort_buffer_size = 4M
+join_buffer_size = 4M
+tmp_table_size = 64M
+max_heap_table_size = 64M
+
+# ===== 安全 =====
+default_authentication_plugin = mysql_native_password  # 兼容老客户端
+skip-name-resolve                      # 禁用 DNS 反向解析，提升连接速度
+
+# ===== 日志 =====
+slow_query_log = ON
+slow_query_log_file = /var/log/mysql/slow.log
+long_query_time = 1                    # 超过 1 秒记为慢查询
+log-queries-not-using-indexes          # 没走索引的也记下来
+
+# ===== 主从复制 =====
+log_bin = mysql-bin
+binlog_format = ROW                    # 推荐 ROW 格式，数据一致
+expire_logs_days = 7                   # binlog 保留 7 天
+gtid_mode = ON                         # 开启 GTID，复制更可靠
+enforce_gtid_consistency = ON</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">innodb_buffer_pool_size 是第一旋钮</div>
+          <p>
+            这个参数决定了 InnoDB 能缓存多少数据和索引。设为物理内存的 60%~70% 是经验值。
+            太小会频繁读盘，太大会和系统抢内存导致 OOM。改完必须 <code>systemctl restart mysqld</code>。
+          </p>
+        </div>
+
+        <h2>2. 备份与恢复</h2>
+        <p>备份是运维的生命线。面试常问「你们的备份策略是什么？怎么恢复？」</p>
+
+        <h3>2.1 逻辑备份 mysqldump</h3>
+        <pre><code># 全库备份（含存储过程、触发器、事件）
+mysqldump -uroot -p --all-databases --routines --triggers --events \
+    --single-transaction --master-data=2 > full_backup.sql
+
+# 单库备份
+mysqldump -uroot -p --single-transaction mydb > mydb.sql
+
+# 只备份表结构
+mysqldump -uroot -p -d mydb > schema.sql
+
+# 只备份数据
+mysqldump -uroot -p -t mydb > data.sql
+
+# 恢复
+mysql -uroot -p < full_backup.sql
+# 或指定库
+mysql -uroot -p mydb < mydb.sql</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">参数说明</div>
+          <p>
+            <code>--single-transaction</code>：对 InnoDB 表做一致性快照，不锁表（生产必加）。
+            <code>--master-data=2</code>：在备份文件里记录 binlog 位置，用于搭建从库或按时间点恢复。
+          </p>
+        </div>
+
+        <h3>2.2 物理备份（XtraBackup）</h3>
+        <p>数据量大时 mysqldump 太慢，用 Percona XtraBackup 做物理热备：</p>
+        <pre><code># 安装
+yum install -y https://downloads.percona.com/downloads/Percona-XtraBackup-8.0/.../percona-xtrabackup-80.rpm
+
+# 全量备份
+xtrabackup --backup --target-dir=/backup/full --user=root --password=xxx
+
+# 增量备份（基于上次全量）
+xtrabackup --backup --target-dir=/backup/inc1 --incremental-basedir=/backup/full
+
+# 恢复三步：prepare → 拷贝 → 重启
+xtrabackup --prepare --target-dir=/backup/full
+systemctl stop mysqld
+rsync -av /backup/full/ /data/mysql/
+chown -R mysql:mysql /data/mysql
+systemctl start mysqld</code></pre>
+
+        <h3>2.3 基于 binlog 的按时间点恢复（PITR）</h3>
+        <p>误删数据时，用全量备份 + binlog 恢复到误操作前一秒：</p>
+        <pre><code># 1. 先恢复最近一次全量备份
+mysql < full_backup.sql
+
+# 2. 找到误操作的 binlog 位置
+mysqlbinlog /var/lib/mysql/mysql-bin.000123 | grep -i "drop table" -B 5
+
+# 3. 重放 binlog 到误操作前的位置
+mysqlbinlog --stop-position=12345 /var/lib/mysql/mysql-bin.000123 | mysql
+
+# 4. 或者按时间恢复
+mysqlbinlog --stop-datetime="2024-01-15 10:30:00" \
+    /var/lib/mysql/mysql-bin.000123 | mysql</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">备份不演练等于没备份</div>
+          <p>
+            面试官很看重这点。定期做恢复演练，确认备份可用、恢复流程熟练。
+            真正出事时才不会手忙脚乱。
+          </p>
+        </div>
+
+        <h2>3. 主从复制</h2>
+
+        <h3>3.1 原理</h3>
+        <div class="callout">
+          <div class="callout-title">复制三线程</div>
+          <pre><code>主库 (Master)              从库 (Slave)
+┌─────────────┐           ┌──────────────────┐
+│  写操作 →    │  binlog   │ I/O线程 → relay log │
+│  生成 binlog │ ────────▶ │                  │
+└─────────────┘           │ SQL线程 → 重放    │
+                          └──────────────────┘</code></pre>
+          <p>
+            主库把变更写入 binlog → 从库 I/O 线程拉取到 relay log → 从库 SQL 线程重放。
+            MySQL 5.7+ 支持多线程并行回放，提升复制速度。
+          </p>
+        </div>
+
+        <h3>3.2 搭建步骤</h3>
+        <pre><code># === 主库 ===
+# 1. my.cnf 配置 server-id 和 log_bin
+# 2. 创建复制用户
+CREATE USER 'repl'@'%' IDENTIFIED BY '密码';
+GRANT REPLICATION SLAVE ON *.* TO 'repl'@'%';
+
+# 3. 锁表、记录 binlog 位置
+FLUSH TABLES WITH READ LOCK;
+SHOW MASTER STATUS;   -- 记下 File 和 Position
+# 另开终端做 mysqldump 备份
+UNLOCK TABLES;
+
+# === 从库 ===
+# 1. 恢复主库备份
+# 2. 配置复制
+CHANGE MASTER TO
+  MASTER_HOST='主库IP',
+  MASTER_USER='repl',
+  MASTER_PASSWORD='密码',
+  MASTER_LOG_FILE='mysql-bin.000123',
+  MASTER_LOG_POS=1234,
+  MASTER_AUTO_POSITION=1;
+
+START SLAVE;
+SHOW SLAVE STATUS\G   -- 看 IO/SQL 线程是否都是 Yes</code></pre>
+
+        <h3>3.3 主从延迟与故障排查</h3>
+        <pre><code># 看延迟秒数
+SHOW SLAVE STATUS\G
+# 关注：Seconds_Behind_Master（延迟秒数）
+#       Slave_IO_Running / Slave_SQL_Running（线程状态）
+
+# IO 线程 No：网络问题或账号密码错误，看 Last_IO_Error
+# SQL 线程 No：重放出错（如表不存在、主键冲突），看 Last_SQL_Error
+
+# 临时跳过错误（慎用，可能导致数据不一致）
+STOP SLAVE;
+SET GLOBAL sql_slave_skip_counter = 1;
+START SLAVE;</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">主从延迟常见原因</div>
+          <ul>
+            <li>从库硬件比主库差，追不上</li>
+            <li>大事务（一条 SQL 更新百万行）</li>
+            <li>从库有慢查询占用资源</li>
+            <li>网络带宽不足</li>
+            <li>单线程 SQL 线程追不上（开并行复制 <code>slave_parallel_workers</code>）</li>
+          </ul>
+        </div>
+
+        <h2>4. 性能调优</h2>
+
+        <h3>4.1 慢查询分析</h3>
+        <pre><code># 1. 开启慢查询（已在 my.cnf 配置）
+SET GLOBAL slow_query_log = ON;
+SET GLOBAL long_query_time = 1;
+
+# 2. 用 mysqldumpslow 统计 Top 慢查询
+mysqldumpslow -s t -t 10 /var/log/mysql/slow.log
+# -s t 按时间排序，-t 10 取前 10
+
+# 3. 用 pt-query-digest 更详细分析（percona-toolkit）
+pt-query-digest /var/log/mysql/slow.log | head -100</code></pre>
+
+        <h3>4.2 EXPLAIN 看执行计划</h3>
+        <p>拿到慢 SQL，先用 EXPLAIN 看它怎么执行的：</p>
+        <pre><code>EXPLAIN SELECT * FROM orders WHERE user_id = 123 AND status = 1 ORDER BY create_time DESC;
+
+# 重点看这些列：
+# type：访问类型，const > eq_ref > ref > range > index > ALL
+#       出现 ALL 说明全表扫描，要加索引
+# key：实际用到的索引，NULL 说明没用索引
+# rows：预估扫描行数，越小越好
+# Extra：
+#   Using index      → 覆盖索引，好
+#   Using where      → 回表过滤
+#   Using temporary  → 用了临时表，差
+#   Using filesort   → 外部排序，差</code></pre>
+
+        <h3>4.3 索引优化原则</h3>
+        <ul>
+          <li><strong>最左前缀</strong>：联合索引 (a,b,c)，查询条件要从 a 开始才走索引。</li>
+          <li><strong>避免索引失效</strong>：不要对索引列用函数、计算、隐式类型转换。</li>
+          <li><strong>覆盖索引</strong>：查询的列都在索引里，不用回表，性能最好。</li>
+          <li><strong>索引选择性</strong>：区分度高的列放联合索引前面。</li>
+          <li><strong>不要过度建索引</strong>：索引加快查询但拖慢写入，且占空间。</li>
+        </ul>
+
+        <h2>5. Oracle 与达梦的差异点</h2>
+        <p>面试官如果问 Oracle 或达梦，重点说差异，别把 MySQL 那套直接套过去。</p>
+
+        <div class="term-card">
+          <div class="term-name">Oracle</div>
+          <p>
+            <strong>体系结构</strong>：实例（SGA+PGA+后台进程）+ 数据库（数据文件+控制文件+redo log）。
+            <strong>备份</strong>：用 RMAN，支持全量/增量/归档日志恢复。
+            <strong>调优</strong>：关注 SGA/PGA 分配、AWR 报告分析 SQL 性能。
+            <strong>高可用</strong>：Data Guard（类似主从）、RAC（多实例共享存储）。
+            <strong>常见面试点</strong>：表空间管理、归档模式、闪回（Flashback）恢复。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">达梦（DM）</div>
+          <p>
+            国产数据库，语法兼容 Oracle，很多概念直接对应。
+            <strong>体系</strong>：实例 + 库，类似 Oracle。
+            <strong>备份</strong>：dmrman 工具（类似 RMAN），支持全量/增量/归档。
+            <strong>复制</strong>：DM 数据守护（类似 Data Guard）、DM MPP 集群。
+            <strong>面试重点</strong>：强调国产信创适配经验，管理工具是 manager/console/dmsql。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">面试小技巧</div>
+          <p>
+            被问到不熟悉的数据库时，先讲通用的运维思想（备份、高可用、性能调优），
+            再对比自己熟悉的数据库说差异点，比直接说「不会」好得多。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>MySQL 核心配置：<code>innodb_buffer_pool_size</code> 是第一旋钮，设为内存 60%~70%。</li>
+          <li>备份分逻辑（mysqldump）和物理（XtraBackup），配合 binlog 做按时间点恢复。</li>
+          <li>主从复制靠 binlog + relay log，关注 IO/SQL 线程状态和延迟。</li>
+          <li>慢查询用 <code>mysqldumpslow</code> 或 <code>pt-query-digest</code> 分析，EXPLAIN 看执行计划。</li>
+          <li>索引遵循最左前缀、避免函数计算、追求覆盖索引。</li>
+          <li>Oracle 用 RMAN/Data Guard/AWR，达梦兼容 Oracle 语法用 dmrman/数据守护。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="innodb_buffer_pool_size 缓存数据和索引，是影响 InnoDB 性能最关键的参数。">
+            <div class="quiz-question">1. （单选）MySQL InnoDB 引擎中，对性能影响最大的参数是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. innodb_buffer_pool_size</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. max_connections</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. port</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. character-set-server</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="主从复制中，从库有 IO 线程拉取 binlog 和 SQL 线程重放 relay log 两个核心线程。">
+            <div class="quiz-question">2. （单选）MySQL 主从复制中，从库负责拉取主库 binlog 的线程是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. SQL 线程</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. IO 线程</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. Purge 线程</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. Master 线程</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="EXPLAIN"
+               data-explain="EXPLAIN 命令用于查看 SQL 的执行计划，分析索引使用和扫描行数。">
+            <div class="quiz-question">3. （填空）分析一条 SQL 语句的执行计划（是否走索引、扫描行数）时，使用什么命令？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D"
+               data-explain="Oracle 的物理备份工具是 RMAN，MySQL 是 mysqldump/XtraBackup。">
+            <div class="quiz-question">4. （单选）Oracle 数据库的物理备份工具是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q4" value="A" /> A. mysqldump</label></li>
+              <li><label><input type="radio" name="q4" value="B" /> B. XtraBackup</label></li>
+              <li><label><input type="radio" name="q4" value="C" /> C. dmrman</label></li>
+              <li><label><input type="radio" name="q4" value="D" /> D. RMAN</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 第 17 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>
