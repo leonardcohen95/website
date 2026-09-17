@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第22章 Selenium 自动化测试面试实战 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="22-selenium">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>AI Agent 教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 22 章</span>
+          <span class="meta-tag">自动化测试</span>
+          <span class="meta-tag">约 40 分钟</span>
+        </div>
+        <h1>Selenium 自动化测试面试实战</h1>
+        <p>
+          Selenium 是 Web 自动化测试领域的事实标准，也是测试开发、运维自动化、爬虫岗位的
+          高频考点。本章从核心原理讲起，覆盖元素定位、等待机制、三大切换、常见问题处理，
+          以及 Page Object 设计模式。每一节都标注了「面试怎么问」，帮你把知识点转化为
+          面试表达。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Selenium 的组成与 WebDriver 工作原理</li>
+          <li>掌握 8 种元素定位方式及其优先级</li>
+          <li>吃透三种等待机制的区别与使用场景（面试必考）</li>
+          <li>熟练处理 iframe、多窗口、alert 弹窗三大切换</li>
+          <li>能用 Page Object 模式编写可维护的自动化测试</li>
+          <li>掌握无头模式、反检测、文件上传等实战技巧</li>
+        </ul>
+
+        <h2>1. Selenium 是什么</h2>
+        <p>
+          Selenium 是一套用于<strong>浏览器自动化</strong>的开源工具集，它能模拟真实用户
+          操作浏览器（点击、输入、拖拽等），广泛用于 UI 自动化测试、数据采集、RPA 等场景。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">Selenium 三大组件</div>
+          <p>
+            <strong>Selenium WebDriver</strong>：核心，通过各浏览器厂商提供的驱动
+            （ChromeDriver、geckodriver 等）直接控制浏览器，支持 Python/Java/JS 等语言。<br />
+            <strong>Selenium Grid</strong>：分布式执行，把测试任务分发到多台机器/多浏览器并行跑。<br />
+            <strong>Selenium IDE</strong>：浏览器插件，录制回放，适合快速入门，生产少用。
+          </p>
+        </div>
+
+        <h3>1.1 WebDriver 工作原理（面试常问）</h3>
+        <p>面试经常问「Selenium 是怎么控制浏览器的？」，用下面这个流程回答最清晰：</p>
+        <pre><code>你的脚本(Python)
+    │  调用 Selenium Client API
+    ▼
+Selenium Client Library (selenium 包)
+    │  发送 HTTP 请求 (W3C WebDriver 协议)
+    ▼
+Browser Driver (chromedriver.exe)  ← 一个本地 HTTP 服务
+    │  通过浏览器的 DevTools/远程调试协议
+    ▼
+真实浏览器 (Chrome) 执行操作并返回结果</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">面试回答要点</div>
+          <p>
+            关键点有三个：①WebDriver 是基于 <strong>HTTP 协议</strong>通信的；
+            ②驱动程序（chromedriver）是一个本地 HTTP Server；
+            ③Selenium 4 之后统一遵循 <strong>W3C WebDriver 标准协议</strong>，
+            不再有 Selenium 3 时代的 JSON Wire Protocol。
+          </p>
+        </div>
+
+        <h3>1.2 环境搭建（Selenium 4.x）</h3>
+        <p>
+          Selenium 4.6 之后内置了 <strong>Selenium Manager</strong>，会自动下载匹配的浏览器驱动，
+          不需要手动下载 chromedriver 了。这是面试官喜欢问的新特性。
+        </p>
+        <pre><code># 安装
+pip install selenium
+
+# 最简启动（Selenium Manager 自动管理驱动）
+from selenium import webdriver
+
+driver = webdriver.Chrome()          # 自动找/下载匹配的 ChromeDriver
+driver.get("https://www.example.com")
+print(driver.title)
+driver.quit()</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">Selenium 4 API 变化（必知）</div>
+          <p>
+            Selenium 4 废弃了 <code>executable_path</code> 参数。如果你看到
+            <code>webdriver.Chrome(executable_path="...")</code> 这种写法，
+            在新版会直接抛 <code>TypeError</code>。正确写法是用 <code>Service</code>：
+          </p>
+        </div>
+
+        <pre><code>from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+
+# 方式一：自动管理驱动（推荐）
+driver = webdriver.Chrome()
+
+# 方式二：手动指定驱动路径（需要 Service）
+service = Service(executable_path="/path/to/chromedriver")
+driver = webdriver.Chrome(service=service)</code></pre>
+
+        <h2>2. 元素定位 8 种方式</h2>
+        <p>
+          自动化的第一步就是「找到元素」。Selenium 提供了 8 种定位方式，面试会问「你平时
+          怎么选定位方式？」，答案是：<strong>id &gt; name &gt; css_selector &gt; xpath</strong>，
+          优先选稳定、唯一的属性。
+        </p>
+
+        <pre><code>from selenium.webdriver.common.by import By
+
+# 1. id（最优先，唯一且稳定）
+driver.find_element(By.ID, "username")
+
+# 2. name（常用于表单）
+driver.find_element(By.NAME, "password")
+
+# 3. class name（注意：只能传单个 class，不能有空格）
+driver.find_element(By.CLASS_NAME, "btn-primary")
+
+# 4. tag name（标签名，通常不唯一）
+driver.find_element(By.TAG_NAME, "input")
+
+# 5. link text（精确匹配链接文字）
+driver.find_element(By.LINK_TEXT, "登录")
+
+# 6. partial link text（模糊匹配链接文字）
+driver.find_element(By.PARTIAL_LINK_TEXT, "忘记密码")
+
+# 7. css selector（功能强大，推荐）
+driver.find_element(By.CSS_SELECTOR, "#login-form .btn")
+
+# 8. xpath（万能，能定位复杂结构）
+driver.find_element(By.XPATH, "//input[@name='username']")</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">find_element vs find_elements</div>
+          <p>
+            <code>find_element</code> 返回第一个匹配元素，找不到抛
+            <code>NoSuchElementException</code>；<code>find_elements</code> 返回列表，
+            找不到返回空列表 <code>[]</code>。判断元素是否存在用后者更安全。
+          </p>
+        </div>
+
+        <h3>2.1 XPath 常用写法（面试高频）</h3>
+        <pre><code># 绝对路径（不推荐，页面结构变就挂）
+/html/body/div[2]/form/input
+
+# 相对路径 + 属性（推荐）
+//input[@id='username']
+//button[@type='submit' and @class='btn']
+
+# 文本匹配
+//a[text()='登录']
+//a[contains(text(), '忘记')]
+
+# 模糊匹配属性
+//input[contains(@class, 'btn-')]
+//div[starts-with(@id, 'user-')]
+
+# 父子 / 兄弟关系
+//div[@id='box']/following-sibling::p    # 后面的兄弟 p
+//li[last()]                               # 最后一个 li
+//ul/li[position()=3]                      # 第 3 个 li</code></pre>
+
+        <h3>2.2 CSS Selector 常用写法</h3>
+        <pre><code># 选择器示例
+#username                # id
+.btn-primary             # class
+input[name='password']   # 属性
+div.card > p             # 直接子元素
+div.card p               # 后代元素
+input[type='text'][name='user']  # 多属性
+li:nth-child(3)          # 第 3 个 li</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">CSS vs XPath 怎么选？</div>
+          <p>
+            <strong>CSS 优先</strong>：语法简洁、浏览器原生支持、性能略好。
+            <strong>XPath 用在</strong>：需要按文本查找（CSS 做不到）、需要向前查找父元素
+            （CSS 只能向下）、复杂的轴关系定位。
+          </p>
+        </div>
+
+        <h2>3. 元素操作</h2>
+        <p>找到元素后，常见操作如下：</p>
+        <pre><code>el = driver.find_element(By.ID, "username")
+
+el.click()                    # 点击
+el.send_keys("hello")         # 输入
+el.clear()                    # 清空输入框
+el.send_keys(Keys.ENTER)      # 按回车键
+
+el.get_attribute("value")     # 获取属性值
+el.text                       # 获取可见文本
+el.is_displayed()             # 是否可见
+el.is_enabled()               # 是否可用
+el.is_selected()              # 是否被选中（复选框/单选）</code></pre>
+
+        <h3>3.1 模拟键盘与鼠标（ActionChains）</h3>
+        <pre><code>from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
+
+# 鼠标悬停
+ActionChains(driver).move_to_element(menu).perform()
+
+# 右键单击
+ActionChains(driver).context_click(el).perform()
+
+# 双击
+ActionChains(driver).double_click(el).perform()
+
+# 拖拽
+ActionChains(driver).drag_and_drop(source, target).perform()
+
+# 链式操作：悬停→点击→输入
+ActionChains(driver) \
+    .move_to_element(menu) \
+    .click(submenu) \
+    .send_keys("text") \
+    .perform()
+
+# 组合键：Ctrl+A 全选，Ctrl+C 复制
+el.send_keys(Keys.CONTROL, "a")
+el.send_keys(Keys.CONTROL, "c")</code></pre>
+
+        <h3>3.2 下拉框处理（Select）</h3>
+        <pre><code>from selenium.webdriver.support.ui import Select
+
+select = Select(driver.find_element(By.ID, "city"))
+
+select.select_by_index(1)          # 按索引（从 0 开始）
+select.select_by_value("bj")       # 按 value 属性
+select.select_by_visible_text("北京")  # 按可见文本
+
+# 反选（仅多选下拉框）
+select.deselect_all()
+select.deselect_by_value("bj")
+
+# 获取所有选项
+options = select.options
+first = select.first_selected_option</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">注意</div>
+          <p>
+            <code>Select</code> 只能处理原生 <code>&lt;select&gt;</code> 标签。
+            现在很多网站用 <code>div + ul</code> 自定义下拉框，那就不能用 Select，
+            得先点击触发下拉，再点击对应选项。
+          </p>
+        </div>
+
+        <h2>4. 三种等待机制（面试必考）</h2>
+        <p>
+          这是 Selenium 面试出现率最高的知识点。面试官一定会问「强制等待、隐式等待、
+          显式等待有什么区别？」，务必背熟。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">强制等待 time.sleep()</div>
+          <p>
+            让程序死等 N 秒，不管元素是否出现。<strong>缺点</strong>：写死时间，
+            等少了不稳定，等多了浪费时间。只在调试时临时用，生产代码不要用。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">隐式等待 implicitly_wait()</div>
+          <p>
+            设置一个最长等待时间，在时间内轮询查找元素，找到就继续，超时抛异常。
+            <strong>全局生效</strong>，只需设置一次。<strong>缺点</strong>：只能等元素出现，
+            不能等「可点击」「文本变化」等条件。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">显式等待 WebDriverWait + EC</div>
+          <p>
+            针对<strong>单个元素/单个条件</strong>等待，最灵活、最推荐。
+            配合 <code>expected_conditions</code> 可以等各种状态。
+          </p>
+        </div>
+
+        <pre><code>import time
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+# 1. 强制等待
+time.sleep(3)
+
+# 2. 隐式等待（全局，设置一次即可）
+driver.implicitly_wait(10)
+
+# 3. 显式等待（推荐）
+wait = WebDriverWait(driver, 10, poll_frequency=0.5)
+el = wait.until(EC.element_to_be_clickable((By.ID, "login-btn")))
+el.click()</code></pre>
+
+        <h3>4.1 常用 expected_conditions</h3>
+        <pre><code># 元素可见（在 DOM 中且可见）
+EC.visibility_of_element_located((By.ID, "box"))
+
+# 元素可点击
+EC.element_to_be_clickable((By.ID, "btn"))
+
+# 元素出现在 DOM（不一定可见）
+EC.presence_of_element_located((By.ID, "box"))
+
+# 文本出现
+EC.text_to_be_present_in_element((By.ID, "msg"), "登录成功")
+
+# 标题包含
+EC.title_contains("首页")
+
+# 元素消失
+EC.invisibility_of_element_located((By.ID, "loading"))
+
+# 可点击后点击（Selenium 4 新增）
+EC.element_to_be_clickable((By.ID, "btn")).click(driver)</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">面试回答模板</div>
+          <p>
+            问：三种等待的区别？<br />
+            答：<strong>强制等待</strong>是 <code>time.sleep</code>，死等固定时间，简单但浪费时间且不稳定；
+            <strong>隐式等待</strong>通过 <code>implicitly_wait</code> 设置全局超时，
+            轮询查找元素，找到就返回，但只能等元素存在；
+            <strong>显式等待</strong>用 <code>WebDriverWait + expected_conditions</code>，
+            可以针对具体元素和具体条件（可点击、文本出现等）等待，最灵活，生产环境优先用显式等待。
+          </p>
+        </div>
+
+        <h2>5. 三大切换（iframe / 多窗口 / alert）</h2>
+        <p>页面中出现嵌套页面、新标签页、弹窗时，必须先切换「上下文」才能操作。</p>
+
+        <h3>5.1 切换 iframe</h3>
+        <pre><code># 按索引切换（第 0 个 iframe）
+driver.switch_to.frame(0)
+
+# 按 id 或 name 切换
+driver.switch_to.frame("frameName")
+
+# 按元素切换（先定位再切换）
+iframe = driver.find_element(By.CSS_SELECTOR, "iframe.xxx")
+driver.switch_to.frame(iframe)
+
+# 切回主文档
+driver.switch_to.default_content()
+
+# 切回上一层 iframe（多层嵌套时）
+driver.switch_to.parent_frame()</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">常见坑</div>
+          <p>
+            操作完 iframe 内的元素后，<strong>必须切回 default_content</strong> 才能操作外面的元素。
+            很多人操作完忘了切回，导致外面的元素一直定位不到。
+          </p>
+        </div>
+
+        <h3>5.2 切换多窗口</h3>
+        <pre><code># 获取当前窗口句柄
+main = driver.current_window_handle
+
+# 获取所有窗口句柄列表
+handles = driver.window_handles
+
+# 切换到最新打开的窗口
+driver.switch_to.window(handles[-1])
+
+# 关闭当前窗口并切回主窗口
+driver.close()
+driver.switch_to.window(main)
+
+# 遍历所有窗口，按标题切换
+for h in driver.window_handles:
+    driver.switch_to.window(h)
+    if "登录" in driver.title:
+        break</code></pre>
+
+        <h3>5.3 切换 alert / confirm / prompt 弹窗</h3>
+        <pre><code>alert = driver.switch_to.alert
+
+print(alert.text)      # 获取弹窗文本
+alert.accept()         # 点击确定
+alert.dismiss()        # 点击取消
+
+# prompt 弹窗可以输入
+alert.send_keys("hello")
+alert.accept()</code></pre>
+
+        <h2>6. 常见问题处理</h2>
+
+        <h3>6.1 文件上传</h3>
+        <pre><code># input[type=file] 直接 send_keys 文件路径即可
+upload = driver.find_element(By.CSS_SELECTOR, "input[type='file']")
+upload.send_keys("/path/to/file.txt")
+
+# 多个文件
+upload.send_keys("/path/1.txt\n/path/2.txt")</code></pre>
+
+        <h3>6.2 截图</h3>
+        <pre><code># 整页截图
+driver.save_screenshot("full.png")
+
+# 元素截图（Selenium 4 支持）
+el = driver.find_element(By.ID, "box")
+el.screenshot("element.png")
+
+# 截图为 base64（用于报告）
+png = driver.get_screenshot_as_base64()</code></pre>
+
+        <h3>6.3 执行 JavaScript</h3>
+        <pre><code># 滚动到元素
+el = driver.find_element(By.ID, "bottom")
+driver.execute_script("arguments[0].scrollIntoView();", el)
+
+# 滚动到底部
+driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
+# 修改元素属性（去掉只读、隐藏元素等）
+driver.execute_script("arguments[0].removeAttribute('readonly');", el)
+driver.execute_script("arguments[0].style.display='block';", el)
+
+# 直接设置 value（绕过输入限制）
+driver.execute_script("arguments[0].value='hello';", el)</code></pre>
+
+        <h3>6.4 Cookie 操作</h3>
+        <pre><code># 获取所有 cookie
+cookies = driver.get_cookies()
+
+# 添加 cookie（常用于跳过登录）
+driver.add_cookie({"name": "token", "value": "xxx", "domain": ".example.com"})
+
+# 删除
+driver.delete_cookie("token")
+driver.delete_all_cookies()</code></pre>
+
+        <h2>7. 高级用法</h2>
+
+        <h3>7.1 无头模式（Headless）</h3>
+        <p>不打开浏览器窗口，在服务器上跑自动化测试必备。</p>
+        <pre><code>from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+
+options = Options()
+options.add_argument("--headless=new")        # 无头模式
+options.add_argument("--disable-gpu")         # 禁用 GPU（某些环境需要）
+options.add_argument("--window-size=1920,1080")  # 指定窗口大小
+options.add_argument("--no-sandbox")          # Linux  root 用户需要
+options.add_argument("--disable-dev-shm-usage")  # 容器中需要
+
+driver = webdriver.Chrome(options=options)</code></pre>
+
+        <h3>7.2 反爬虫检测</h3>
+        <p>
+          很多网站会检测 <code>navigator.webdriver</code> 等特征识别 Selenium。
+          常用的绕过手段：
+        </p>
+        <pre><code># 1. 排除 webdriver 标识
+options.add_experimental_option("excludeSwitches", ["enable-automation"])
+options.add_experimental_option("useAutomationExtension", False)
+
+# 2. 注入脚本，移除 webdriver 特征
+driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+    "source": """
+    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+    window.chrome = {runtime: {}};
+    """
+})
+
+# 3. 设置真实 User-Agent
+options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) ...")
+
+# 4. 更彻底的方案：用 undetected-chromedriver
+# pip install undetected-chromedriver
+import undetected_chromedriver as uc
+driver = uc.Chrome()</code></pre>
+
+        <h3>7.3 常用 Chrome 启动参数</h3>
+        <pre><code>options.add_argument("--start-maximized")           # 最大化窗口
+options.add_argument("--incognito")                 # 无痕模式
+options.add_argument("--disable-infobars")          # 去掉"自动化控制"提示
+options.add_argument("--ignore-certificate-errors") # 忽略证书错误
+options.add_argument("--proxy-server=http://1.2.3.4:8080")  # 代理
+options.add_argument("--lang=zh-CN")                # 设置语言</code></pre>
+
+        <h2>8. Page Object 模式（POM）</h2>
+        <p>
+          面试常问「你的自动化框架是怎么设计的？」Page Object Model 是最经典的答案。
+          核心思想：<strong>把页面操作封装成类，把元素定位和测试逻辑分离</strong>。
+        </p>
+
+        <pre><code># pages/login_page.py
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+class LoginPage:
+    def __init__(self, driver):
+        self.driver = driver
+        self.wait = WebDriverWait(driver, 10)
+
+    # 元素定位统一管理
+    USERNAME = (By.ID, "username")
+    PASSWORD = (By.ID, "password")
+    LOGIN_BTN = (By.CSS_SELECTOR, "button[type='submit']")
+
+    # 操作封装成方法
+    def enter_username(self, text):
+        self.wait.until(EC.visibility_of_element_located(self.USERNAME)).send_keys(text)
+
+    def enter_password(self, text):
+        self.driver.find_element(*self.PASSWORD).send_keys(text)
+
+    def click_login(self):
+        self.wait.until(EC.element_to_be_clickable(self.LOGIN_BTN)).click()
+
+    # 业务流程
+    def login(self, username, password):
+        self.enter_username(username)
+        self.enter_password(password)
+        self.click_login()
+
+
+# tests/test_login.py
+def test_login_success(driver):
+    login_page = LoginPage(driver)
+    login_page.login("admin", "123456")
+    assert "首页" in driver.title</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">POM 的好处（面试表达）</div>
+          <p>
+            ①<Strong>可维护性</strong>：页面元素变了只改 Page 类，不用改所有用例；
+            ②<Strong>可读性</strong>：测试代码读起来像业务步骤（login、search）；
+            ③<Strong>复用性</strong>：多个用例可以共用同一个 Page 类的方法。
+          </p>
+        </div>
+
+        <h2>9. 实战案例：自动登录并抓取数据</h2>
+        <p>下面是一个完整的实战脚本，综合了定位、等待、切换、截图等知识点：</p>
+        <pre><code>from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+
+class DemoSpider:
+    def __init__(self):
+        options = webdriver.ChromeOptions()
+        options.add_argument("--headless=new")
+        options.add_argument("--no-sandbox")
+        self.driver = webdriver.Chrome(options=options)
+        self.wait = WebDriverWait(self.driver, 10)
+
+    def login(self, url, username, password):
+        self.driver.get(url)
+        # 显式等待用户名框可点击
+        self.wait.until(EC.element_to_be_clickable((By.ID, "username"))).send_keys(username)
+        self.driver.find_element(By.ID, "password").send_keys(password)
+        self.driver.find_element(By.CSS_SELECTOR, "button[type=submit]").click()
+
+        # 等待登录成功（标题变化）
+        self.wait.until(EC.title_contains("首页"))
+        print("登录成功")
+
+    def get_data(self):
+        # 等待表格加载
+        self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table tr")))
+        rows = self.driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
+        data = []
+        for row in rows:
+            cols = row.find_elements(By.TAG_NAME, "td")
+            data.append([c.text for c in cols])
+        return data
+
+    def run(self):
+        try:
+            self.login("https://example.com/login", "admin", "123456")
+            data = self.get_data()
+            for row in data:
+                print(row)
+            self.driver.save_screenshot("result.png")
+        except TimeoutException:
+            print("等待超时，请检查页面元素")
+            self.driver.save_screenshot("error.png")
+        finally:
+            self.driver.quit()
+
+if __name__ == "__main__":
+    DemoSpider().run()</code></pre>
+
+        <h2>10. 面试高频问题速查</h2>
+
+        <div class="callout">
+          <div class="callout-title">Q1: 元素定位不到怎么办？</div>
+          <p>
+            排查顺序：①定位表达式是否正确（先在浏览器 F12 控制台验证）；
+            ②元素是否在 iframe 中（需切换）；③元素是否需要等待（加显式等待）；
+            ④元素是否被遮挡/不可见；⑤是否有相同 id 的多个元素。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q2: click() 不生效怎么办？</div>
+          <p>
+            ①元素被遮挡，用 <code>execute_script("arguments[0].click()", el)</code> 执行 JS 点击；
+            ②元素不可见，先滚动到可视区 <code>scrollIntoView()</code>；
+            ③用 ActionChains 模拟鼠标点击。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q3: 如何保证脚本稳定性？</div>
+          <p>
+            ①用显式等待代替 <code>time.sleep</code>；②用相对 XPath/CSS，不用绝对路径；
+            ③用 id/name 等稳定属性定位；④加异常处理和失败截图；⑤用 Page Object 模式
+            降低维护成本；⑥测试数据和测试逻辑分离。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q4: Selenium 3 和 Selenium 4 的区别？</div>
+          <p>
+            ①Selenium 4 统一使用 W3C WebDriver 协议，不再用 JSON Wire Protocol；
+            ②废弃 <code>executable_path</code>，改用 <code>Service</code>；
+            ③内置 Selenium Manager 自动管理驱动；④新增相对定位器
+            （above/below/near 等）；⑤优化了元素截图等 API。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q5: Selenium 怎么实现并发执行？</div>
+          <p>
+            三种方式：①用 <code>pytest-xdist</code> 多进程跑 pytest 用例；
+            ②用 <code>concurrent.futures.ThreadPoolExecutor</code> 开多线程（注意 driver 不共享）；
+            ③用 Selenium Grid 分布式，把用例分发到多台机器。每个线程/进程要有自己独立的 driver 实例。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Selenium 核心是 WebDriver，通过 HTTP 协议 + 浏览器驱动控制真实浏览器。</li>
+          <li>Selenium 4 用 Service 替代 executable_path，内置 Selenium Manager 自动管理驱动。</li>
+          <li>元素定位优先 id，其次 css/xpath；XPath 适合文本定位和复杂结构。</li>
+          <li>三种等待：强制（不推荐）、隐式（全局，等存在）、显式（推荐，等具体条件）。</li>
+          <li>三大切换：iframe、多窗口、alert，操作后记得切回。</li>
+          <li>Page Object 模式把元素定位和测试逻辑分离，提升可维护性。</li>
+          <li>实战中常用无头模式、JS 执行、反检测参数、失败截图来提升稳定性。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="显式等待 WebDriverWait + expected_conditions 可以针对具体元素和具体条件（如可点击）等待，最灵活稳定，是生产环境首选。">
+            <div class="quiz-question">1. （单选）在生产自动化测试中，等待元素可点击最推荐的方式是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. time.sleep(5)</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. driver.implicitly_wait(10)</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. WebDriverWait + EC.element_to_be_clickable</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 手动数数 5 秒</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="Selenium 4 废弃了 executable_path 参数，需要用 selenium.webdriver.chrome.service.Service 来包装驱动路径。">
+            <div class="quiz-question">2. （单选）Selenium 4 中手动指定 ChromeDriver 路径的正确写法是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. webdriver.Chrome(service=Service("path"))</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. webdriver.Chrome(executable_path="path")</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. webdriver.Chrome(driver_path="path")</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. webdriver.Chrome(path="path")</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="default_content|defaultContent"
+               data-explain="操作完 iframe 内的元素后，需要用 driver.switch_to.default_content() 切回主文档，才能操作 iframe 外的元素。">
+            <div class="quiz-question">3. （填空）操作完 iframe 内的元素后，要切回主文档，方法名（下划线分隔）是 switch_to.______ ?</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="CSS Selector 无法根据文本来定位元素（没有 text 伪类的标准支持），而 XPath 可以用 text() 和 contains() 按文本定位。">
+            <div class="quiz-question">4. （单选）以下哪种定位需求，XPath 能做而 CSS Selector 做不到？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q4" value="A" /> A. 按 id 定位</label></li>
+              <li><label><input type="radio" name="q4" value="B" /> B. 按元素的文本内容定位</label></li>
+              <li><label><input type="radio" name="q4" value="C" /> C. 按 class 定位</label></li>
+              <li><label><input type="radio" name="q4" value="D" /> D. 按属性定位</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="Page Object|POM|page object"
+               data-explain="Page Object Model（POM）是把每个页面封装成类，元素定位和操作方法放在 Page 类里，测试用例只调用业务方法，从而实现元素定位与测试逻辑分离。">
+            <div class="quiz-question">5. （填空）Selenium 自动化测试中，把页面元素和操作封装成类、与测试逻辑分离的经典设计模式叫什么？（两个英文单词）</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>AI Agent 搭建教程 · 第 22 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

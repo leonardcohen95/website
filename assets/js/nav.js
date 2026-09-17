@@ -152,6 +152,13 @@ window.SITE_CONFIG = {
       group: "AI+运维",
       desc: "大模型本地部署、智能告警、根因分析与 AIOps 实践",
     },
+    {
+      id: "22-selenium",
+      file: "chapters/22-selenium.html",
+      title: "Selenium 自动化测试面试实战",
+      group: "自动化测试",
+      desc: "WebDriver 原理、元素定位、等待机制、三大切换、POM 设计与面试高频题",
+    },
   ],
 };
 

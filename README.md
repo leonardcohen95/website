@@ -14,6 +14,7 @@
 | 第 6 章 | [规划与反思](chapters/06-planning.html) | ReAct 模式，让 Agent 先思考再行动 |
 | 第 7 章 | [多 Agent 协作](chapters/07-multi-agent.html) | 多 Agent 分工协作模式与实现 |
 | 第 8 章 | [部署与总结](chapters/08-deploy.html) | 免费公网部署、免费域名、学习路线总结 |
+| 第 22 章 | [Selenium 自动化测试面试实战](chapters/22-selenium.html) | WebDriver 原理、元素定位、等待机制、三大切换、POM 设计与面试高频题 |
 
 ## 项目结构
 
