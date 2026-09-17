@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第23章 Selenium 自动化测试实战案例集 | 运维知识教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="23-selenium-practice">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 23 章</span>
+          <span class="meta-tag">自动化测试</span>
+          <span class="meta-tag">约 50 分钟</span>
+        </div>
+        <h1>Selenium 自动化测试实战案例集</h1>
+        <p>
+          上一章讲了 Selenium 的核心知识点，本章通过 <strong>5 个从浅到深的实战案例</strong>
+          把知识串起来。每个案例都有完整的可运行代码和逐行注释，覆盖搜索、表单、
+          数据抓取、验证码处理、测试框架搭建等真实场景。学完你能在面试和工作中
+          直接套用。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>能用 Selenium 完成搜索、表单提交等基础自动化</li>
+          <li>掌握多页数据抓取与翻页处理</li>
+          <li>理解验证码的常见处理思路与限制</li>
+          <li>能搭建基于 pytest + POM 的测试框架</li>
+          <li>学会生成 HTML 测试报告与失败截图</li>
+        </ul>
+
+        <h2>案例 1：搜索引擎自动化查询（入门）</h2>
+        <p>
+          最经典的入门案例：打开百度，输入关键词，点击搜索，验证结果页标题。
+          覆盖启动浏览器、定位元素、输入、点击、断言、退出全流程。
+        </p>
+
+        <pre><code>import time
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+# 1. 启动浏览器（Selenium 4 自动管理驱动）
+driver = webdriver.Chrome()
+# 设置隐式等待，全局轮询元素（最多等 10 秒）
+driver.implicitly_wait(10)
+
+try:
+    # 2. 打开百度首页
+    driver.get("https://www.baidu.com")
+    print("当前标题:", driver.title)  # 应输出"百度一下，你就知道"
+
+    # 3. 定位搜索框（id="kw" 是百度搜索框的 id）
+    search_box = driver.find_element(By.ID, "kw")
+    # 输入关键词
+    search_box.send_keys("Selenium 自动化测试")
+    # 模拟回车提交搜索（也可以用 driver.find_element(By.ID, "su").click()）
+    search_box.send_keys(Keys.ENTER)
+
+    # 4. 显式等待结果页加载完成（等结果数那个 div 出现）
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, "#content_left"))
+    )
+    print("搜索后标题:", driver.title)
+    # 断言标题包含关键词（百度搜索后标题会包含搜索词）
+    assert "Selenium" in driver.title, "搜索结果页标题不含关键词"
+
+    # 5. 抓取第一页所有结果的标题文本
+    results = driver.find_elements(By.CSS_SELECTOR, "#content_left .t, #content_left h3")
+    for i, r in enumerate(results[:5], 1):
+        print(f"{i}. {r.text}")
+
+finally:
+    # 6. 无论成功失败都要退出，否则浏览器进程残留
+    driver.quit()</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">知识点回顾</div>
+          <p>
+            ①<code>implicitly_wait</code> 全局轮询；②<code>send_keys(Keys.ENTER)</code>
+            模拟回车；③<code>find_elements</code> 返回列表用于批量抓取；
+            ④<code>finally: driver.quit()</code> 保证退出。
+          </p>
+        </div>
+
+        <h2>案例 2：表单填写与提交（基础）</h2>
+        <p>
+          模拟用户注册/登录场景：填写用户名、密码、选择下拉框、勾选协议、提交。
+          覆盖表单元素操作和 Select 下拉框处理。
+        </p>
+
+        <pre><code>from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait, Select
+from selenium.webdriver.support import expected_conditions as EC
+
+driver = webdriver.Chrome()
+wait = WebDriverWait(driver, 10)  # 显式等待对象
+
+try:
+    # 打开一个演示用注册页（示例地址，可替换成你自己的测试页）
+    driver.get("https://example.com/register")
+    driver.maximize_window()
+
+    # 1. 填写文本框
+    driver.find_element(By.ID, "username").send_keys("testuser001")
+    driver.find_element(By.ID, "email").send_keys("test@example.com")
+    driver.find_element(By.ID, "password").send_keys("Pass1234!")
+
+    # 2. 处理原生 select 下拉框（用 Select 类）
+    city_select = Select(driver.find_element(By.ID, "city"))
+    city_select.select_by_value("beijing")  # 按 value 属性选
+    # 也可以按可见文本: city_select.select_by_visible_text("北京")
+    # 或按索引:      city_select.select_by_index(1)
+
+    # 3. 勾选"同意协议"复选框，先判断是否已勾
+    agree = driver.find_element(By.ID, "agree")
+    if not agree.is_selected():
+        agree.click()
+
+    # 4. 点击提交按钮（等它可点击再点，避免按钮还没渲染就点）
+    submit_btn = wait.until(EC.element_to_be_clickable((By.ID, "submit")))
+    submit_btn.click()
+
+    # 5. 验证注册成功（等成功提示出现）
+    success_msg = wait.until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, ".success-msg"))
+    )
+    print("注册结果:", success_msg.text)
+    assert "成功" in success_msg.text
+
+except Exception as e:
+    # 出错时截图保留证据，方便排查
+    driver.save_screenshot("register_error.png")
+    print("注册失败:", e)
+    raise
+finally:
+    driver.quit()</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">自定义下拉框怎么办</div>
+          <p>
+            现在很多网站用 <code>div + ul</code> 自定义下拉框，<code>Select</code>
+            类用不了。处理思路：先点击触发下拉框展开 → 再点击对应选项 li。
+            <code>driver.find_element(By.ID, "dropdown").click()  # 展开</code>
+            <code>driver.find_element(By.XPATH, "//li[text()='北京']").click()</code>
+          </p>
+        </div>
+
+        <h2>案例 3：多页数据抓取与翻页（进阶）</h2>
+        <p>
+          真实业务常需要翻页抓取数据。这个案例演示：循环点击"下一页"，
+          抓取每页表格数据，直到没有下一页为止。覆盖多页处理、异常容错、数据收集。
+        </p>
+
+        <pre><code>from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
+
+driver = webdriver.Chrome()
+wait = WebDriverWait(driver, 10)
+
+all_data = []  # 收集所有页数据
+
+try:
+    driver.get("https://example.com/user-list")
+    driver.maximize_window()
+
+    page = 1
+    while True:
+        # 1. 等待当前页表格加载完成
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "table tbody tr")))
+
+        # 2. 抓取本页所有行
+        rows = driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
+        for row in rows:
+            # 每行的单元格文本
+            cells = row.find_elements(By.TAG_NAME, "td")
+            row_data = [c.text for c in cells]
+            all_data.append(row_data)
+
+        print(f"第 {page} 页抓取完成，本页 {len(rows)} 条，累计 {len(all_data)} 条")
+
+        # 3. 尝试点击"下一页"按钮
+        try:
+            # 假设下一页按钮 class="next"，且禁用状态 class 会变成 "next disabled"
+            next_btn = driver.find_element(By.CSS_SELECTOR, "a.next:not(.disabled)")
+            # 滚动到按钮可见，避免被遮挡点不到
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", next_btn)
+            next_btn.click()
+            page += 1
+            # 翻页后等表格刷新（旧数据消失再重新出现）
+            # 用 staleness 检测：先把第一行元素引用存下来，等它"失效"说明刷新了
+            old_first = rows[0]
+            wait.until(EC.staleness_of(old_first))
+        except NoSuchElementException:
+            # 找不到下一页按钮 → 已到最后一页
+            print("没有下一页了，抓取结束")
+            break
+        except TimeoutException:
+            print("翻页后超时，可能加载失败，提前结束")
+            break
+
+    # 输出汇总
+    print(f"\n共抓取 {len(all_data)} 条数据")
+    for i, row in enumerate(all_data[:5], 1):
+        print(f"{i}. {row}")
+
+finally:
+    driver.quit()</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">翻页抓取的关键技巧</div>
+          <p>
+            ①<strong>staleness_of</strong> 检测：翻页后旧元素引用会"失效"，
+            用它来判断页面已刷新，避免抓到旧数据；②判断是否到最后一页：
+            看下一页按钮是否禁用/消失；③数据量大时注意分批落盘，别全存内存。
+          </p>
+        </div>
+
+        <h2>案例 4：验证码处理思路（进阶）</h2>
+        <p>
+          验证码是自动化测试的难点。这个案例不教破解，而是讲<strong>三种工程化处理思路</strong>，
+          这是面试官想听到的答案。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">思路一：测试环境关闭验证码（推荐）</div>
+          <p>
+            最简单。让开发在测试环境加一个开关，登录接口带特定参数或 header 时跳过验证码校验。
+            生产环境保留验证码。这是企业里最常用的做法。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">思路二：万能验证码</div>
+          <p>
+            让后端写死一个"万能码"（比如 <code>0000</code>），测试时输入它即可通过。
+            比方案一更安全一些，生产环境不会真关验证码，但仍需后端配合。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">思路三：OCR 识别（仅限简单图形验证码）</div>
+          <p>
+            用 <code>ddddocr</code> 库识别图形验证码，适合纯数字/字母的简单验证码。
+            滑动验证码和点选验证码不适用。识别率不是 100%，要做重试。
+          </p>
+        </div>
+
+        <pre><code># 思路三示例：用 ddddocr 识别图形验证码
+# 安装: pip install ddddocr
+import ddddocr
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import io
+
+# 初始化 OCR 识别器（首次加载较慢，全局只初始化一次）
+ocr = ddddocr.DdddOcr(show_ad=False)
+
+driver = webdriver.Chrome()
+wait = WebDriverWait(driver, 10)
+
+try:
+    driver.get("https://example.com/login")
+    driver.find_element(By.ID, "username").send_keys("admin")
+    driver.find_element(By.ID, "password").send_keys("123456")
+
+    # 1. 定位验证码图片元素
+    captcha_img = wait.until(
+        EC.presence_of_element_located((By.ID, "captchaImg"))
+    )
+
+    # 2. 把图片元素截图转成字节流（不用下载，直接用元素截图）
+    img_bytes = captcha_img.screenshot_as_png
+
+    # 3. 用 ddddocr 识别
+    code = ocr.classification(img_bytes)
+    print("识别到的验证码:", code)
+
+    # 4. 填入验证码输入框
+    driver.find_element(By.ID, "captcha").send_keys(code)
+    driver.find_element(By.ID, "loginBtn").click()
+
+    # 5. 验证是否登录成功
+    wait.until(EC.title_contains("首页"))
+    print("登录成功")
+finally:
+    driver.quit()</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">面试怎么说</div>
+          <p>
+            问：自动化测试遇到验证码怎么办？<br />
+            答：<strong>优先让开发在测试环境关掉或给万能码</strong>，因为验证码本身就是为了防自动化，
+            硬刚不划算。只有第三方系统改不了后端时才考虑 OCR 识别简单图形码，复杂验证码（滑动、
+            点选）不做识别，改用 cookie 复用登录态的方式绕过。
+          </p>
+        </div>
+
+        <h2>案例 5：pytest + POM 测试框架（高级）</h2>
+        <p>
+          面试最高频问题之一：「你的自动化框架是怎么设计的？」。下面是一个完整的
+          <strong>pytest + Page Object Model + 数据驱动 + HTML 报告</strong> 的最小可运行框架。
+          目录结构清晰，可以直接作为项目模板。
+        </p>
+
+        <h3>5.1 项目结构</h3>
+        <pre><code>auto_test/
+├── pages/                # 页面对象层
+│   ├── __init__.py
+│   ├── base_page.py      # 基类：封装公共操作
+│   └── login_page.py     # 登录页：元素 + 操作
+├── tests/                # 测试用例层
+│   ├── __init__.py
+│   ├── conftest.py       # pytest fixture（driver 初始化/退出）
+│   └── test_login.py     # 登录用例
+├── data/                 # 测试数据
+│   └── login_data.yaml
+├── utils/                # 工具层
+│   └── logger.py
+├── conftest.py           # 全局 fixture
+├── pytest.ini            # pytest 配置
+└── requirements.txt</code></pre>
+
+        <h3>5.2 基类 BasePage（封装公共操作）</h3>
+        <pre><code># pages/base_page.py
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+
+class BasePage:
+    """所有 Page 类的父类，封装通用操作，减少重复代码"""
+
+    def __init__(self, driver):
+        self.driver = driver
+        self.wait = WebDriverWait(driver, 10)
+
+    # 封装：等元素可见并返回
+    def find_visible(self, locator):
+        return self.wait.until(EC.visibility_of_element_located(locator))
+
+    # 封装：等元素可点击并点击
+    def click_when_ready(self, locator):
+        self.wait.until(EC.element_to_be_clickable(locator)).click()
+
+    # 封装：输入文本（先清空）
+    def type_text(self, locator, text):
+        el = self.find_visible(locator)
+        el.clear()
+        el.send_keys(text)
+
+    # 封装：获取文本
+    def get_text(self, locator):
+        return self.find_visible(locator).text
+
+    # 封装：失败截图（报告里展示）
+    def screenshot(self, name):
+        self.driver.save_screenshot(f"screenshots/{name}.png")</code></pre>
+
+        <h3>5.3 登录页 LoginPage（元素 + 操作）</h3>
+        <pre><code># pages/login_page.py
+from selenium.webdriver.common.by import By
+from pages.base_page import BasePage
+
+class LoginPage(BasePage):
+    """登录页对象：把元素定位和操作封装在这里，用例层不直接碰元素"""
+
+    # 元素定位器统一管理（改元素只改这里）
+    USERNAME = (By.ID, "username")
+    PASSWORD = (By.ID, "password")
+    LOGIN_BTN = (By.CSS_SELECTOR, "button[type='submit']")
+    ERROR_MSG = (By.CSS_SELECTOR, ".error-message")
+    SUCCESS_MSG = (By.CSS_SELECTOR, ".welcome")
+
+    # 页面 URL
+    URL = "https://example.com/login"
+
+    def open(self):
+        self.driver.get(self.URL)
+
+    # 业务动作：登录
+    def login(self, username, password):
+        self.type_text(self.USERNAME, username)
+        self.type_text(self.PASSWORD, password)
+        self.click_when_ready(self.LOGIN_BTN)
+
+    # 获取结果
+    def get_error(self):
+        return self.get_text(self.ERROR_MSG)
+
+    def is_login_success(self):
+        try:
+            self.find_visible(self.SUCCESS_MSG)
+            return True
+        except TimeoutException:
+            return False</code></pre>
+
+        <h3>5.4 pytest fixture（driver 生命周期）</h3>
+        <pre><code># tests/conftest.py
+import pytest
+from selenium import webdriver
+
+@pytest.fixture
+def driver():
+    """每个用例前后各启动/退出一次浏览器，互不干扰"""
+    options = webdriver.ChromeOptions()
+    # 无头模式，CI 中跑不需要界面
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--window-size=1920,1080")
+
+    drv = webdriver.Chrome(options=options)
+    drv.implicitly_wait(5)
+    yield drv       # 用例在这里执行
+    drv.quit()      # 用例结束后退出</code></pre>
+
+        <h3>5.5 数据驱动用例（YAML 数据）</h3>
+        <pre><code># data/login_data.yaml
+- username: admin
+  password: "123456"
+  expected: success
+- username: admin
+  password: wrong
+  expected: fail
+- username: ""
+  password: "123456"
+  expected: fail</code></pre>
+
+        <pre><code># tests/test_login.py
+import pytest
+import yaml
+from pages.login_page import LoginPage
+
+# 读取测试数据
+with open("data/login_data.yaml", encoding="utf-8") as f:
+    CASES = yaml.safe_load(f)
+
+# 参数化：每组数据跑一次
+@pytest.mark.parametrize("case", CASES)
+def test_login(driver, case):
+    page = LoginPage(driver)
+    page.open()
+    page.login(case["username"], case["password"])
+
+    if case["expected"] == "success":
+        assert page.is_login_success(), "应该登录成功但没成功"
+    else:
+        assert not page.is_login_success(), "应该失败却登录成功了"
+
+# 运行：pytest -v --html=report.html
+# 生成 HTML 报告需安装: pip install pytest-html</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">框架亮点（面试表达）</div>
+          <p>
+            ①<Strong>分层</strong>：BasePage 公共操作 → Page 层元素和业务 → tests 层用例，职责清晰；
+            ②<Strong>数据驱动</strong>：用例和测试数据分离，加用例只加 YAML 不改代码；
+            ③<Strong>fixture 管理 driver</strong>：每个用例独立浏览器，互不干扰；
+            ④<Strong>HTML 报告</strong>：配合 pytest-html 生成可视化报告，失败自动截图。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>案例1-2 是入门级：搜索、表单提交，覆盖定位+操作+断言的基本链路。</li>
+          <li>案例3 是进阶：多页抓取用 staleness_of 检测页面刷新，避免抓到旧数据。</li>
+          <li>案例4 讲验证码处理思路：优先关闭/万能码，不得已才 OCR，滑动码不做识别。</li>
+          <li>案例5 是高级：pytest + POM + 数据驱动 + fixture + HTML 报告的完整框架。</li>
+          <li>面试回答框架设计时，重点讲分层、数据驱动、driver 生命周期、报告产出四点。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="staleness_of 检测元素引用是否失效，翻页后旧元素会失效，用它判断页面已刷新，避免抓到旧数据。">
+            <div class="quiz-question">1. （单选）翻页抓取时，判断页面已刷新的最佳方式是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. time.sleep(2)</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 检查页面标题</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. EC.staleness_of(旧元素)</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 重新 get 一次 URL</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="让开发在测试环境关闭验证码或提供万能码是最推荐的做法，因为验证码本就是防自动化的，硬刚不划算。">
+            <div class="quiz-question">2. （单选）自动化测试遇到验证码，最推荐的工程化处理方式是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. 测试环境关闭验证码或提供万能码</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. 用 OCR 识别所有验证码</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. 用机器学习模型硬刚</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. 跳过登录用例不测</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="BasePage|base_page|基类"
+               data-explain="POM 框架中，公共操作（等待、点击、输入、截图）封装在 BasePage 基类中，各 Page 类继承它，减少重复代码。">
+            <div class="quiz-question">3. （填空）POM 框架中，把等待、点击、输入等公共操作封装在哪个类的父类里？（英文，两个单词）</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="pytest fixture 用 yield 分割 setup 和 teardown，yield 之前是 setup，之后是 teardown，driver.quit() 放在 yield 之后。">
+            <div class="quiz-question">4. （单选）pytest fixture 中，driver.quit() 应该放在哪里？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q4" value="A" /> A. yield 之前</label></li>
+              <li><label><input type="radio" name="q4" value="B" /> B. yield 之后</label></li>
+              <li><label><input type="radio" name="q4" value="C" /> C. 用例函数里</label></li>
+              <li><label><input type="radio" name="q4" value="D" /> D. 不需要退出</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>运维知识教程 · 第 23 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

@@ -159,6 +159,20 @@ window.SITE_CONFIG = {
       group: "自动化测试",
       desc: "WebDriver 原理、元素定位、等待机制、三大切换、POM 设计与面试高频题",
     },
+    {
+      id: "23-selenium-practice",
+      file: "chapters/23-selenium-practice.html",
+      title: "Selenium 自动化测试实战案例集",
+      group: "自动化测试",
+      desc: "搜索、表单、多页抓取、验证码处理、pytest+POM 测试框架五个从浅到深的案例",
+    },
+    {
+      id: "24-office-automation",
+      file: "chapters/24-office-automation.html",
+      title: "移动办公自动化实战",
+      group: "自动化测试",
+      desc: "OA 审批、邮件群发、报表导出、考勤打卡、批量录入与 Appium 移动端入门",
+    },
   ],
 };
 

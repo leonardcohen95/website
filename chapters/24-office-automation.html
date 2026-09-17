@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第24章 移动办公自动化实战 | 运维知识教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="24-office-automation">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 24 章</span>
+          <span class="meta-tag">办公自动化</span>
+          <span class="meta-tag">约 45 分钟</span>
+        </div>
+        <h1>移动办公自动化实战</h1>
+        <p>
+          企业日常办公中大量重复操作可以自动化：OA 审批、邮件处理、报表导出、
+          考勤打卡、数据录入。本章用 <strong>Selenium + Python</strong> 实现 5 个
+          真实办公场景的自动化脚本，每个都有完整代码和详细注释。这些案例既能提升
+          工作效率，也是面试中展示「自动化解决实际问题」能力的利器。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>能用 Selenium 自动化 OA 系统的审批流程</li>
+          <li>实现邮件批量发送与附件下载自动化</li>
+          <li>掌握报表自动导出与文件重命名整理</li>
+          <li>实现考勤打卡自动化与定时触发</li>
+          <li>理解批量数据录入的通用模式与容错处理</li>
+        </ul>
+
+        <h2>1. 前置准备</h2>
+        <p>所有案例都基于以下环境，先装好依赖：</p>
+        <pre><code># 核心依赖
+pip install selenium openpyxl pandas schedule
+
+# 目录结构
+office_auto/
+├── config.py          # 账号密码等配置（不要提交到 git）
+├── oa_approval.py     # 案例1：OA 审批
+├── email_sender.py    # 案例2：邮件批量发送
+├── report_export.py   # 案例3：报表导出
+├── attendance.py      # 案例4：考勤打卡
+├── data_entry.py      # 案例5：批量录入
+├── data/              # 数据文件
+├── reports/           # 导出的报表
+└── logs/              # 运行日志</code></pre>
+
+        <pre><code># config.py - 集中管理配置（用环境变量更安全）
+import os
+
+class Config:
+    # OA 系统
+    OA_URL = os.getenv("OA_URL", "https://oa.company.com")
+    OA_USER = os.getenv("OA_USER", "your_username")
+    OA_PASS = os.getenv("OA_PASS", "your_password")
+
+    # 邮箱（用 SMTP，不走 Selenium 更高效）
+    SMTP_HOST = "smtp.qq.com"
+    SMTP_PORT = 465
+    SMTP_USER = os.getenv("SMTP_USER", "you@qq.com")
+    SMTP_PASS = os.getenv("SMTP_PASS", "授权码不是密码")
+
+    # Chrome 驱动配置
+    CHROME_OPTIONS = [
+        "--headless=new",           # 无头模式
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--window-size=1920,1080",
+        "--disable-notifications",  # 禁用通知弹窗
+    ]</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">安全提醒</div>
+          <p>
+            账号密码不要写死在代码里！用 <code>python-dotenv</code> 读 .env 文件或直接用
+            环境变量。.env 文件加入 .gitignore，防止密码泄露到代码仓库。
+          </p>
+        </div>
+
+        <h2>2. 案例一：OA 审批自动化</h2>
+        <p>
+          场景：每天有大量请假/报销审批待处理，要点开每条审批，检查内容，点同意，
+          填写审批意见。手动处理耗时，用自动化批量处理。
+        </p>
+
+        <pre><code># oa_approval.py
+import time
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from config import Config
+
+class OAApproval:
+    """OA 审批自动化：登录 → 进入待审批列表 → 逐条审批"""
+
+    def __init__(self):
+        options = webdriver.ChromeOptions()
+        for arg in Config.CHROME_OPTIONS:
+            options.add_argument(arg)
+        self.driver = webdriver.Chrome(options=options)
+        self.wait = WebDriverWait(self.driver, 15)
+
+    def login(self):
+        """登录 OA 系统"""
+        self.driver.get(Config.OA_URL + "/login")
+        # 输入用户名密码
+        self.driver.find_element(By.ID, "username").send_keys(Config.OA_USER)
+        self.driver.find_element(By.ID, "password").send_keys(Config.OA_PASS)
+        self.driver.find_element(By.CSS_SELECTOR, "button[type=submit]").click()
+        # 等待登录成功（首页某个标志性元素出现）
+        self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, "dashboard")))
+        print("[OA] 登录成功")
+
+    def get_pending_list(self):
+        """获取待审批列表，返回每条的详情链接"""
+        # 进入待审批页面
+        self.driver.get(Config.OA_URL + "/approval/pending")
+        self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".approval-item")))
+
+        # 收集所有待审批条目的"详情"链接
+        items = self.driver.find_elements(By.CSS_SELECTOR, ".approval-item a.detail-link")
+        links = [item.get_attribute("href") for item in items]
+        print(f"[OA] 共 {len(links)} 条待审批")
+        return links
+
+    def approve_one(self, link, comment="同意"):
+        """审批单条：打开详情 → 点同意 → 填意见 → 提交"""
+        self.driver.get(link)
+        # 等待详情页加载
+        self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".approval-detail")))
+
+        # 检查审批内容（可选：读取关键字段做条件判断）
+        applicant = self.driver.find_element(By.CSS_SELECTOR, ".applicant").text
+        reason = self.driver.find_element(By.CSS_SELECTOR, ".reason").text
+        print(f"  审批人: {applicant}，事由: {reason}")
+
+        # 点击"同意"按钮
+        self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button.btn-approve"))).click()
+
+        # 填写审批意见（弹出意见框）
+        textarea = self.wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "textarea.comment")))
+        textarea.send_keys(comment)
+
+        # 提交
+        self.driver.find_element(By.CSS_SELECTOR, "button.btn-submit-comment").click()
+
+        # 等待审批成功提示
+        self.wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, ".success-toast")))
+        print(f"  审批完成")
+
+    def run(self):
+        """主流程：登录 → 获取列表 → 逐条审批"""
+        approved = 0
+        try:
+            self.login()
+            links = self.get_pending_list()
+
+            for i, link in enumerate(links, 1):
+                print(f"\n[{i}/{len(links)}] 正在审批...")
+                try:
+                    self.approve_one(link)
+                    approved += 1
+                except (TimeoutException, NoSuchElementException) as e:
+                    # 单条失败不影响其他，记录后继续
+                    print(f"  审批失败: {e}")
+                    self.driver.save_screenshot(f"logs/approval_fail_{i}.png")
+                    continue
+
+            print(f"\n[OA] 完成！共审批 {approved}/{len(links)} 条")
+        finally:
+            self.driver.quit()
+
+if __name__ == "__main__":
+    OAApproval().run()</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">容错设计要点</div>
+          <p>
+            ①<Strong>逐条 try-except</strong>：单条失败不影响其他审批；②<Strong>失败截图</strong>：
+            存到 logs 目录方便排查；③<Strong>计数统计</strong>：最后输出成功/失败数；
+            ④<Strong>finally 退出</strong>：保证浏览器关闭。
+          </p>
+        </div>
+
+        <h2>3. 案例二：邮件批量发送自动化</h2>
+        <p>
+          场景：给 100 个客户/员工群发定制邮件（每封内容不同）。用 SMTP 比 Selenium
+          操作网页邮箱高效得多，这是<strong>选型要点</strong>：能走 API/协议的不要走 UI 自动化。
+        </p>
+
+        <pre><code># email_sender.py
+import smtplib
+import pandas as pd
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
+from config import Config
+
+class EmailSender:
+    """批量发送定制邮件（支持附件和模板变量替换）"""
+
+    def __init__(self):
+        # 连接 SMTP 服务器（SSL 加密）
+        self.server = smtplib.SMTP_SSL(Config.SMTP_HOST, Config.SMTP_PORT)
+        self.server.login(Config.SMTP_USER, Config.SMTP_PASS)
+        print("[邮件] SMTP 连接成功")
+
+    def read_recipients(self, excel_path):
+        """从 Excel 读取收件人列表（姓名、邮箱、公司等字段）"""
+        df = pd.read_excel(excel_path)
+        print(f"[邮件] 共 {len(df)} 位收件人")
+        return df.to_dict("records")  # 转成字典列表
+
+    def build_email(self, recipient):
+        """构建单封邮件：模板替换 + 附件"""
+        msg = MIMEMultipart()
+        msg["From"] = Config.SMTP_USER
+        msg["To"] = recipient["email"]
+        msg["Subject"] = f"【通知】致 {recipient['name']} 的一封信"
+
+        # 邮件正文模板：用收件人信息替换占位符
+        body = f"""\
+        <html><body>
+        <p>尊敬的 {recipient['name']}（{recipient['company']}）：</p>
+        <p>您好！这是为您定制的邮件内容。</p>
+        <p>您的专属编号：{recipient['id']}</p>
+        <p>如有疑问请回复本邮件。</p>
+        <br><p>此致</p>
+        </body></html>
+        """
+        msg.attach(MIMEText(body, "html", "utf-8"))
+
+        # 附加 PDF 报告（可选）
+        pdf_path = f"data/reports/{recipient['id']}.pdf"
+        import os
+        if os.path.exists(pdf_path):
+            with open(pdf_path, "rb") as f:
+                attach = MIMEApplication(f.read(), _subtype="pdf")
+                attach.add_header("Content-Disposition", "attachment", filename=f"报告_{recipient['name']}.pdf")
+                msg.attach(attach)
+
+        return msg
+
+    def send_all(self, excel_path):
+        """批量发送"""
+        recipients = self.read_recipients(excel_path)
+        success = 0
+        for i, r in enumerate(recipients, 1):
+            try:
+                msg = self.build_email(r)
+                self.server.sendmail(Config.SMTP_USER, r["email"], msg.as_string())
+                print(f"  [{i}/{len(recipients)}] 发送成功 → {r['email']}")
+                success += 1
+            except Exception as e:
+                print(f"  [{i}/{len(recipients)}] 发送失败 → {r['email']}: {e}")
+        print(f"\n[邮件] 完成！成功 {success}/{len(recipients)}")
+        self.server.quit()
+
+if __name__ == "__main__":
+    EmailSender().send_all("data/recipients.xlsx")</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">为什么不用 Selenium 操作邮箱网页</div>
+          <p>
+            SMTP 是邮件协议，直接走协议比操作网页快 100 倍，且稳定不依赖页面变化。
+            <strong>选型原则</strong>：能用 API/协议的优先用，UI 自动化是最后手段。
+            Selenium 操作网页邮箱只适合需要网页端交互（如拖拽分类）的场景。
+          </p>
+        </div>
+
+        <h2>4. 案例三：报表自动导出与整理</h2>
+        <p>
+          场景：每天从后台系统导出报表，下载到本地，按"日期_报表名"格式重命名，
+          归档到对应文件夹。手动做枯燥易错，用 Selenium 自动化整个流程。
+        </p>
+
+        <pre><code># report_export.py
+import os
+import time
+from datetime import datetime
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from config import Config
+
+class ReportExporter:
+    """登录后台 → 导出报表 → 重命名归档"""
+
+    def __init__(self):
+        # 关键：指定下载目录，避免弹"保存"对话框
+        self.download_dir = os.path.abspath("reports")
+        os.makedirs(self.download_dir, exist_ok=True)
+
+        options = webdriver.ChromeOptions()
+        for arg in Config.CHROME_OPTIONS:
+            options.add_argument(arg)
+
+        # 配置 Chrome 下载行为：默认下载到指定目录，不弹窗
+        prefs = {
+            "download.default_directory": self.download_dir,
+            "download.prompt_for_download": False,   # 不弹保存对话框
+            "download.directory_upgrade": True,
+            "safebrowsing.enabled": True,            # 允许下载
+            "plugins.always_open_pdf_externally": True  # PDF 直接下载不预览
+        }
+        options.add_experimental_option("prefs", prefs)
+        self.driver = webdriver.Chrome(options=options)
+        self.wait = WebDriverWait(self.driver, 15)
+
+    def login_and_export(self, report_name):
+        """登录后台，导出指定报表"""
+        self.driver.get(Config.OA_URL + "/admin/login")
+        self.driver.find_element(By.ID, "username").send_keys(Config.OA_USER)
+        self.driver.find_element(By.ID, "password").send_keys(Config.OA_PASS)
+        self.driver.find_element(By.CSS_SELECTOR, "button[type=submit]").click()
+        self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, "dashboard")))
+
+        # 进入报表页面
+        self.driver.get(Config.OA_URL + "/reports")
+        # 点击"导出"按钮
+        self.driver.find_element(By.CSS_SELECTOR, f"button[data-report='{report_name}']").click()
+        # 选择导出格式（Excel）
+        self.wait.until(EC.element_to_be_clickable(
+            (By.CSS_SELECTOR, "button.export-excel")
+        )).click()
+
+        # 等待下载完成：轮询下载目录，等 .crdownload 临时文件消失
+        self._wait_download_done()
+        print(f"[报表] {report_name} 导出完成")
+
+    def _wait_download_done(self, timeout=60):
+        """等待下载完成：Chrome 下载时会有 .crdownload 临时文件"""
+        start = time.time()
+        while time.time() - start < timeout:
+            files = os.listdir(self.download_dir)
+            # 没有正在下载的临时文件 → 下载完成
+            if not any(f.endswith(".crdownload") for f in files):
+                return
+            time.sleep(0.5)
+        raise TimeoutError("下载超时")
+
+    def rename_and_archive(self, report_name):
+        """把下载的文件重命名为 日期_报表名.xlsx 并归档"""
+        # 找最新下载的文件
+        files = sorted(
+            [f for f in os.listdir(self.download_dir) if f.endswith((".xlsx", ".csv"))],
+            key=lambda f: os.path.getmtime(os.path.join(self.download_dir, f)),
+            reverse=True
+        )
+        if not files:
+            print("[报表] 没找到下载文件")
+            return
+
+        old_path = os.path.join(self.download_dir, files[0])
+        # 新文件名：20260916_销售报表.xlsx
+        date_str = datetime.now().strftime("%Y%m%d")
+        new_name = f"{date_str}_{report_name}.xlsx"
+        new_path = os.path.join(self.download_dir, new_name)
+
+        # 重命名
+        os.rename(old_path, new_path)
+        print(f"[报表] 已归档: {new_name}")
+
+    def run(self, reports):
+        """导出多个报表"""
+        try:
+            for report in reports:
+                self.login_and_export(report)
+                self.rename_and_archive(report)
+        finally:
+            self.driver.quit()
+
+if __name__ == "__main__":
+    ReportExporter().run(["销售日报", "库存月报", "客户分析"])</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">下载自动化的两个关键点</div>
+          <p>
+            ①<Strong>配置 Chrome prefs</strong>：把 <code>prompt_for_download</code> 设为 False，
+            否则会弹保存对话框卡住；②<Strong>检测下载完成</strong>：轮询目录看
+            <code>.crdownload</code> 临时文件是否消失，这是 Chrome 下载完成的标志。
+          </p>
+        </div>
+
+        <h2>5. 案例四：考勤打卡自动化（定时触发）</h2>
+        <p>
+          场景：固定时间自动登录考勤系统打卡。用 <code>schedule</code> 库定时触发，
+          避免忘记打卡。需要考虑：上下班不同时间、工作日判断、打卡记录日志。
+        </p>
+
+        <pre><code># attendance.py
+import time
+import schedule
+import logging
+from datetime import datetime
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from config import Config
+
+# 日志配置：记录每次打卡结果
+logging.basicConfig(
+    filename="logs/attendance.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(message)s"
+)
+
+def is_workday():
+    """判断今天是否工作日（周一到周五）"""
+    today = datetime.today()
+    # weekday(): 0=周一 ... 6=周日
+    return today.weekday() < 5
+
+def punch(type_="上班"):
+    """执行打卡：登录 → 点打卡按钮 → 确认"""
+    if not is_workday():
+        logging.info(f"今天非工作日，跳过{type_}打卡")
+        return
+
+    options = webdriver.ChromeOptions()
+    for arg in Config.CHROME_OPTIONS:
+        options.add_argument(arg)
+    driver = webdriver.Chrome(options=options)
+
+    try:
+        driver.get(Config.OA_URL + "/attendance")
+        # 登录
+        driver.find_element(By.ID, "username").send_keys(Config.OA_USER)
+        driver.find_element(By.ID, "password").send_keys(Config.OA_PASS)
+        driver.find_element(By.CSS_SELECTOR, "button[type=submit]").click()
+        # 等待打卡页面加载
+        WebDriverWait(driver, 15).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "button.punch-btn"))
+        )
+
+        # 点击打卡
+        driver.find_element(By.CSS_SELECTOR, "button.punch-btn").click()
+        # 确认打卡成功
+        result = WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.CSS_SELECTOR, ".punch-result"))
+        ).text
+        logging.info(f"{type_}打卡结果: {result}")
+        print(f"[考勤] {type_}打卡: {result}")
+
+    except Exception as e:
+        logging.error(f"{type_}打卡失败: {e}")
+        driver.save_screenshot(f"logs/attendance_fail_{type_}.png")
+    finally:
+        driver.quit()
+
+# 定时任务：工作日 9:00 上班打卡，18:30 下班打卡
+schedule.every().day.at("09:00").do(punch, type_="上班")
+schedule.every().day.at("18:30").do(punch, type_="下班")
+
+print("[考勤] 定时打卡已启动，等待触发...")
+
+# 保持程序运行，定时检查任务
+while True:
+    schedule.run_pending()
+    time.sleep(30)  # 每 30 秒检查一次</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">合规提醒</div>
+          <p>
+            自动打卡可能违反公司考勤制度，本案例仅用于<strong>学习技术原理</strong>。
+            实际工作中请遵守公司规定，自动化应用于合法授权的场景。
+          </p>
+        </div>
+
+        <h2>6. 案例五：批量数据录入</h2>
+        <p>
+          场景：把 Excel 里的 200 条员工信息逐条录入到后台系统。手动录入耗时且易错，
+          自动化录入可以保证准确性并节省大量时间。覆盖数据驱动 + 容错 + 进度跟踪。
+        </p>
+
+        <pre><code># data_entry.py
+import time
+import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait, Select
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+from config import Config
+
+class DataEntry:
+    """从 Excel 读数据，逐条录入后台系统"""
+
+    def __init__(self):
+        options = webdriver.ChromeOptions()
+        for arg in Config.CHROME_OPTIONS:
+            options.add_argument(arg)
+        self.driver = webdriver.Chrome(options=options)
+        self.wait = WebDriverWait(self.driver, 10)
+
+    def login(self):
+        self.driver.get(Config.OA_URL + "/admin")
+        self.driver.find_element(By.ID, "username").send_keys(Config.OA_USER)
+        self.driver.find_element(By.ID, "password").send_keys(Config.OA_PASS)
+        self.driver.find_element(By.CSS_SELECTOR, "button[type=submit]").click()
+        self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, "dashboard")))
+
+    def fill_form(self, row):
+        """填写单条记录的表单"""
+        # 文本字段：姓名、工号、手机、邮箱
+        self.driver.find_element(By.ID, "emp_name").send_keys(row["name"])
+        self.driver.find_element(By.ID, "emp_id").send_keys(str(row["id"]))
+        self.driver.find_element(By.ID, "phone").send_keys(str(row["phone"]))
+        self.driver.find_element(By.ID, "email").send_keys(row["email"])
+
+        # 下拉框：部门（用 Select 处理原生 select）
+        dept = Select(self.driver.find_element(By.ID, "department"))
+        dept.select_by_visible_text(row["department"])
+
+        # 单选按钮：性别
+        gender = row["gender"]  # "男" 或 "女"
+        self.driver.find_element(
+            By.CSS_SELECTOR, f"input[type=radio][value='{gender}']"
+        ).click()
+
+        # 日期：入职日期（有些日期框不能直接 send_keys，要用 JS 清除 readonly）
+        date_input = self.driver.find_element(By.ID, "hire_date")
+        self.driver.execute_script("arguments[0].removeAttribute('readonly');", date_input)
+        date_input.send_keys(row["hire_date"].strftime("%Y-%m-%d"))
+
+        # 提交
+        self.driver.find_element(By.CSS_SELECTOR, "button[type=submit]").click()
+
+        # 等待提交成功（成功提示出现）
+        self.wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, ".success-msg")))
+
+    def run(self, excel_path):
+        """主流程：登录 → 读数据 → 逐条录入"""
+        df = pd.read_excel(excel_path)
+        total = len(df)
+        success = 0
+        failed_rows = []
+
+        try:
+            self.login()
+            print(f"[录入] 开始录入，共 {total} 条")
+
+            for idx, row in df.iterrows():
+                progress = f"[{idx + 1}/{total}]"
+                try:
+                    # 每条录入前回到录入页面
+                    self.driver.get(Config.OA_URL + "/employee/new")
+                    self.fill_form(row)
+                    print(f"  {progress} 录入成功: {row['name']}")
+                    success += 1
+                except (TimeoutException, Exception) as e:
+                    print(f"  {progress} 录入失败: {row['name']} - {e}")
+                    failed_rows.append(idx)
+                    self.driver.save_screenshot(f"logs/entry_fail_{idx}.png")
+                    continue
+
+            # 输出统计
+            print(f"\n[录入] 完成！成功 {success}/{total}")
+            if failed_rows:
+                print(f"  失败行号: {failed_rows}")
+                # 把失败的行导出成新 Excel，方便后续补录
+                df.iloc[failed_rows].to_excel("data/failed_entries.xlsx", index=False)
+                print("  失败数据已保存到 data/failed_entries.xlsx")
+
+        finally:
+            self.driver.quit()
+
+if __name__ == "__main__":
+    DataEntry().run("data/employees.xlsx")</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">批量录入的通用模式</div>
+          <p>
+            ①<Strong>数据驱动</strong>：从 Excel/CSV 读数据，循环录入；
+            ②<Strong>逐条容错</strong>：单条失败记录行号，继续下一条；
+            ③<Strong>失败重试</strong>：把失败行导出新 Excel，下次只录失败的部分；
+            ④<Strong>进度输出</strong>：打印 [当前/总数] 进度，方便监控。
+          </p>
+        </div>
+
+        <h2>7. 进阶：移动端办公自动化（Appium 简介）</h2>
+        <p>
+          如果办公系统是<strong>手机 APP</strong>（如钉钉、企业微信移动端），
+          Selenium 不能用，需要 <strong>Appium</strong>。Appium 是移动端自动化工具，
+          和 Selenium 用法极其相似（同样支持 By.ID、XPath 等定位），只是驱动从
+          chromedriver 换成了 UiAutomator2（Android）和 XCUITest（iOS）。
+        </p>
+
+        <pre><code># Appium 示例：打开钉钉 APP 自动签到（伪代码，需真机或模拟器）
+from appium import webdriver
+from appium.webdriver.common.appiumby import AppiumBy
+
+# Appium 能力配置：告诉 Appium 要操作哪个 APP
+caps = {
+    "platformName": "Android",
+    "automationName": "UiAutomator2",
+    "deviceName": "Pixel_5",          # 模拟器或真机名
+    "appPackage": "com.alibaba.android.rimet",   # 钉钉包名
+    "appActivity": ".biz.SplashActivity",
+    "noReset": True,                  # 不重置 APP（保留登录态）
+}
+
+# 连接 Appium Server（需先启动 appium 命令）
+driver = webdriver.Remote("http://127.0.0.1:4723/wd/hub", caps)
+
+# 定位方式和 Selenium 几乎一样
+driver.find_element(AppiumBy.ID, "com.alibaba.android.rimet:id/home_btn").click()
+driver.find_element(AppiumBy.XPATH, "//*[@text='工作']").click()
+driver.find_element(AppiumBy.XPATH, "//*[@text='签到']").click()
+
+driver.quit()</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">Selenium vs Appium 对比</div>
+          <p>
+            <strong>相同点</strong>：API 几乎一致（find_element、WebDriverWait、EC），
+            学会 Selenium 能快速上手 Appium。<br />
+            <strong>不同点</strong>：Selenium 操作浏览器（Web），Appium 操作手机 APP
+            （Native/Hybrid）；Appium 需要 Appium Server + 真机/模拟器；
+            定位方式 Appium 多了 Accessibility ID、文本定位等移动端特有方式。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>OA 审批自动化：登录 → 获取列表 → 逐条审批，核心是逐条容错和失败截图。</li>
+          <li>邮件批量发送：优先用 SMTP 协议而非 UI 自动化，能用 API 的不要走 UI。</li>
+          <li>报表导出：配置 Chrome 下载 prefs + 轮询 .crdownload 检测下载完成。</li>
+          <li>考勤打卡：用 schedule 库定时触发 + 工作日判断 + 日志记录。</li>
+          <li>批量录入：数据驱动 + 逐条容错 + 失败行导出补录，是通用模式。</li>
+          <li>移动端 APP 自动化用 Appium，API 和 Selenium 几乎一致，可平滑迁移。</li>
+          <li>选型原则：能用协议/API 的优先用，UI 自动化是最后手段。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="SMTP 是邮件协议，直接走协议比操作网页邮箱快且稳定。能用 API/协议的不要走 UI 自动化。">
+            <div class="quiz-question">1. （单选）批量发送邮件，最推荐的方式是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 用 Selenium 操作网页邮箱</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 用 SMTP 协议直接发送</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 手动一封一封发</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 用 requests 模拟网页接口</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="crdownload|.crdownload"
+               data-explain="Chrome 下载时会有 .crdownload 临时文件，下载完成后该文件消失。轮询目录检查这个后缀即可判断下载是否完成。">
+            <div class="quiz-question">2. （填空）Selenium 自动化下载文件时，通过检测哪种临时文件消失来判断下载完成？（填文件后缀）</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="批量录入时，单条失败应记录行号并继续，把失败行导出新文件后续补录，保证整体流程不中断。">
+            <div class="quiz-question">3. （单选）批量数据录入时，单条录入失败应该怎么处理？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. 整个流程终止</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. 重试到成功为止</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. 记录失败行号，跳过继续，最后导出失败行补录</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. 忽略不记录</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="Appium 是移动端自动化工具，API 和 Selenium 几乎一致，支持 By.ID/XPath 等定位，但操作的是手机 APP 而非浏览器。">
+            <div class="quiz-question">4. （单选）移动端 APP（如钉钉手机版）自动化测试用什么工具？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q4" value="A" /> A. Appium</label></li>
+              <li><label><input type="radio" name="q4" value="B" /> B. Selenium</label></li>
+              <li><label><input type="radio" name="q4" value="C" /> C. Postman</label></li>
+              <li><label><input type="radio" name="q4" value="D" /> D. JMeter</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>运维知识教程 · 第 24 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

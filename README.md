@@ -15,6 +15,8 @@
 | 第 7 章 | [多 Agent 协作](chapters/07-multi-agent.html) | 多 Agent 分工协作模式与实现 |
 | 第 8 章 | [部署与总结](chapters/08-deploy.html) | 免费公网部署、免费域名、学习路线总结 |
 | 第 22 章 | [Selenium 自动化测试面试实战](chapters/22-selenium.html) | WebDriver 原理、元素定位、等待机制、三大切换、POM 设计与面试高频题 |
+| 第 23 章 | [Selenium 自动化测试实战案例集](chapters/23-selenium-practice.html) | 搜索、表单、多页抓取、验证码处理、pytest+POM 测试框架五个从浅到深的案例 |
+| 第 24 章 | [移动办公自动化实战](chapters/24-office-automation.html) | OA 审批、邮件群发、报表导出、考勤打卡、批量录入与 Appium 移动端入门 |
 
 ## 项目结构
 
