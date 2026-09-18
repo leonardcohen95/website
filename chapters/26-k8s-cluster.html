@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第26章 K8s 集群搭建实战 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="26-k8s-cluster">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 26 章</span>
+          <span class="meta-tag">K8s 专题</span>
+          <span class="meta-tag">约 45 分钟</span>
+        </div>
+        <h1>K8s 集群搭建实战</h1>
+        <p>
+          上一章理解了概念，本章动手搭集群。我们会用三种方式循序渐进：minikube 一行命令
+          起单机集群（学习用）、kind 搭多节点集群（CI 测试用）、kubeadm 搭生产级集群
+          （面试重点）。学完你能独立完成从裸机到可用 K8s 集群的全流程，并能回答
+          「kubeadm init 做了什么」「为什么关闭 swap」等高频面试题。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>掌握集群搭建的前置准备：硬件、OS、内核、网络配置</li>
+          <li>能用 minikube 一行命令起本地集群用于学习</li>
+          <li>能用 kind 编排多节点配置（1 master + 2 worker）</li>
+          <li>能用 kubeadm 完成生产级集群搭建，含网络插件与 worker 加入</li>
+          <li>掌握节点标签、污点、驱逐、维护模式等节点管理操作</li>
+          <li>能排查 kubelet 未启动、镜像拉取失败、节点 NotReady 等常见搭建问题</li>
+        </ul>
+
+        <h2>1. 环境准备</h2>
+        <p>不论用哪种方式搭，前置环境要求都差不多。先把基础打好，后面少踩坑。</p>
+
+        <h3>1.1 硬件要求</h3>
+        <ul>
+          <li><strong>学习/测试</strong>：2 核 CPU、4G 内存、20G 磁盘起步。</li>
+          <li><strong>生产 Master</strong>：4 核 8G 起步（控制平面吃内存），SSD 磁盘（etcd 对 IO 敏感）。</li>
+          <li><strong>生产 Worker</strong>：根据业务负载，一般 8 核 16G 起，磁盘看镜像和日志量。</li>
+          <li><strong>网络</strong>：节点间网络互通，关闭 SELinux 避免折腾（生产可单独配策略）。</li>
+        </ul>
+
+        <h3>1.2 操作系统要求</h3>
+        <ul>
+          <li>CentOS 7 / RHEL 7+ / Rocky Linux / AlmaLinux</li>
+          <li>Ubuntu 20.04 / 22.04 LTS</li>
+          <li>内核 4.x+（推荐 5.x，CNI 和 cgroup v2 支持更好）</li>
+        </ul>
+
+        <h3>1.3 通用前置准备（所有节点都要做）</h3>
+        <div class="callout warn">
+          <div class="callout-title">三个必须做的前置</div>
+          <p>
+            ① <strong>关闭 swap</strong>：K8s 调度基于资源请求，swap 会让内存使用不可预测，kubelet 默认拒绝在开 swap 的节点上启动；
+            ② <strong>关闭防火墙或配置规则</strong>：避免节点间端口被拦导致通信失败（生产建议配规则而非全关）；
+            ③ <strong>时间同步</strong>：节点时间不一致会导致证书校验失败、调度异常，必须装 chrony 或 ntpd。
+          </p>
+        </div>
+        <pre><code># === 所有节点通用前置 ===
+# 1. 关闭 swap（关键！不关 kubelet 起不来）
+swapoff -a
+sed -i '/ swap / s/^/#/' /etc/fstab     # 注释掉开机挂载，永久生效
+
+# 2. 关闭 SELinux（避免权限问题，生产可配策略）
+setenforce 0
+sed -i 's/^SELINUX=enforcing$/SELINUX=disabled/' /etc/selinux/config
+
+# 3. 关闭防火墙（学习用；生产请改用配置规则放行端口）
+systemctl disable --now firewalld
+
+# 4. 时间同步（必做，否则证书校验会出问题）
+yum install -y chrony          # Ubuntu: apt install -y chrony
+systemctl enable --now chronyd
+chronyc sources                # 确认时间源同步
+
+# 5. 设置主机名和 hosts（多节点必做，方便互相识别）
+hostnamectl set-hostname k8s-master   # 其他节点改 k8s-worker1 等
+cat >> /etc/hosts &lt;&lt;EOF
+192.168.1.10 k8s-master
+192.168.1.11 k8s-worker1
+192.168.1.12 k8s-worker2
+EOF</code></pre>
+
+        <h2>2. minikube 本地快速搭建</h2>
+        <p>
+          minikube 是官方推荐的单机学习工具，一行命令起一个集群，最适合入门体验和
+          快速验证。它支持多种 driver（docker、kvm、virtualbox）。
+        </p>
+
+        <h3>2.1 安装 minikube</h3>
+        <pre><code># Linux x86_64
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
+minikube version
+
+# macOS
+brew install minikube
+
+# 前置：需要先装 Docker（作为 driver 容器）
+# minikube start 默认用 docker driver，需要本机能跑 docker</code></pre>
+
+        <h3>2.2 启动集群</h3>
+        <pre><code># 用 docker 作为驱动启动（最常用，不依赖虚拟化）
+minikube start --driver=docker
+# 它会自动拉取镜像、起一个容器作为节点、装好控制平面
+
+# 指定 K8s 版本（兼容性测试时有用）
+minikube start --driver=docker --kubernetes-version=v1.29.0
+
+# 给点资源（默认 2C2G 可能不够，开发可调大）
+minikube start --driver=docker --cpus=4 --memory=4g
+
+# 验证
+kubectl get nodes
+# NAME       STATUS   ROLES           AGE   VERSION
+# minikube   Ready    control-plane   30s   v1.29.0
+
+# minikube 自动配置好了 kubectl 的 ~/.kube/config</code></pre>
+
+        <h3>2.3 常用 minikube 命令</h3>
+        <pre><code>minikube status              # 集群状态
+minikube dashboard           # 打开 Web 控制台
+minikube service &lt;svc-name&gt;  # 用浏览器打开某个 NodePort 服务
+minikube ssh                 # SSH 进入 minikube 节点
+minikube stop                # 停止集群（不删除，下次 start 继续用）
+minikube delete              # 彻底删除集群
+minikube addons enable ingress  # 启用 ingress 插件</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">minikube 的定位</div>
+          <p>
+            minikube 适合<strong>本地学习和快速验证</strong>，单节点、无高可用，<strong>不适合生产</strong>。
+            优势是开箱即用、跨平台、自动配置 kubectl。当你想试个新资源、跑个示例，
+            minikube 是最快的方式。
+          </p>
+        </div>
+
+        <h2>3. kind 搭建多节点集群</h2>
+        <p>
+          kind（Kubernetes IN Docker）用 Docker 容器模拟节点，能在本机起多节点集群，
+          特别适合 CI 测试和验证多节点行为（如调度、节点亲和）。
+        </p>
+
+        <h3>3.1 安装 kind</h3>
+        <pre><code># Linux / macOS（Go 二进制）
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
+chmod +x ./kind
+sudo mv ./kind /usr/local/bin/kind
+kind version
+
+# macOS 也可用 brew
+brew install kind</code></pre>
+
+        <h3>3.2 多节点配置文件</h3>
+        <pre><code># kind-config.yaml：1 个控制平面 + 2 个 worker
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  # 控制平面节点
+  - role: control-plane
+  # 工作节点
+  - role: worker
+  - role: worker
+  # 可选：把额外端口映射出来（ingress 测试常用）
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP</code></pre>
+
+        <h3>3.3 创建与验证</h3>
+        <pre><code># 用配置文件创建集群
+kind create cluster --config=kind-config.yaml --name=k8s-demo
+# Creating cluster "k8s-demo" ...
+# ✓ Control-plane node ready
+# ✓ Worker nodes ready
+# Set kubectl context to kind-k8s-demo
+
+# 验证（看到 3 个节点：1 control-plane + 2 worker）
+kubectl get nodes
+# NAME                       STATUS   ROLES           AGE   VERSION
+# k8s-demo-control-plane     Ready    control-plane   30s   v1.29.0
+# k8s-demo-worker            Ready    &lt;none&gt;          20s   v1.29.0
+# k8s-demo-worker2           Ready    &lt;none&gt;          20s   v1.29.0
+
+# 删除集群
+kind delete cluster --name=k8s-demo</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">minikube vs kind</div>
+          <p>
+            <strong>minikube</strong>：单节点为主，开箱即用，插件丰富（dashboard、ingress），
+            适合学习；<strong>kind</strong>：多节点、起停快、CI 友好，适合测试调度/多节点行为。
+            两者都依赖 Docker，都不适合生产。
+          </p>
+        </div>
+
+        <h2>4. kubeadm 生产级搭建（重点）</h2>
+        <p>
+          kubeadm 是官方提供的集群引导工具，帮你完成证书、配置、控制平面组件部署等
+          复杂步骤。生产环境基本都用它，是面试必考内容。
+        </p>
+        <p>整体流程：<strong>所有节点前置准备 → Master init → 配 kubectl → 装网络插件 → Worker join → 验证</strong>。</p>
+
+        <div class="term-card">
+          <div class="term-name">kubeadm</div>
+          <p>
+            官方提供的集群<strong>引导工具</strong>，负责把裸机变成 K8s 集群：生成证书、起控制平面
+            组件、配置 kubelet、生成 join 命令。它只管「搭起来」，不管「日常运维」（升级、
+            备份要靠别的工具）。生产环境几乎都用它，是面试高频点。
+          </p>
+        </div>
+
+        <h3>4.1 所有节点前置准备</h3>
+        <pre><code># === 所有节点（master + worker）都要执行 ===
+
+# 1. 关闭 swap（前面已说，再次确认）
+swapoff -a &amp;&amp; sed -i '/ swap / s/^/#/' /etc/fstab
+
+# 2. 加载内核模块（容器网络要用 overlay 和 br_netfilter）
+cat &lt;&lt;EOF | tee /etc/modules-load.d/k8s.conf
+overlay
+br_netfilter
+EOF
+modprobe overlay
+modprobe br_netfilter
+lsmod | grep -E 'overlay|br_netfilter'   # 确认加载成功
+
+# 3. 设置内核参数（让 iptables 能看到桥接流量）
+cat &lt;&lt;EOF | tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward                 = 1
+EOF
+sysctl --system    # 让配置生效
+
+# 4. 安装 containerd（容器运行时，1.24+ 必须用 containerd 等而非 docker）
+yum install -y yum-utils
+yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+yum install -y containerd.io
+# 生成默认配置并开启 systemd cgroup 驱动（kubelet 也用 systemd，必须一致）
+containerd config default | tee /etc/containerd/config.toml &gt;/dev/null
+sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+systemctl enable --now containerd
+crictl --version    # 确认 crictl 可用（containerd 自带）
+
+# 5. 安装 kubeadm/kubelet/kubectl（注意版本要一致）
+cat &lt;&lt;EOF | tee /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://mirrors.aliyun.com/kubernetes-new/core/stable/v1.29/rpm/
+enabled=1
+gpgcheck=0
+EOF
+yum install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
+systemctl enable kubelet   # 注意：只 enable 不 start，kubeadm init 时会拉起
+kubectl version --client &amp;&amp; kubeadm version   # 确认版本</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">cgroup 驱动必须一致</div>
+          <p>
+            containerd 和 kubelet 的 cgroup 驱动必须都是 <code>systemd</code>，不一致会导致
+            kubelet 起不来。上面 sed 命令把 containerd 改成 systemd，kubelet 默认也是
+            systemd（kubeadm 1.22+ 自动配）。这是一个高频踩坑点。
+          </p>
+        </div>
+
+        <h3>4.2 Master 节点初始化</h3>
+        <pre><code># === 仅在 Master 节点执行 ===
+# 用阿里云镜像源拉控制平面组件镜像（国内必做，否则拉不下来）
+kubeadm config images pull \
+  --image-repository registry.aliyuncs.com/google_containers
+
+# 初始化控制平面
+# --pod-network-cidr：Pod 网段，必须和后面网络插件的 cidr 一致
+# --image-repository：指定国内镜像源
+# --kubernetes-version：固定版本，避免随机拉最新
+kubeadm init \
+  --apiserver-advertise-address=192.168.1.10 \
+  --image-repository registry.aliyuncs.com/google_containers \
+  --kubernetes-version v1.29.0 \
+  --service-cidr=10.96.0.0/12 \
+  --pod-network-cidr=10.244.0.0/16
+
+# 成功后会输出类似：
+# Your Kubernetes control-plane has initialized successfully!
+#
+# To start using your cluster, you need to run as a regular user:
+#   mkdir -p $HOME/.kube
+#   sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+#   sudo chown $(id -u):$(id -g) $HOME/.kube/config
+#
+# Then you can join any number of worker nodes by running:
+# kubeadm join 192.168.1.10:6443 --token xxxxxx.yyyy \
+#   --discovery-token-ca-cert-hash sha256:zzzz
+#
+# 把这条 join 命令记下来！worker 加入要用</code></pre>
+
+        <h3>4.3 配置 kubectl</h3>
+        <pre><code># === 在 Master 节点，用普通用户执行 ===
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# 验证（此时节点应该 Ready，但 Pod 网络还没装，coredns 还是 Pending）
+kubectl get nodes
+# NAME         STATUS   ROLES           AGE   VERSION
+# k8s-master   Ready    control-plane   2m    v1.29.0
+
+kubectl get pods -n kube-system
+# coredns-xxx   0/1   Pending   0   2m   # 网络插件没装，Pending 是正常的</code></pre>
+
+        <h3>4.4 安装网络插件</h3>
+        <p>
+          K8s 集群必须有 CNI 网络插件才能让 Pod 跨节点通信。两大主流：Flannel（简单）
+          和 Calico（功能强）。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">CNI（容器网络接口）</div>
+          <p>
+            CNI 是 K8s 的<strong>网络插件标准</strong>，定义了 Pod 如何分配 IP、如何跨节点通信。
+            没装 CNI 时节点会一直 NotReady、coredns 一直 Pending，因为 Pod 网络没就绪。
+            常见实现：Flannel、Calico、Cilium、Weave。生产选型看是否需要 NetworkPolicy、
+            性能、规模。
+          </p>
+        </div>
+        <pre><code># === 方案一：Flannel（最简单，适合入门）===
+# CIDR 必须和 init 时的 --pod-network-cidr 一致（10.244.0.0/16）
+kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+
+# === 方案二：Calico（功能强，生产推荐，支持 NetworkPolicy）===
+# 先下载 YAML，改 CIDR 为你的 pod-network-cidr
+curl https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml -O
+sed -i 's/# - name: CALICO_IPV4POOL_CIDR/- name: CALICO_IPV4POOL_CIDR/' calico.yaml
+sed -i 's/#   value: "192.168.0.0\/16"/  value: "10.244.0.0\/16"/' calico.yaml
+kubectl apply -f calico.yaml
+
+# 等待所有 kube-system Pod 变 Running
+kubectl get pods -n kube-system -w
+# coredns-xxx   1/1   Running   0   5m   # 变 Running 说明网络 OK 了</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">Flannel vs Calico 怎么选</div>
+          <p>
+            <strong>Flannel</strong>：简单稳定，只做基础网络，配置少，适合中小规模和学习；
+            <strong>Calico</strong>：功能全，支持 NetworkPolicy 网络隔离、BGP 路由、性能好，
+            适合大规模和生产。需要网络隔离策略就用 Calico。
+          </p>
+        </div>
+
+        <h3>4.5 Worker 节点加入</h3>
+        <pre><code># === 在每个 Worker 节点执行（前置准备已完成）===
+# 用 Master init 时输出的 join 命令
+kubeadm join 192.168.1.10:6443 --token xxxxxx.yyyyy \
+  --discovery-token-ca-cert-hash sha256:zzzzz
+
+# 如果忘了 token，在 Master 重新生成
+kubeadm token create --print-join-command
+# 它会输出完整的 join 命令，复制到 worker 执行
+
+# 加入成功后，在 Master 验证
+kubectl get nodes
+# NAME           STATUS   ROLES           AGE   VERSION
+# k8s-master     Ready    control-plane   10m   v1.29.0
+# k8s-worker1    Ready    &lt;none&gt;          2m    v1.29.0
+# k8s-worker2    Ready    &lt;none&gt;          90s   v1.29.0
+
+# 如果忘了把 admin.conf 拷给 worker，worker 上也可以单独配 kubectl
+mkdir -p $HOME/.kube
+scp master:/etc/kubernetes/admin.conf $HOME/.kube/config   # 仅管理用</code></pre>
+
+        <h3>4.6 验证集群状态</h3>
+        <pre><code># 节点全部 Ready
+kubectl get nodes -o wide
+
+# 控制平面组件健康
+kubectl get componentstatuses
+# NAME                 STATUS    MESSAGE   ERROR
+# scheduler            Healthy   ok
+# controller-manager   Healthy   ok
+# etcd-0               Healthy   ok
+
+# kube-system Pod 全部 Running
+kubectl get pods -n kube-system -o wide</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">kubeadm init 做了什么（面试重点）</div>
+          <p>
+            ① 拉取控制平面镜像；② 生成自签 CA 和各组件证书；③ 写 kubeconfig；
+            ④ 用静态 Pod 起 apiserver/etcd/scheduler/controller-manager（静态 Pod 由
+            kubelet 直接读 /etc/kubernetes/manifests 起容器）；⑤ 配 RBAC 和集群网络；
+            ⑥ 部署 kube-proxy 和 coredns；⑦ 输出 join 命令（含 token 和 CA 哈希）。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">静态 Pod（Static Pod）</div>
+          <p>
+            存放在 <code>/etc/kubernetes/manifests/</code> 下的 Pod YAML 不需要经过 apiserver，
+            <strong>kubelet 会直接监视该目录并起容器</strong>。控制平面组件（apiserver/etcd 等）
+            就是以静态 Pod 方式运行的——这样即使 apiserver 没起来，kubelet 也能把它拉起来，
+            解决了「鸡生蛋」问题。改了 manifests 目录里的 YAML，kubelet 会自动重建对应 Pod。
+          </p>
+        </div>
+
+        <h2>5. 节点管理</h2>
+        <p>集群搭好后，日常要管节点：打标签、加污点、驱逐维护等。</p>
+
+        <h3>5.1 查看节点</h3>
+        <pre><code># 节点概览
+kubectl get nodes
+# 详细信息（含 IP、内核、版本、容量）
+kubectl get nodes -o wide
+# 查看某个节点详情（资源使用、污点、标签、事件）
+kubectl describe node k8s-worker1</code></pre>
+
+        <h3>5.2 节点标签</h3>
+        <pre><code># 给节点打标签（key=value）
+kubectl label nodes k8s-worker1 disktype=ssd
+# 查看
+kubectl get nodes --show-labels
+# 删除标签（key 后加减号）
+kubectl label nodes k8s-worker1 disktype-
+
+# 用法：在 Pod 里用 nodeSelector 调度到特定标签节点
+# spec:
+#   nodeSelector:
+#     disktype: ssd</code></pre>
+
+        <h3>5.3 污点（Taint）与容忍（Toleration）</h3>
+        <pre><code># 给节点加污点（效果=NoSchedule 表示不再调度新 Pod 上来）
+kubectl taint nodes k8s-worker1 gpu=true:NoSchedule
+# 污点格式：key=value:effect，effect 有 NoSchedule/NoExecute/PreferNoSchedule
+
+# 删除污点（key 后加减号）
+kubectl taint nodes k8s-worker1 gpu=true:NoSchedule-
+
+# Pod 要调度到带污点节点，必须声明 toleration 容忍
+# spec:
+#   tolerations:
+#     - key: "gpu"
+#       value: "true"
+#       effect: "NoSchedule"</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">污点 vs 标签</div>
+          <p>
+            <strong>标签</strong>是「吸引」——Pod 用 nodeSelector 主动选节点；
+            <strong>污点</strong>是「排斥」——节点拒绝 Pod 调度过来，除非 Pod 显式容忍。
+            Master 默认带 <code>node-role.kubernetes.io/control-plane:NoSchedule</code> 污点，
+            所以业务 Pod 不会被调度到 Master。
+          </p>
+        </div>
+
+        <h3>5.4 驱逐与维护模式</h3>
+        <p>节点要维护（重启、升级）时，先把它上面的 Pod 安全迁走：</p>
+        <pre><code># 1. 标记节点不可调度（新 Pod 不会调度过来）
+kubectl cordon k8s-worker1
+
+# 2. 驱逐节点上所有 Pod（会触发副本在其他节点重建）
+kubectl drain k8s-worker1 --ignore-daemonsets --delete-emptydir-data
+# --ignore-daemonsets：跳过 DaemonSet（如 kube-proxy、网络插件，它们本就该每节点一个）
+# --delete-emptydir-data：清理 emptyDir 数据卷的 Pod
+
+# 3. 现在节点可以安全维护（重启、升级内核等）
+
+# 4. 维护完恢复调度
+kubectl uncordon k8s-worker1</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">drain 不会无脑删</div>
+          <p>
+            <code>kubectl drain</code> 会<strong>优雅驱逐</strong>：先标记 cordon，再按
+            Deployment 副本数在其他节点重建 Pod，最后删本节点 Pod。但它对没有控制器的
+            裸 Pod（裸 Pod 没人重建）会拒绝驱逐，加 <code>--force</code> 才会强删（不推荐）。
+          </p>
+        </div>
+
+        <h2>6. 集群健康检查</h2>
+        <p>搭完要体检，下面几条是日常巡检必备。</p>
+
+        <h3>6.1 控制平面组件</h3>
+        <pre><code># 组件状态（scheduler/controller-manager/etcd 应都 Healthy）
+kubectl get componentstatuses
+# 部分版本缩写 cs
+kubectl get cs
+
+# 控制平面以静态 Pod 形式跑在 Master
+kubectl get pods -n kube-system -o wide | grep -E 'apiserver|etcd|scheduler|controller'</code></pre>
+
+        <h3>6.2 节点资源</h3>
+        <pre><code># 节点详情（看 Capacity/Allocatable、Conditions、资源分配）
+kubectl describe node k8s-worker1 | grep -A5 -E 'Capacity|Allocated|Conditions'
+
+# 节点实时资源使用（需要装 metrics-server）
+kubectl top nodes
+# NAME           CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%
+# k8s-master     256m         12%    1280Mi          32%
+# k8s-worker1    512m         6%     2048Mi          25%
+
+# 装 metrics-server（top 命令依赖它）
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml</code></pre>
+
+        <h3>6.3 关键系统 Pod</h3>
+        <pre><code># kube-system 命名空间的所有 Pod 必须 Running
+kubectl get pods -n kube-system
+# 重点关注：
+#   coredns-*            DNS 服务，不通会导致域名解析失败
+#   etcd-master          状态库，挂了集群就废
+#   kube-apiserver       入口
+#   kube-proxy-*         每节点一个，负责 Service 网络
+#   kube-scheduler / kube-controller-manager
+#   网络插件 Pod（如 kube-flannel-* / calico-node-*）
+
+# 看某个 Pod 的日志
+kubectl logs -n kube-system &lt;pod-name&gt;
+kubectl describe pod -n kube-system &lt;pod-name&gt;   # 看 Events</code></pre>
+
+        <h2>7. 常见搭建问题排查</h2>
+
+        <h3>7.1 kubelet 未启动</h3>
+        <pre><code># 现象：节点 NotReady，kubectl get nodes 没有节点
+# 排查
+systemctl status kubelet
+journalctl -u kubelet -f --no-pager | tail -50
+
+# 常见原因：
+# 1. swap 没关 → 报错 "Running with swap on is not supported"
+swapoff -a
+# 2. cgroup 驱动不一致 → 看 kubelet 日志报 "failed to get container info"
+#    确认 containerd 和 kubelet 都用 systemd
+grep SystemdCgroup /etc/containerd/config.toml
+# 3. 配置文件错 → 看 /var/lib/kubelet/config.yaml 是否存在
+# 重启
+systemctl restart kubelet</code></pre>
+
+        <h3>7.2 镜像拉取失败</h3>
+        <pre><code># 现象：kubeadm init 卡在拉镜像，或 Pod 状态 ImagePullBackOff
+# 国内拉 k8s.gcr.io 镜像基本失败，必须配国内源
+
+# 方法1：init 时指定阿里云镜像源
+kubeadm init --image-repository registry.aliyuncs.com/google_containers ...
+
+# 方法2：手动拉镜像再改 tag
+kubeadm config images list    # 看需要哪些镜像
+docker pull registry.aliyuncs.com/google_containers/kube-apiserver:v1.29.0
+docker tag registry.aliyuncs.com/google_containers/kube-apiserver:v1.29.0 \
+       registry.k8s.io/kube-apiserver:v1.29.0
+
+# 方法3：给 containerd 配镜像加速器
+# 编辑 /etc/containerd/config.toml，在 [plugins."io.containerd.grpc.v1.cri".registry.mirrors] 加：
+#   [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
+#     endpoint = ["https://registry.aliyuncs.com"]
+systemctl restart containerd</code></pre>
+
+        <h3>7.3 节点 NotReady（网络插件未装）</h3>
+        <pre><code># 现象：kubectl get nodes 节点是 NotReady
+kubectl describe node k8s-worker1 | grep -A5 Conditions
+# 报错 "runtime network not ready: NetworkPluginNotReady"
+
+# 原因：还没装 CNI 网络插件
+# 解决：装 Flannel 或 Calico（见 4.4）
+kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+
+# 验证网络插件 Pod 起来了
+kubectl get pods -n kube-system | grep -E 'flannel|calico'
+# 装完后节点会变 Ready</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">排查命令速查</div>
+          <p>
+            集群异常时按这个顺序查：① <code>kubectl get nodes</code> 看节点是否 Ready；
+            ② <code>kubectl get pods -n kube-system</code> 看系统 Pod 是否 Running；
+            ③ <code>kubectl get cs</code> 看控制平面组件是否 Healthy；
+            ④ <code>systemctl status kubelet &amp;&amp; journalctl -u kubelet -f</code> 看节点 kubelet 日志；
+            ⑤ <code>crictl ps &amp;&amp; crictl logs &lt;容器&gt;</code> 看容器运行时层面的容器和日志。
+          </p>
+        </div>
+
+        <h2>8. 面试角度</h2>
+
+        <h3>8.1 「你搭建过 K8s 集群吗？说说流程」</h3>
+        <div class="callout">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            用 kubeadm 搭过测试和生产集群。流程：① <strong>所有节点前置</strong>：关 swap、关
+            SELinux/防火墙、时间同步、加载 overlay/br_netfilter 模块、设 sysctl、装 containerd
+            并改 systemd cgroup、装 kubeadm/kubelet/kubectl；② <strong>Master 用
+            <code>kubeadm init</code></strong> 初始化，用阿里云镜像源，指定 pod-network-cidr；
+            ③ 配 kubectl（拷 admin.conf）；④ <strong>装 CNI 网络插件</strong>（Flannel 或 Calico），
+            让 coredns 变 Running；⑤ <strong>Worker 用 <code>kubeadm join</code></strong> 加入；
+            ⑥ 验证节点 Ready、组件 Healthy、系统 Pod Running。生产 Master 还要做高可用
+            （多 Master + 负载均衡）和 etcd 备份。
+          </p>
+        </div>
+
+        <h3>8.2 「kubeadm init 做了什么」</h3>
+        <div class="callout">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            kubeadm init 完成控制平面的引导：① <strong>拉镜像</strong>（apiserver/etcd/scheduler/
+            controller-manager/kube-proxy/coredns）；② <strong>生成证书</strong>（自签 CA + 各组件
+            证书，存 /etc/kubernetes/pki）；③ <strong>写 kubeconfig</strong>（admin/controller/
+            scheduler/kubelet）；④ 起静态 Pod（apiserver/etcd/scheduler/controller-manager，
+            kubelet 读 /etc/kubernetes/manifests 起它们）；⑤ 配 RBAC 和 kubelet 准入；⑥ 部署
+            kube-proxy 和 coredns（此时 coredns 是 Pending，等网络插件）；⑦ <strong>生成 join 命令</strong>
+            （含 token 和 CA 哈希）供 worker 加入。注意它不负责装网络插件，要手动 apply。
+          </p>
+        </div>
+
+        <h3>8.3 「为什么搭建 K8s 要关闭 swap」</h3>
+        <div class="callout">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            ① <strong>调度准确性</strong>：K8s 调度器根据 Pod 的资源 requests 选节点，依赖节点真实
+            可用内存；开了 swap 内存可能被换到磁盘，真实可用量不可预测，导致超卖和 OOM；
+            ② <strong>性能稳定性</strong>：容器被换到 swap 会导致性能骤降和延迟尖峰，影响服务
+            质量；③ <strong>kubelet 默认拒绝</strong>：kubelet 启动参数 <code>--fail-swap-on=true</code>，
+            开 swap 时 kubelet 直接起不来。所以必须关 swap 并注释 /etc/fstab 永久生效。
+            （K8s 1.22+ 起对 swap 有实验性支持，但生产仍推荐关闭。）
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>搭建前置：关 swap、关防火墙/SELinux、时间同步，三件套是踩坑高发区，必做。</li>
+          <li>minikube 适合本地学习，一行命令起单节点，不适合生产。</li>
+          <li>kind 用 Docker 模拟节点，能起多节点集群，适合 CI 测试调度行为。</li>
+          <li>kubeadm 是生产级方案：所有节点前置 → Master init → 配 kubectl → 装网络插件 → Worker join。</li>
+          <li>containerd 与 kubelet 的 cgroup 驱动必须一致（都用 systemd），否则 kubelet 起不来。</li>
+          <li>网络插件必装：Flannel 简单、Calico 功能强支持 NetworkPolicy；不装节点会一直 NotReady。</li>
+          <li>节点管理：label 吸引、taint 排斥；维护用 cordon + drain + uncordon 三步走。</li>
+          <li>排查顺序：get nodes → get pods -n kube-system → get cs → kubelet 日志 → crictl。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="minikube 是单节点学习工具，开箱即用但不支持多节点和高可用，不适合生产环境。多节点测试用 kind，生产用 kubeadm。">
+            <div class="quiz-question">1. （单选）关于 minikube，下列说法正确的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. minikube 适合搭建生产级高可用集群</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. minikube 适合本地学习和快速验证，不适合生产</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. minikube 必须用 virtualbox 作为 driver</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. minikube 不能与 kubectl 配合使用</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="K8s 调度依赖节点真实可用内存，swap 会让内存使用不可预测，导致超卖和性能抖动；且 kubelet 默认 fail-swap-on=true，开 swap 直接起不来。">
+            <div class="quiz-question">2. （单选）搭建 K8s 集群时为什么要关闭 swap？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. 关闭 swap 可以提升 etcd 的读写性能</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. 关闭 swap 是为了节省磁盘空间</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. swap 让内存不可预测影响调度，且 kubelet 默认拒绝在开 swap 的节点启动</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. K8s 1.24 之后要求必须关闭 swap，否则 kubeadm 无法安装</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D"
+               data-explain="kubeadm init 不会安装 CNI 网络插件，需要手动 kubectl apply 安装 Flannel/Calico；不装网络插件节点会一直 NotReady、coredns 会 Pending。">
+            <div class="quiz-question">3. （单选）用 kubeadm 搭建集群后，发现节点一直 NotReady、coredns 一直 Pending，最可能的原因是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. kubelet 没有启动</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. swap 没有关闭</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. kubectl 配置文件错误</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. 还没安装 CNI 网络插件（如 Flannel/Calico）</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="drain|kubectl drain"
+               data-explain="节点维护时先用 kubectl drain 安全驱逐节点上所有 Pod（自动 cordon + 优雅重建），维护完用 kubectl uncordon 恢复调度。">
+            <div class="quiz-question">4. （填空）节点要维护时，先用哪条命令把上面的 Pod 安全驱逐到其他节点？（写命令动词，2 个单词）</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s 深度专题 · 第 26 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=3"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

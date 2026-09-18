@@ -27,17 +27,17 @@
   <section class="hero">
     <div class="hero-badges">
       <span class="badge">Python 初学者友好</span>
-      <span class="badge">24 章分步教学</span>
+      <span class="badge">34 章分步教学</span>
       <span class="badge">含互动测验</span>
       <span class="badge">覆盖运维面试考点</span>
-      <span class="badge">AI+运维实战</span>
+      <span class="badge">K8s 专题 10 章</span>
     </div>
     <h1>从 AI Agent 到运维工程师进阶</h1>
     <p>
       前 14 章带你从零搭建一个 AI Agent（RAG、LangChain、LangGraph 全覆盖）；
-      后 7 章针对运维工程师岗位要求，系统讲解 Linux 调优、Shell/Python 自动化、数据库运维、
-      Docker/K8s、中间件实战以及大模型部署与 AI+运维。每章都有可运行的代码和互动测验，
-      帮你全面覆盖面试官可能考察的问题。
+      第 15-24 章针对运维工程师岗位要求，系统讲解 Linux 调优、自动化、数据库、
+      Docker/K8s、中间件与移动办公自动化；最后 10 章（25-34）是 K8s 深度专题，
+      从概念架构到生产运维，配合实战与面试高频题，学完能独立胜任 K8s 相关岗位。
     </p>
     <a href="chapters/01-intro.html" class="btn btn-primary">开始学习 →</a>
   </section>
@@ -66,7 +66,7 @@
   <!-- 章节目录 -->
   <section class="section">
     <h2 class="section-title">课程目录</h2>
-    <p class="section-sub">共 24 章，前 14 章 AI Agent，后 10 章运维与自动化进阶</p>
+    <p class="section-sub">共 34 章，前 14 章 AI Agent，15-24 章运维与自动化，25-34 章 K8s 深度专题</p>
     <div class="chapter-grid" id="chapter-grid"></div>
   </section>
 
@@ -99,6 +99,19 @@
           <li>Redis、Elasticsearch、Kafka、Zookeeper、ClickHouse 部署与排障</li>
           <li>大模型本地部署（Ollama/vLLM）与 AI+运维（智能告警、根因分析、故障自愈）</li>
         </ul>
+        <h3 style="margin:24px 0 12px;">☸️ K8s 深度专题（第 25-34 章）</h3>
+        <ul>
+          <li>K8s 核心概念、架构原理与声明式模型理解</li>
+          <li>从 minikube 到 kubeadm 生产级集群搭建实战</li>
+          <li>Pod 生命周期、容器设计模式、资源管理与三类探针</li>
+          <li>Deployment/StatefulSet/DaemonSet/Job 全 Workload 管理</li>
+          <li>Service、Ingress、NetworkPolicy 服务发现与网络隔离</li>
+          <li>PV/PVC/StorageClass 存储体系与 ConfigMap/Secret 配置管理</li>
+          <li>RBAC 权限模型、ServiceAccount 与安全加固最佳实践</li>
+          <li>调度器、亲和性、污点容忍与 HPA/VPA 自动扩缩容</li>
+          <li>Helm 包管理：编写 Chart、模板语法与环境差异化部署</li>
+          <li>Prometheus 监控、故障排查手册与 30+ 面试高频题精讲</li>
+        </ul>
       </div>
     </div>
   </section>
@@ -108,7 +121,7 @@
     <p style="margin-top:6px;">本教程可免费用于学习，欢迎分享给更多想学 AI 和运维的朋友。</p>
   </footer>
 
-  <script src="assets/js/nav.js?v=2"></script>
+  <script src="assets/js/nav.js?v=3"></script>
   <script>
     // 首页章节目录渲染
     document.addEventListener("DOMContentLoaded", function () {

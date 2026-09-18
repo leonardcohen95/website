@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第27章 Pod 深入解析 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="27-k8s-pod">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 27 章</span>
+          <span class="meta-tag">K8s 专题</span>
+          <span class="meta-tag">约 40 分钟</span>
+        </div>
+        <h1>Pod 深入解析</h1>
+        <p>
+          Pod 是 Kubernetes 中最小的调度单元，也是面试官最爱下手的切入点。
+          前一章我们快速带过了 Pod 的基本写法，本章把它彻底拆开：
+          从 Pod 为什么存在、生命周期、Init/Sidecar 容器设计模式，到资源管理（requests/limits/QoS）、
+          三类探针、优雅终止与调试命令。学完你能解释「Pod 是什么」「探针怎么配」
+          「节点资源不足时谁先被驱逐」这类高频面试题，并能在生产中写出健壮的 Pod YAML。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Pod 的本质：为什么不直接管容器，而要包一层 Pod</li>
+          <li>掌握 Pod 生命周期与 Phase/Container State 的区别</li>
+          <li>会写 Init Container 和 Sidecar 容器，并说清两者差异</li>
+          <li>掌握 requests/limits 与 QoS 三等级及驱逐顺序</li>
+          <li>能正确配置 liveness/readiness/startup 三类探针并调参</li>
+          <li>理解 Pod 优雅终止流程，会用 preStop hook 避免丢请求</li>
+        </ul>
+
+        <h2>1. Pod 的本质</h2>
+        <p>
+          容器 runtime（containerd、CRI-O）管理的对象是「容器」，但 K8s 调度的最小单元却是 Pod。
+          面试官常问的第一个问题就是：「为什么 K8s 不直接调度容器，而要包一层 Pod？」
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">Pod 是什么</div>
+          <p>
+            Pod 是一组<strong>紧密耦合的容器</strong>的集合，它们共享网络命名空间（同一个 IP、同一组端口）
+            和存储卷，被一起调度到同一个 Node 上，生命周期也绑在一起。K8s 不直接操作容器，
+            而是操作 Pod，由 Pod 内部的 pause 容器持有网络/IPC 命名空间，业务容器加入它。
+          </p>
+        </div>
+
+        <p>
+          K8s 选择 Pod 而不是单个容器，主要原因是：现实中的应用往往需要多个进程协同（比如一个 Web
+          进程加一个日志采集进程），这些进程必须共享 localhost、共享卷、一起重启。
+          如果直接以容器为调度单元，容器间的这种紧耦合关系就没法表达。Pod 就是把这层「共生」关系
+          显式建模出来。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">为什么需要 Pod 这一层</div>
+          <ul>
+            <li><strong>共享网络</strong>：Pod 内多个容器共享同一个 IP 和端口空间，互相用 <code>localhost</code> 通信。</li>
+            <li><strong>共享存储</strong>：Pod 内的 <code>volumes</code> 可以被多个容器同时挂载，文件互通。</li>
+            <li><strong>统一调度</strong>：Pod 是调度的最小单元，里面所有容器一起被调度到同一 Node，一起生死。</li>
+            <li><strong>解耦运行时</strong>：K8s 通过 Pod 抽象屏蔽了 containerd/Docker/CRI-O 的差异。</li>
+          </ul>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">一个 Pod 一个 IP</div>
+          <p>
+            每个 Pod 拿到一个独立的集群内 IP，<strong>Pod 内所有容器共享这个 IP</strong>。
+            这意味着 Pod 内容器间不能用相同端口（比如不能两个容器都监听 80），
+            但跨 Pod 通信用 Pod IP 即可，无需关心容器。Service 也是给一组 Pod IP 做负载均衡的入口。
+          </p>
+        </div>
+
+        <pre><code># Pod 内多容器共享网络和存储的典型场景：Nginx + filebeat
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-with-sidecar
+  labels:
+    app: web
+spec:
+  volumes:
+    - name: shared-logs          # Pod 级共享卷
+      emptyDir: {}
+  containers:
+    - name: nginx                # 主容器：写日志到共享卷
+      image: nginx:1.25
+      volumeMounts:
+        - name: shared-logs
+          mountPath: /var/log/nginx
+    - name: filebeat             # sidecar 容器：从共享卷读日志转发
+      image: elastic/filebeat:8.11
+      volumeMounts:
+        - name: shared-logs
+          mountPath: /var/log/nginx
+          readOnly: true</code></pre>
+
+        <h2>2. Pod 生命周期</h2>
+        <p>
+          一个 Pod 从被创建到被销毁，会经历多个阶段。理解状态流转对排查「Pod 起不来」至关重要。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">Pod 状态流转图</div>
+          <pre><code>  [kubectl create]
+        │
+        ▼
+   ┌─────────┐    调度失败/资源不足    ┌──────────┐
+   │ Pending │ ─────────────────────► │   失败   │
+   └────┬────┘                        └──────────┘
+        │ 调度成功
+        ▼
+   ┌────────────────────┐
+   │ ContainerCreating  │  拉镜像 / 挂卷 / 起容器
+   └─────────┬──────────┘
+             │ 所有容器 Running
+             ▼
+   ┌──────────┐    liveness 失败    ┌──────────────┐
+   │ Running  │ ──────────────────► │  重启容器    │
+   └────┬─────┘                      └──────┬───────┘
+        │ delete Pod                        │ 反复崩溃
+        ▼                                   ▼
+   ┌──────────────┐                 ┌───────────────────┐
+   │ Terminating  │                 │ CrashLoopBackOff   │
+   └──────┬───────┘                 └───────────────────┘
+          │ grace period 到
+          ▼
+       [Deleted]</code></pre>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Pod 状态速查表</div>
+          <ul>
+            <li><code>Pending</code>：已提交但未调度，或镜像/卷还在准备，常见于资源不足。</li>
+            <li><code>ContainerCreating</code>：已调度到节点，正在拉镜像、挂卷、起容器。</li>
+            <li><code>Running</code>：所有容器已起来，但<strong>不代表应用就绪</strong>，要看 readiness。</li>
+            <li><code>Succeeded</code>：所有容器正常退出（code=0），常见于 Job 类型 Pod。</li>
+            <li><code>Failed</code>：所有容器都退出且至少一个失败（code != 0）。</li>
+            <li><code>Unknown</code>：通常因和 Node 失联，无法获取状态。</li>
+            <li><code>CrashLoopBackOff</code>：容器反复崩溃重启（不是 Phase，是 Container State）。</li>
+            <li><code>ImagePullBackOff</code>：镜像拉取失败，会一直 BackOff 重试。</li>
+            <li><code>Terminating</code>：正在优雅终止，等待 grace period 到或 preStop 完成。</li>
+          </ul>
+        </div>
+
+        <h3>2.1 Pod Phase vs Container State</h3>
+        <p>
+          这是面试常考的细节点：<strong>Pod Phase</strong> 是 Pod 级别的高层状态（Pending/Running/Succeeded/Failed/Unknown），
+          而 <strong>Container State</strong> 是单个容器的状态，分为三种：
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">Container State 三态</div>
+          <p>
+            <strong>Waiting</strong>：容器还没起，正在拉镜像/拉卷/等待依赖，对应 <code>ContainerCreating</code> 或 <code>Pending</code>。
+            <strong>Running</strong>：容器进程在前台运行，已分配 PID。
+            <strong>Terminated</strong>：容器进程已退出，会记录退出码和退出原因。
+          </p>
+        </div>
+
+        <p>
+          一个 Pod 的 Phase=Running 只表示「至少有一个容器在 Running」，并不代表应用能接流量。
+          真正决定能不能接流量的是 <strong>readinessProbe</strong>，下面专门讲。
+        </p>
+
+        <h2>3. 容器设计模式</h2>
+        <p>
+          Pod 内多容器是有套路的，社区总结出几种常见设计模式。掌握它们能让你在面试时
+          脱口而出「Init Container」「Sidecar」「Ambassador」「Adapter」这些词。
+        </p>
+
+        <h3>3.1 Init Container（初始化容器）</h3>
+        <p>
+          Init Container 在<strong>主容器之前</strong>运行，必须按顺序成功完成（exit 0）才会启动下一个，
+          全部完成后才起主容器。典型用途：等数据库就绪、初始化配置文件、注册到服务发现。
+        </p>
+
+        <pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: web-init
+spec:
+  initContainers:
+    - name: wait-for-db          # 第一个 init：等待 MySQL 起来
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - |
+          echo "waiting for mysql..."
+          until nc -z mysql-svc 3306; do
+            sleep 2
+          done
+          echo "mysql is ready"
+    - name: init-config          # 第二个 init：生成配置文件到共享卷
+      image: busybox:1.36
+      command: ['sh','-c','echo "db_host=mysql-svc" > /config/app.conf']
+      volumeMounts:
+        - name: config
+          mountPath: /config
+  containers:
+    - name: web                 # 主容器：使用 init 生成的配置
+      image: nginx:1.25
+      volumeMounts:
+        - name: config
+          mountPath: /etc/app
+  volumes:
+    - name: config
+      emptyDir: {}</code></pre>
+
+        <h3>3.2 Sidecar（旁车容器）</h3>
+        <p>
+          Sidecar 是和主容器<strong>同时运行</strong>的辅助容器，负责日志收集、监控代理、代理服务、
+          配置同步等「边角料」工作，把主容器逻辑保持纯粹。
+        </p>
+
+        <pre><code># 经典 Sidecar：Nginx 主容器 + busybox 日志转发 sidecar
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-sidecar
+spec:
+  volumes:
+    - name: nginx-logs
+      emptyDir: {}
+  containers:
+    - name: nginx
+      image: nginx:1.25
+      volumeMounts:
+        - name: nginx-logs
+          mountPath: /var/log/nginx
+    - name: log-shipper          # sidecar：tail 日志并打到 stdout 给 kubectl logs 抓
+      image: busybox:1.36
+      command: ['sh','-c','tail -f /var/log/nginx/access.log']
+      volumeMounts:
+        - name: nginx-logs
+          mountPath: /var/log/nginx
+          readOnly: true</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">常见 Pod 内容器设计模式</div>
+          <ul>
+            <li><strong>Init Container</strong>：先跑完退出，做初始化、依赖等待、配置生成。</li>
+            <li><strong>Sidecar</strong>：和主容器并行，做日志/监控/代理，与主容器解耦。</li>
+            <li><strong>Ambassador</strong>：代理外部服务（如把外部 MySQL 包装成本地 localhost）。</li>
+            <li><strong>Adapter</strong>：把主容器输出适配成统一格式（如日志标准化）。</li>
+          </ul>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-title">Init 和 Sidecar 不是一回事</div>
+          <p>
+            面试常被坑：Init Container <strong>必须成功退出</strong>才会进入主容器阶段，
+            而 Sidecar 和主容器<strong>同时长期运行</strong>，不会退出。
+            K8s 1.28+ 起支持 <code>initContainers</code> 中带 <code>restartPolicy: Always</code> 的「Sidecar 形态 Init 容器」，
+            但语义上仍是「先启动、与主容器并行运行」的辅助容器。
+          </p>
+        </div>
+
+        <h2>4. 资源管理</h2>
+        <p>
+          没有资源限制的 Pod 会和无约束的进程一样互相抢资源，最终被 OOM Killer 干掉。
+          K8s 通过 <code>requests</code> 和 <code>limits</code> 两个字段管理 CPU 和内存。
+        </p>
+
+        <h3>4.1 requests vs limits</h3>
+        <pre><code>resources:
+  requests:                # 调度依据：保证 Pod 至少能拿到这么多
+    cpu: 250m              # 250 millicore = 0.25 核
+    memory: 256Mi         # 256 Mebibyte
+  limits:                  # 上限：超过会被限制或杀死
+    cpu: 500m              # 最多用 0.5 核（CPU 可被 throttle，不杀进程）
+    memory: 512Mi         # 内存超限直接 OOMKilled</code></pre>
+
+        <div class="term-card">
+          <div class="term-name">CPU 和内存单位</div>
+          <p>
+            <strong>CPU</strong>：1 = 1 核，单位 <code>m</code>（millicore，千分之一核），如 <code>500m</code> = 0.5 核。
+            不允许写成小数如 <code>0.5</code>？可以写 <code>0.5</code>，但生产建议用 <code>500m</code>。
+            <strong>内存</strong>：用二进制单位 <code>Ki/Mi/Gi/Ti</code>（1Mi=1024Ki），不要用 KB/MB（十进制）。
+          </p>
+        </div>
+
+        <h3>4.2 QoS 等级</h3>
+        <p>
+          K8s 根据 requests/limits 的设置，把 Pod 划分到三个 <strong>QoS（Quality of Service）</strong> 等级。
+          节点资源紧张时，按等级决定<strong>谁先被驱逐</strong>。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">Guaranteed（保证级）</div>
+          <p>
+            <strong>所有容器</strong>的 requests = limits（CPU 和内存都设了且相等）。
+            优先级最高，资源紧张时<strong>最后被驱逐</strong>。生产关键服务建议用这个等级。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Burstable（突发级）</div>
+          <p>
+            至少有一个容器设了 requests，但 requests != limits，或只设了部分资源。
+            中等优先级，资源紧张时优先于 Guaranteed 被驱逐。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">BestEffort（尽力级）</div>
+          <p>
+            所有容器都<strong>没有设</strong> requests 和 limits。优先级最低，资源紧张时<strong>最先被驱逐</strong>。
+            开发/测试环境可以用，生产绝对不要。
+          </p>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-title">驱逐顺序（重要）</div>
+          <p>
+            节点资源不足（MemoryPressure/DiskPressure）时，kubelet 触发驱逐，
+            <strong>顺序是 BestEffort → Burstable → Guaranteed</strong>。
+            同等级内按「超出 requests 最多」的 Pod 优先驱逐。所以生产服务想稳定，
+            一定要把 requests=limits 设成相等，让它拿到 Guaranteed 等级。
+          </p>
+        </div>
+
+        <pre><code># Guaranteed 等级 Pod 示例：requests == limits
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-guaranteed
+spec:
+  containers:
+    - name: web
+      image: nginx:1.25
+      resources:
+        requests:           # ===
+          cpu: 500m          # 严格相等 → Guaranteed
+          memory: 512Mi      # ===
+        limits:
+          cpu: 500m
+          memory: 512Mi</code></pre>
+
+        <h2>5. 探针详解</h2>
+        <p>
+          探针是 K8s 感知应用真实状态的「传感器」。配好探针，K8s 才知道应用什么时候就绪、
+          什么时候卡死、什么时候需要重启。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">livenessProbe（存活探针）</div>
+          <p>
+            判断容器是否「活着」。失败时 kubelet 会<strong>重启容器</strong>（按 restartPolicy 处理）。
+            用于捕获死锁、 hang 住、线程池耗尽这类「进程还在但功能坏了」的情况。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">readinessProbe（就绪探针）</div>
+          <p>
+            判断容器是否「准备好接流量」。失败时 Pod 会被从 Service 的 endpoints 中摘除，
+            <strong>不重启容器</strong>。用于启动慢、依赖未就绪、过载时主动让流量。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">startupProbe（启动探针）</div>
+          <p>
+            K8s 1.16+ 引入。判断容器是否「首次启动完成」。
+            启动期间 liveness/readiness 都被禁用，直到 startup 成功。
+            用于启动很慢的应用（如 Java Spring Boot），避免被 liveness 误杀。
+          </p>
+        </div>
+
+        <h3>5.1 探针类型</h3>
+        <p>每种探针都可以选三种检查方式：</p>
+        <ul>
+          <li><strong>httpGet</strong>：HTTP GET，状态码 2xx/3xx 视为成功。最常用。</li>
+          <li><strong>tcpSocket</strong>：TCP 连接能建立即成功。用于非 HTTP 服务（MySQL、Redis）。</li>
+          <li><strong>exec</strong>：在容器内执行命令，退出码 0 视为成功。灵活但开销略大。</li>
+        </ul>
+
+        <h3>5.2 完整探针 YAML 示例</h3>
+        <pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: web-probes
+  labels:
+    app: web
+spec:
+  containers:
+    - name: web
+      image: nginx:1.25
+      ports:
+        - containerPort: 80
+      # === 启动探针：保护慢启动应用 ===
+      startupProbe:
+        httpGet:
+          path: /healthz
+          port: 80
+        failureThreshold: 30      # 允许连续失败 30 次
+        periodSeconds: 10         # 每 10s 探一次 → 最长等 5 分钟
+      # === 就绪探针：失败就摘流量 ===
+      readinessProbe:
+        httpGet:
+          path: /ready
+          port: 80
+        initialDelaySeconds: 5    # 容器启动后 5s 才开始探
+        periodSeconds: 5
+        failureThreshold: 3       # 连续 3 次失败 → 摘流量
+      # === 存活探针：失败就重启 ===
+      livenessProbe:
+        httpGet:
+          path: /healthz
+          port: 80
+        initialDelaySeconds: 15
+        periodSeconds: 10
+        failureThreshold: 3
+        timeoutSeconds: 2</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">没有探针会怎样</div>
+          <p>
+            不配探针时，K8s 只看<strong>容器进程是否在运行</strong>，无法感知应用内部死活。
+            典型坑：Java 应用启动 2 分钟，期间没配 startup 探针 → liveness 在第 30 秒就开始探，
+            连续失败就重启 → 永远起不来（CrashLoopBackOff）。生产 Pod 一定要三类探针齐全。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">探针参数调优建议</div>
+          <ul>
+            <li><code>initialDelaySeconds</code>：留够应用启动时间，慢启动应用宁可设大点。</li>
+            <li><code>periodSeconds</code>：默认 10s，对延迟敏感可降到 5s，过低会增加压力。</li>
+            <li><code>failureThreshold</code>：默认 3 次，避免单次抖动误判，关键服务可调到 5。</li>
+            <li><code>timeoutSeconds</code>：默认 1s，HTTP 探针一般够，慢接口建议 2-3s。</li>
+            <li>慢启动应用用 <code>startupProbe</code> 替代 <code>initialDelaySeconds</code> 的「盲等」。</li>
+          </ul>
+        </div>
+
+        <h2>6. Pod 优雅终止</h2>
+        <p>
+          直接 <code>kubectl delete pod</code> 时，K8s 不会立刻 kill 容器，而是走一段「优雅终止」流程，
+          给应用留出收尾时间。这段流程理解错了，就是「发版丢请求」的元凶。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">Pod 终止流程</div>
+          <pre><code>1. kubelet 设置 Pod 为 Terminating，从 Service endpoints 摘除
+2. 同时执行 preStop hook（如果有）
+3. 给容器发 SIGTERM，应用开始收尾（关闭连接、flush 缓存）
+4. 等待 terminationGracePeriodSeconds（默认 30s）
+5. 时间到还没退出 → 发 SIGKILL 强杀
+6. 清理卷、删 Pod 对象</code></pre>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-title">为什么直接 kill Pod 会丢请求</div>
+          <p>
+            关键时间差：Pod 被摘出 endpoints <strong>和</strong> kube-proxy 同步 iptables/IPVS 规则
+            是异步的，<strong>客户端可能还按旧规则往这个 Pod 发请求</strong>。如果此时立刻 SIGKILL，
+            这些在途请求就丢了。解决：用 <code>preStop hook</code> 让 Pod 多睡一会儿，
+            等客户端的连接都断开。
+          </p>
+        </div>
+
+        <pre><code># 完整优雅终止示例：preStop hook + 缩短 grace period
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-graceful
+spec:
+  terminationGracePeriodSeconds: 60   # 最多等 60s 才强杀
+  containers:
+    - name: web
+      image: nginx:1.25
+      lifecycle:
+        preStop:                       # 在 SIGTERM 之前执行
+          exec:
+            command:
+              - sh
+              - -c
+              - |
+                echo "draining..."
+                nginx -s quit          # 让 nginx 处理完现有连接再退
+                sleep 15               # 关键：等 kube-proxy 规则同步完</code></pre>
+
+        <p>
+          典型坑：用了 nginx 但没配 <code>preStop</code>，nginx 收到 SIGTERM 直接退出，
+          iptables 规则可能还没更新完，正在途的请求被 RST。生产服务发版丢请求数第一的元凶。
+        </p>
+
+        <h2>7. Pod 调试命令速查</h2>
+        <pre><code># 看 Pod 列表和所在节点、IP、状态
+kubectl get pods -o wide
+kubectl get pods -n kube-system -o wide
+
+# 看详细信息和 Events（排查起不来的第一站）
+kubectl describe pod &lt;pod-name&gt;
+
+# 看日志（-c 指定多容器的某一个；--previous 看上一个挂掉的容器）
+kubectl logs &lt;pod-name&gt; [-c container-name] -f
+kubectl logs --previous &lt;pod-name&gt;
+
+# 进入容器
+kubectl exec -it &lt;pod-name&gt; -- /bin/sh
+kubectl exec -it &lt;pod-name&gt; -c sidecar -- /bin/sh
+
+# 端口转发（本地调试 Pod，不经过 Service）
+kubectl port-forward &lt;pod-name&gt; 8080:80
+# 然后浏览器访问 http://localhost:8080
+
+# 临时跑一个调试 Pod，用完即删
+kubectl run debug --image=nicolaka/netshoot --rm -it -- sh
+
+# 看 Pod 的 YAML（看 K8s 自动补的字段，如 serviceAccount、nodeSelector）
+kubectl get pod &lt;pod-name&gt; -o yaml
+
+# 看 Pod 的资源占用（需要 metrics-server）
+kubectl top pod
+kubectl top pod -l app=web --sort-by=memory</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">排查 Pod 起不来的三步法</div>
+          <ul>
+            <li>第一步：<code>kubectl get pod</code> 看 Phase 状态。</li>
+            <li>第二步：<code>kubectl describe pod</code> 看 Events 段（FailedScheduling / ErrImagePull / CrashLoopBackOff）。</li>
+            <li>第三步：<code>kubectl logs</code> / <code>kubectl logs --previous</code> 看应用日志。</li>
+          </ul>
+        </div>
+
+        <h2>8. 面试高频题</h2>
+
+        <div class="callout">
+          <div class="callout-title">Q1：Pod 有哪些状态？</div>
+          <p>
+            Pod 级别 Phase 有 5 种：Pending、Running、Succeeded、Failed、Unknown。
+            注意 <code>CrashLoopBackOff</code>、<code>ImagePullBackOff</code> 这些其实不是 Phase，
+            而是 Container State 的<strong>等待原因（Reason）</strong>，体现在 <code>kubectl get pod</code> 的
+            READY 列旁边的状态字符串。排查时先 <code>describe</code> 看 Events，再 <code>logs --previous</code>。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q2：三类探针的区别？</div>
+          <p>
+            <strong>liveness</strong> 失败 → 重启容器；<strong>readiness</strong> 失败 → 摘流量不重启；
+            <strong>startup</strong> 只在启动期生效，启动期间禁用 liveness，避免慢启动应用被误杀。
+            生产建议三类齐配，readiness 是流量控制核心，liveness 用于死锁兜底。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q3：QoS 等级是什么？怎么划分？</div>
+          <p>
+            QoS 是 K8s 根据 Pod 的 requests/limits 自动算出来的优先级，
+            分 Guaranteed（requests=limits）、Burstable（部分设置）、BestEffort（全不设）三档。
+            节点资源紧张时按 BestEffort → Burstable → Guaranteed 顺序驱逐。
+            生产关键服务要保证 Guaranteed：所有容器 requests 和 limits 设成相等。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q4：Init Container 和 Sidecar 的区别？</div>
+          <p>
+            Init Container 在主容器之前<strong>串行运行</strong>，必须成功退出（exit 0）才进入下一阶段，
+            用于依赖等待、配置初始化。Sidecar 和主容器<strong>并行长期运行</strong>，不退出，
+            用于日志/监控/代理。两者都和主容器共享网络和存储，但生命周期完全不同。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Pod 是 K8s 最小调度单元，包了一组共享网络/存储的容器，解耦了运行时差异。</li>
+          <li>Pod Phase 是高层状态，Container State 是单容器状态；Running 不等于就绪，要看 readiness。</li>
+          <li>Init Container 串行先跑完退出，Sidecar 和主容器并行；常见模式还有 Ambassador、Adapter。</li>
+          <li>requests 是调度保障，limits 是上限；CPU 用 m，内存用 Mi/Gi。</li>
+          <li>QoS 三等级：Guaranteed（requests=limits）最稳，BestEffort 最易被驱逐。</li>
+          <li>三类探针：liveness 重启、readiness 摘流量、startup 保护慢启动；生产要全配。</li>
+          <li>优雅终止靠 preStop hook + terminationGracePeriodSeconds，避免发版丢在途请求。</li>
+          <li>排查 Pod 起不来三步：get 看状态 → describe 看 Events → logs 看日志。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="readinessProbe 失败时 Pod 从 Service endpoints 摘除、不接收新流量，但容器不会被重启；liveness 失败才会重启。">
+            <div class="quiz-question">1. （单选）readinessProbe 探测失败时，K8s 会做什么？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 重启该容器</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 删除该 Pod 重建</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 从 Service 摘除流量但不重启</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 把 Pod 调度到其他节点</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="只有当所有容器都设置了 requests=limits（且 CPU、内存都设），Pod 才会被判为 Guaranteed。">
+            <div class="quiz-question">2. （单选）下列哪种配置的 Pod 会被划为 Guaranteed QoS 等级？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. 所有容器 CPU 和内存的 requests=limits</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. 只设了 limits，没设 requests</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. requests 和 limits 都不设</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. 只设了 CPU requests，内存全不设</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D"
+               data-explain="Pending 表示 Pod 还未调度成功或镜像/卷在准备中，常见于资源不足；CrashLoopBackOff 是 Container State 而非 Phase。">
+            <div class="quiz-question">3. （单选）Pod 一直卡在 Pending 状态，最可能的原因是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. 应用启动后立刻崩溃</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. 镜像拉取失败反复重试</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. livenessProbe 连续失败导致重启</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. 没有节点能满足资源 requests 或调度约束</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="Init Container|initContainers|init container|初始化容器|Init|init"
+               data-explain="Init Container 在主容器之前串行运行，必须 exit 0 才能进入下一阶段，常用于等待依赖、初始化配置；与并行运行的 Sidecar 不同。">
+            <div class="quiz-question">4. （填空）在主容器之前串行运行、必须成功退出才会启动主容器的容器叫什么？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s 深度专题 · 第 27 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=3"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

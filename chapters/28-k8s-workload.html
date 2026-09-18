@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第28章 Workload 资源管理 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="28-k8s-workload">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 28 章</span>
+          <span class="meta-tag">K8s 专题</span>
+          <span class="meta-tag">约 40 分钟</span>
+        </div>
+        <h1>Workload 资源管理</h1>
+        <p>
+          前一章我们讲了 Pod，但生产里几乎不会直接创建裸 Pod——挂了没人管、不能滚动更新、
+          副本数没法扩缩。本章覆盖 K8s 的五大 Workload 资源：ReplicaSet、Deployment、
+          StatefulSet、DaemonSet、Job/CronJob，重点拆 Deployment 滚动更新原理和 StatefulSet
+          为什么是有状态应用的唯一选择。学完你能根据场景挑对 Workload，并答出
+          「Deployment 滚动更新原理」「StatefulSet 和 Deployment 区别」等高频面试题。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Workload 控制器模式：期望状态 vs 实际状态</li>
+          <li>掌握 Deployment 滚动更新、回滚、Recreate 策略及参数调优</li>
+          <li>能解释 StatefulSet 的稳定标识、有序部署和固定存储</li>
+          <li>会用 DaemonSet 部署节点级 Agent，理解新节点自动加入</li>
+          <li>会写 Job 和 CronJob，区分 backoffLimit / completions / schedule</li>
+          <li>能根据应用场景在五种 Workload 中正确选型</li>
+        </ul>
+
+        <h2>1. 为什么需要 Workload 资源</h2>
+        <p>
+          直接 <code>kubectl run</code> 出来的裸 Pod 看似简单，生产却几乎不用，原因有三个：
+        </p>
+        <ul>
+          <li><strong>挂了没人管</strong>：Pod 节点故障或被删，不会自动重建副本。</li>
+          <li><strong>不能滚动更新</strong>：换镜像版本要么手删手建，要么停服。</li>
+          <li><strong>副本数不可控</strong>：扩缩容得手动操作，没法和 HPA 联动。</li>
+        </ul>
+
+        <div class="term-card">
+          <div class="term-name">控制器模式（Reconcile Loop）</div>
+          <p>
+            所有 Workload 本质都是<strong>控制器</strong>：持续比较<strong>期望状态</strong>（用户在 spec 里写的）
+            和<strong>实际状态</strong>（集群里当前的），发现差异就做出动作让两者一致。
+            比如期望 3 副本、实际只剩 2，就再创建 1 个。这种循环叫 Reconcile Loop（调谐循环），
+            是 K8s 声明式模型的核心机制。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">声明式 vs 命令式</div>
+          <p>
+            命令式：<code>kubectl run nginx --image=nginx</code>，告诉 K8s「现在干这个」。
+            声明式：<code>kubectl apply -f deploy.yaml</code>，告诉 K8s「我要的状态是这样，你来对齐」。
+            声明式天然支持版本管理、可重入、可 diff，生产全部用声明式 + GitOps。
+          </p>
+        </div>
+
+        <h2>2. ReplicaSet</h2>
+        <p>
+          ReplicaSet（RS）的作用很简单：维持指定数量的 Pod 副本，少了就建，多了就删。
+        </p>
+
+        <pre><code>apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: web-rs
+spec:
+  replicas: 3                    # 期望 3 个副本
+  selector:                      # 选中哪些 Pod 归自己管
+    matchLabels:
+      app: web
+  template:                      # Pod 模板
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.25
+          ports:
+            - containerPort: 80</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">实际不直接用 ReplicaSet</div>
+          <p>
+            生产中<strong>几乎不会直接写 ReplicaSet YAML</strong>。原因：RS 不支持滚动更新和回滚，
+            改镜像版本只能删旧建新。正确做法是用 Deployment，Deployment 自动管理 ReplicaSet
+            （每次发版会生成一个新 RS，旧 RS 副本数逐步降到 0 但不删，方便回滚）。
+          </p>
+        </div>
+
+        <h2>3. Deployment（重点）</h2>
+        <p>
+          Deployment 是日常用得最多的 Workload。它在 ReplicaSet 之上加了一层
+          <strong>版本管理</strong>：每次改 Pod 模板（比如换镜像版本），Deployment 会创建一个新 RS，
+          通过新老 RS 的副本数此消彼长，完成滚动更新。
+        </p>
+
+        <h3>3.1 完整 YAML（带滚动策略）</h3>
+        <pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-deploy
+  labels:
+    app: web
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: web
+  strategy:
+    type: RollingUpdate         # 滚动更新策略
+    rollingUpdate:
+      maxSurge: 1               # 升级过程中最多超出期望副本数 1 个
+      maxUnavailable: 0         # 升级过程中最多比期望少 0 个 → 零停机
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.25
+          ports:
+            - containerPort: 80</code></pre>
+
+        <h3>3.2 滚动更新原理</h3>
+        <p>
+          改镜像触发滚动更新时，Deployment 不直接动现有 Pod，而是创建一个新 ReplicaSet，
+          副本数从 0 开始逐步往上加；同时旧 ReplicaSet 副本数往下减。整个过程
+          <strong>新老版本 Pod 短暂共存</strong>，靠 maxSurge / maxUnavailable 控制节奏。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">滚动更新过程图</div>
+          <pre><code>  replicas=4  maxSurge=1  maxUnavailable=0
+  ┌─────────────┐
+  │ 旧 RS (v1)  │ 4 副本
+  │  新 RS (v2) │ 0 副本
+  └─────────────┘
+         │ set image nginx:1.26
+         ▼
+  ┌─────────────┐
+  │ 旧 RS (v1)  │ 3 副本（先减 1）
+  │  新 RS (v2) │ 1 副本（多建 1 个）
+  └─────────────┘
+         │ ...继续滚动
+         ▼
+  ┌─────────────┐
+  │ 旧 RS (v1)  │ 0 副本（不删，留作回滚）
+  │  新 RS (v2) │ 4 副本（最终状态）
+  └─────────────┘</code></pre>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-title">maxSurge 和 maxUnavailable 的取舍</div>
+          <p>
+            <strong>maxSurge=0</strong>：升级时不允许多建 Pod → 必须<strong>先删旧再建新</strong>，
+            会有一段时间副本数不足，<strong>有停机风险</strong>。优点是不需要额外资源。
+            <strong>maxUnavailable=0</strong>：升级时不允许少于期望副本数 → 必须<strong>先建新再删旧</strong>，
+            <strong>保证零停机</strong>。代价是升级期间会有 surge 个多余 Pod 抢资源。
+            生产 7×24 服务建议 <code>maxUnavailable=0, maxSurge=1</code>（或更高）。
+          </p>
+        </div>
+
+        <h3>3.3 实战命令</h3>
+        <pre><code># 触发滚动更新（改镜像）
+kubectl set image deploy/web-deploy web=nginx:1.26
+
+# 看滚动更新状态（阻塞直到完成或失败）
+kubectl rollout status deploy/web-deploy
+
+# 查看历史版本（每个 revision 对应一个 ReplicaSet）
+kubectl rollout history deploy/web-deploy
+kubectl rollout history deploy/web-deploy --revision=2
+
+# 回滚到上一版本
+kubectl rollout undo deploy/web-deploy
+
+# 回滚到指定版本
+kubectl rollout undo deploy/web-deploy --to-revision=2
+
+# 暂停 / 恢复滚动更新（用于灰度：先放一小部分流量观察）
+kubectl rollout pause deploy/web-deploy
+kubectl rollout resume deploy/web-deploy
+
+# 重启 Deployment（不改版本，重建所有 Pod，常用于强制重新拉镜像）
+kubectl rollout restart deploy/web-deploy</code></pre>
+
+        <h3>3.4 Recreate vs RollingUpdate</h3>
+        <pre><code># Recreate 策略：先全删旧 Pod，再建新 Pod
+spec:
+  strategy:
+    type: Recreate       # 有停机，但能避免新老版本并存的不兼容</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">Recreate 还是 RollingUpdate？</div>
+          <ul>
+            <li><strong>RollingUpdate</strong>（默认）：新老共存，零停机。适合无状态、前后兼容的应用。</li>
+            <li><strong>Recreate</strong>：先全删再建，有停机。适合<strong>不允许多实例并存</strong>的应用，
+                比如单实例任务型、数据格式不兼容的新老版本（旧 Pod 必须先退干净）。</li>
+            <li>建议生产无状态服务一律 RollingUpdate + maxUnavailable=0。</li>
+          </ul>
+        </div>
+
+        <h2>4. StatefulSet</h2>
+        <p>
+          有状态应用（MySQL、Redis Cluster、ZooKeeper、Elasticsearch）用 Deployment 会翻车，
+          因为它们对<strong>网络标识、启动顺序、持久化存储</strong>有强依赖。
+        </p>
+
+        <h3>4.1 为什么 Deployment 不能跑有状态应用</h3>
+        <ul>
+          <li><strong>Pod 名随机</strong>：Deployment 的 Pod 名带随机后缀（<code>web-deploy-7b89f6c4d-abc12</code>），客户端没法靠名字连。</li>
+          <li><strong>无序启停</strong>：滚动更新时 Pod 是无序的，主从角色没法保证先主后从。</li>
+          <li><strong>存储不固定</strong>：Pod 重建后挂的是新卷，数据丢了。</li>
+        </ul>
+
+        <div class="term-card">
+          <div class="term-name">StatefulSet 的三大特性</div>
+          <p>
+            <strong>稳定网络标识</strong>：Pod 名固定为 <code>&lt;sts-name&gt;-0/1/2…</code>，
+            配合 Headless Service 可以 <code>pod-0.svc-name</code> 直连。
+            <strong>有序启停</strong>：部署/扩容<strong>从 0 开始顺序</strong>（pod-0 → pod-1），
+            删除<strong>逆序</strong>（pod-N → pod-0）。
+            <strong>固定存储</strong>：通过 <code>volumeClaimTemplates</code>，
+            每个 Pod 绑定固定的 PVC，重建后挂回原卷。
+          </p>
+        </div>
+
+        <h3>4.2 完整 YAML（Headless Service + volumeClaimTemplates）</h3>
+        <pre><code># 1) Headless Service：返回 Pod IP 而非负载均衡 IP
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-headless
+spec:
+  clusterIP: None             # 关键：None 才是 Headless
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+---
+# 2) StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  serviceName: mysql-headless  # 必须绑 Headless Service
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: password
+  volumeClaimTemplates:         # 每个 Pod 自动生成一个固定 PVC
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">StatefulSet 必备三件套</div>
+          <p>
+            StatefulSet 通常要配 <strong>Headless Service</strong>（让 DNS 返回每个 Pod 的 IP）
+            + <strong>PVC/PV</strong>（固定存储，推荐用 StorageClass 动态供给）+
+            <strong>有序脚本或 init container</strong>（区分主从角色，如通过 ordinal index
+            <code>0=主，>0=从</code>）。三者缺一，有状态应用都跑不稳。
+          </p>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-title">典型场景：MySQL / Redis / ZooKeeper</div>
+          <p>
+            这些应用都需要<strong>稳定身份</strong>（主从互连用 hostname）、<strong>有序启动</strong>（先选主再起从）、
+            <strong>持久化数据</strong>（重启数据不能丢），正好是 StatefulSet 三大特性的对应。
+            生产部署它们首选 StatefulSet + 持久化存储 + Headless Service。
+          </p>
+        </div>
+
+        <h2>5. DaemonSet</h2>
+        <p>
+          DaemonSet 保证<strong>每个（或指定）节点上运行一个 Pod 副本</strong>。新节点加入集群自动起，
+          节点被驱逐或删除，Pod 也跟着消失。典型用途是节点级基础设施。
+        </p>
+
+        <pre><code>apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-exporter
+  namespace: monitoring
+  labels:
+    app: node-exporter
+spec:
+  selector:
+    matchLabels:
+      app: node-exporter
+  template:
+    metadata:
+      labels:
+        app: node-exporter
+    spec:
+      hostNetwork: true           # 用宿主机网络，省一层 NAT
+      hostPID: true                # 能看到宿主机进程，便于采集
+      containers:
+        - name: node-exporter
+          image: prom/node-exporter:v1.7.0
+          ports:
+            - containerPort: 9100
+              hostPort: 9100       # 直接暴露到宿主机端口
+      tolerations:                 # 容忍 master 污点，让 master 也采
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">DaemonSet 典型场景</div>
+          <ul>
+            <li><strong>日志采集</strong>：Fluentd、Filebeat、Vector，每节点读容器日志。</li>
+            <li><strong>监控 Agent</strong>：Node Exporter、Telegraf，采集节点指标。</li>
+            <li><strong>网络插件</strong>：Calico、Flannel、Cilium 的节点组件。</li>
+            <li><strong>存储插件</strong>：CSI driver 的节点端，如 RBD/Ceph-CSI。</li>
+          </ul>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">新节点自动运行 Pod</div>
+          <p>
+            DaemonSet 的调度由 DaemonSet Controller + 调度器协作：集群新加一台 Node，
+            <strong>无需手动操作</strong>，符合 selector 的 Pod 会自动在该节点拉起；
+            节点被移除时 Pod 自动清理。和 Deployment 的「按副本数调度」是两套机制。
+          </p>
+        </div>
+
+        <h2>6. Job 和 CronJob</h2>
+        <p>
+          有些任务就是要「跑完就退」（如数据迁移、备份），用 Deployment 反而奇怪（容器退了会重启）。
+          Job 就是为这种<strong>一次性任务</strong>设计的。
+        </p>
+
+        <h3>6.1 Job</h3>
+        <pre><code>apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+spec:
+  completions: 1               # 期望成功完成几次
+  parallelism: 1                # 同时跑几个
+  backoffLimit: 4               # 失败重试上限，超过标记 Job Failed
+  activeDeadlineSeconds: 600   # 总耗时上限，超时强制停
+  template:
+    spec:
+      restartPolicy: OnFailure  # Job 必须显式设这个，不能是 Always
+      containers:
+        - name: migrate
+          image: myapp/migrate:v1
+          command: ["./migrate.sh"]</code></pre>
+
+        <div class="term-card">
+          <div class="term-name">Job 关键字段</div>
+          <p>
+            <strong>completions</strong>：目标成功次数（默认 1）。
+            <strong>parallelism</strong>：并发执行数，用于批处理加速。
+            <strong>backoffLimit</strong>：失败重试上限，超出后整个 Job 标记 Failed。
+            <strong>activeDeadlineSeconds</strong>：总超时，超时强制停。
+            <strong>restartPolicy</strong>：Job 只能选 <code>OnFailure</code> 或 <code>Never</code>，<strong>不能是 Always</strong>。
+          </p>
+        </div>
+
+        <h3>6.2 CronJob</h3>
+        <pre><code>apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-backup
+spec:
+  schedule: "0 2 * * *"         # 每天 02:00 执行（cron 格式）
+  concurrencyPolicy: Forbid     # 上次没跑完就跳过本次
+  successfulJobsHistoryLimit: 3 # 保留最近 3 次成功的 Job
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: myapp/backup:v1
+              command: ["./backup.sh"]</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">schedule 和 Linux crontab 完全一致</div>
+          <p>
+            CronJob 的 <code>schedule</code> 是标准 5 段 cron 表达式
+            <code>分 时 日 月 周</code>，<strong>时区默认是 K8s 控制平面所在时区</strong>
+            （通常是 UTC！生产强烈建议显式设时区，K8s 1.25+ 支持 <code>timeZone: Asia/Shanghai</code>）。
+            常见坑：在 UTC 集群上写 <code>0 2 * * *</code>，实际是北京时间早上 10 点才跑。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">CronJob 典型场景</div>
+          <ul>
+            <li><strong>数据库定时备份</strong>：mysqldump / pg_dump。</li>
+            <li><strong>数据 ETL / 清洗</strong>：每天凌晨跑批。</li>
+            <li><strong>证书续期</strong>：Let's Encrypt / 自签证书自动签。</li>
+            <li><strong>定时报表生成</strong>：生成日报/周报推送到 IM。</li>
+          </ul>
+        </div>
+
+        <h2>7. Workload 选择决策表</h2>
+        <div class="callout">
+          <div class="callout-title">什么场景用什么 Workload</div>
+          <pre><code>场景                              | 推荐 Workload
+----------------------------------+----------------
+Web/API 无状态服务                | Deployment
+MySQL/Redis/ZK 等有状态服务       | StatefulSet
+节点级日志/监控/网络 Agent        | DaemonSet
+一次性任务（迁移、批处理）        | Job
+定时任务（备份、ETL）             | CronJob
+CI/CD pipeline 临时构建           | Job</code></pre>
+          <p>
+            口诀：<strong>无状态 Deployment，有状态 StatefulSet，
+            节点级 DaemonSet，跑完退 Job，定时跑 CronJob</strong>。
+            生产 90% 的服务是 Deployment，剩下按场景分流。
+          </p>
+        </div>
+
+        <h2>8. 面试高频题</h2>
+
+        <div class="callout">
+          <div class="callout-title">Q1：Deployment 和 StatefulSet 的区别？</div>
+          <p>
+            Deployment 管<strong>无状态</strong>应用，Pod 名随机、无序启停、共享存储；
+            StatefulSet 管<strong>有状态</strong>应用，Pod 名固定（pod-0/1/2）、有序部署和删除、
+            通过 volumeClaimTemplates 绑定固定 PVC，配合 Headless Service 提供稳定 DNS。
+            Deployment 用 ReplicaSet 做版本管理支持滚动更新/回滚；StatefulSet 自己按 ordinal 滚动。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q2：说说 Deployment 滚动更新的原理</div>
+          <p>
+            改 Pod 模板触发更新，Deployment <strong>不直接改现有 Pod</strong>，而是创建一个新 ReplicaSet
+            （副本数从 0 起），同时把旧 RS 副本数往下减。<strong>新老 RS 同时存在</strong>，
+            副本数此消彼长，节奏由 maxSurge（最多多几个）和 maxUnavailable（最多少几个）控制。
+            旧 RS 不删，副本数置 0，留作回滚（<code>kubectl rollout undo</code> 把旧 RS 拉起来）。
+            想要零停机：<code>maxUnavailable=0</code>，让旧 Pod 一直在直到新 Pod 就绪。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q3：什么场景用 DaemonSet？</div>
+          <p>
+            需要<strong>每个节点跑一个副本</strong>的基础设施类场景：日志采集（Fluentd/Filebeat）、
+            监控 Agent（Node Exporter）、网络插件（Calico/Flannel）、存储 CSI 节点端。
+            新节点加入集群自动起 Pod，节点移除自动清。常配 <code>hostNetwork: true</code>
+            和污点容忍（让 master 也部署）。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q4：Job 和 CronJob 的区别？</div>
+          <p>
+            Job 是<strong>一次性任务</strong>，跑完退出（completions/backoffLimit 控制）；
+            CronJob 在 Job 之上加了 <code>schedule</code>（cron 表达式）字段，
+            <strong>按时间定时触发</strong> Job。CronJob 的关键参数还有 concurrencyPolicy
+            （Forbid 禁止并发、Allow 允许、Replace 替换未完成的）和 history 保留数。
+            Job 的 restartPolicy 只能是 OnFailure / Never。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Workload 资源本质是控制器：持续 Reconcile 让实际状态对齐期望状态。</li>
+          <li>ReplicaSet 维持副本数，但生产用 Deployment 管理 RS，支持滚动更新/回滚。</li>
+          <li>Deployment 滚动更新靠新老 RS 副本数此消彼长；maxUnavailable=0 实现零停机。</li>
+          <li>Recreate 策略先全删再建有停机，适合新老不兼容场景；默认 RollingUpdate。</li>
+          <li>StatefulSet 提供稳定网络标识、有序启停、固定存储，是有状态应用的唯一选择。</li>
+          <li>StatefulSet 必须配 Headless Service 和 PVC（推荐 StorageClass 动态供给）。</li>
+          <li>DaemonSet 每节点一个副本，新节点自动加入，用于日志/监控/网络/存储 Agent。</li>
+          <li>Job 跑完即退（completions/backoffLimit）；CronJob 定时触发 Job，schedule 用 cron 格式。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="StatefulSet 提供 Pod 名固定、有序启停、固定 PVC 存储，适合 MySQL/Redis/ZK 这类有状态应用；Deployment 的 Pod 名随机、存储不固定。">
+            <div class="quiz-question">1. （单选）部署一个 MySQL 主从集群，应该用哪种 Workload？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. Deployment</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. StatefulSet</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. DaemonSet</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. Job</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="maxUnavailable=0 表示升级期间不允许少于期望副本数，必须先建新 Pod 再删旧 Pod，从而保证零停机；maxSurge=0 反而会先删旧 Pod 导致短暂少副本。">
+            <div class="quiz-question">2. （单选）Deployment 滚动更新时，要保证零停机，应该怎么设置？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. maxSurge=0 且 maxUnavailable=0</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. maxSurge=0 且 maxUnavailable=1</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. maxSurge=1 且 maxUnavailable=0</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. 改用 Recreate 策略</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="DaemonSet 保证每个节点运行一个 Pod 副本，新节点自动起 Pod，典型用于日志采集、监控 Agent、网络插件这类节点级基础设施。">
+            <div class="quiz-question">3. （单选）在每个节点上部署一个 Node Exporter 监控 Agent，最合适的 Workload 是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. DaemonSet</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. StatefulSet</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. Job</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. Deployment with replicas=节点数</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="CronJob|cronjob|Cron Job|cron job|定时任务"
+               data-explain="CronJob 在 Job 之上加了 schedule 字段（cron 表达式），按时间定时触发 Job 执行；schedule 格式与 Linux crontab 一致，注意默认时区可能是 UTC。">
+            <div class="quiz-question">4. （填空）在 Job 之上增加 schedule 字段实现定时触发任务的 Workload 叫什么？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s 深度专题 · 第 28 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=3"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

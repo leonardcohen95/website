@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第30章 存储与配置管理 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="30-k8s-storage">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 30 章</span>
+          <span class="meta-tag">K8s 专题</span>
+          <span class="meta-tag">约 40 分钟</span>
+        </div>
+        <h1>存储与配置管理</h1>
+        <p>
+          容器的文件系统是临时的，Pod 一删数据就没了。要让数据持久、配置与镜像解耦，K8s 提供
+          了 Volume、PV/PVC、StorageClass、ConfigMap、Secret 这套完整的存储与配置体系。本章从
+          存储全景讲到动态供给、StatefulSet 有状态存储，再到 ConfigMap 热更新与 Secret 安全
+          性。学完你能回答面试中「PV 和 PVC 的关系」「什么是 StorageClass」「ConfigMap 热更新
+          生效吗」「Secret 安全吗」等高频问题，并能写出生产可用的存储与配置清单。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 K8s 存储体系全景：Volume → PV/PVC → StorageClass 的层次关系</li>
+          <li>掌握 emptyDir、hostPath、configMap、secret 等 Volume 类型的用法与坑</li>
+          <li>能编写 PV/PVC 并理解绑定关系、回收策略与 AccessModes</li>
+          <li>掌握 StorageClass 动态供给流程，能写 StatefulSet + volumeClaimTemplates</li>
+          <li>掌握 ConfigMap 两种使用方式及热更新行为的差异</li>
+          <li>理解 Secret 的安全局限，掌握配置最佳实践与常见坑（SubPath 等）</li>
+        </ul>
+
+        <h2>1. K8s 存储体系全景</h2>
+        <p>
+          K8s 存储按抽象层次从低到高分为三档：<strong>Volume</strong>（最底层，Pod 级别）、
+          <strong>PV/PVC</strong>（持久化，集群级）、<strong>StorageClass</strong>（动态供给）。
+          理解这三档的分工，是掌握 K8s 存储的钥匙。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">K8s 存储层次一图流</div>
+          <pre><code>            ┌──────────────────────────────────────────────┐
+            │   StorageClass（动态供给模板）                  │
+            │   provisioner: nfs-client / csi / rbd ...      │
+            │   （PVC 引用 SC 后，自动创建 PV）                  │
+            └───────────────────────┬──────────────────────┘
+                                    │ 自动创建
+                                    ▼
+            ┌──────────────────────────────────────────────┐
+            │   PV (PersistentVolume)   ←→  PVC (Claim)     │
+            │   管理员创建的存储资源      用户申请存储           │
+            │   （AccessModes、容量、回收策略）                  │
+            └───────────────────────┬──────────────────────┘
+                                    │ 绑定后挂载
+                                    ▼
+            ┌──────────────────────────────────────────────┐
+            │   Volume（Pod spec 里直接声明）                  │
+            │   emptyDir / hostPath / configMap / secret     │
+            │   （生命周期跟随 Pod，最灵活但最不持久）            │
+            └──────────────────────────────────────────────┘</code></pre>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">三档抽象一句话</div>
+          <p>
+            <strong>Volume</strong>：Pod 内挂载，跟着 Pod 生灭，最灵活。
+            <strong>PV/PVC</strong>：把存储和 Pod 解耦，Pod 删了数据还在，但 PV 要管理员手动建。
+            <strong>StorageClass</strong>：让 PVC 自己「按需」自动创建 PV，省去人工，是生产标配。
+          </p>
+        </div>
+
+        <h2>2. Volume 类型</h2>
+        <p>Volume 在 Pod 的 spec.volumes 里声明，再由容器 spec.volumeMounts 挂载到某个路径。</p>
+
+        <h3>2.1 emptyDir：Pod 内临时共享</h3>
+        <p>Pod 一创建就有，Pod 删除即消失。常用于多容器共享临时文件、缓存目录。</p>
+        <pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: shared-pod
+spec:
+  volumes:
+    - name: shared-data         # 卷名
+      emptyDir: {}              # 空，Pod 内创建，Pod 删了就没
+  containers:
+    - name: writer
+      image: busybox
+      volumeMounts:
+        - name: shared-data
+          mountPath: /data      # writer 写到 /data
+      command: ["sh","-c","while true; do echo hi &gt; /data/file; sleep 5; done"]
+    - name: reader
+      image: busybox
+      volumeMounts:
+        - name: shared-data
+          mountPath: /app/data   # reader 从 /app/data 读到同一份文件
+      command: ["sh","-c","tail -f /app/data/file"]</code></pre>
+
+        <h3>2.2 hostPath：挂载节点目录</h3>
+        <p>把节点的真实目录挂进 Pod，Pod 能直接读写宿主机文件。</p>
+        <pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: node-log-reader
+spec:
+  volumes:
+    - name: host-logs
+      hostPath:
+        path: /var/log           # 挂载节点的 /var/log
+        type: Directory          # 必须是已存在的目录
+  containers:
+    - name: reader
+      image: busybox
+      volumeMounts:
+        - name: host-logs
+          mountPath: /host-logs
+          readOnly: true         # 只读，避免误改宿主机</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">hostPath 生产慎用</div>
+          <p>
+            hostPath 让 Pod 直接读写宿主机文件，<strong>破坏隔离</strong>：能读到其他 Pod/系统文件，
+            甚至覆盖系统配置；Pod 漂移到别的节点后数据也丢了。生产几乎只在节点级 agent
+            （如 node-exporter、日志采集器）这类必须访问宿主机的场景才用，并配合 nodeSelector
+            固定节点、readOnly 限制权限。普通业务数据请用 PV/PVC。
+          </p>
+        </div>
+
+        <h3>2.3 configMap / secret 卷</h3>
+        <p>把 ConfigMap/Secret 的每个 key 作为文件挂进 Pod，是「配置即文件」的主流方式，
+          后面 ConfigMap/Secret 章节详讲。</p>
+
+        <h2>3. PersistentVolume (PV) 和 PersistentVolumeClaim (PVC)</h2>
+        <p>
+          PV 是<strong>管理员</strong>创建的一块持久化存储资源（NFS、Ceph RBD、云盘等）；
+          PVC 是<strong>用户</strong>对存储的申请（要多大、什么访问模式）。PVC 找到匹配的 PV
+          后绑定，Pod 再通过 PVC 用这块存储。
+        </p>
+
+        <h3>3.1 PV 示例（NFS）</h3>
+        <pre><code>apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-pv-1
+spec:
+  capacity:
+    storage: 5Gi                # 这块 PV 的容量
+  accessModes:
+    - ReadWriteMany             # 访问模式，见下文
+  persistentVolumeReclaimPolicy: Retain   # 回收策略
+  nfs:
+    path: /data/share1          # NFS 服务器上的路径
+    server: 192.168.1.100       # NFS 服务器地址
+    readOnly: false</code></pre>
+
+        <h3>3.2 PVC 示例（申请存储）</h3>
+        <pre><code>apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-data-pvc
+spec:
+  accessModes:
+    - ReadWriteMany             # 必须和 PV 的 accessModes 能匹配
+  resources:
+    requests:
+      storage: 5Gi              # 申请 5Gi，匹配到容量 &gt;= 5Gi 的 PV
+  # storageClassName: ""       # 用静态 PV 时设为空串；指定 SC 走动态供给
+---
+# Pod 使用 PVC
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app
+spec:
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: app-data-pvc # 引用上面的 PVC
+  containers:
+    - name: app
+      image: myapp
+      volumeMounts:
+        - name: data
+          mountPath: /app/data  # 挂到容器的 /app/data，数据持久化</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">PV 和 PVC 的绑定关系</div>
+          <p>
+            PVC 通过 <strong>容量 + accessModes + storageClassName</strong> 三要素匹配 PV。
+            控制器找到<strong>容量大于等于、accessModes 兼容</strong>的最小 PV 绑定（容量是
+            「大于等于」即可，PVC 要 5Gi 会绑到 10Gi 的 PV，剩余空间浪费）。一旦绑定，PV 和 PVC
+            是<strong>一一对应</strong>的，PV 处于 Bound 状态不能被别的 PVC 抢。PVC 删除后，
+            PV 按回收策略处理。
+          </p>
+        </div>
+
+        <h3>3.3 回收策略</h3>
+        <div class="term-card">
+          <div class="term-name">Retain（保留）</div>
+          <p>
+            PVC 删除后，PV 变成 Released 状态，<strong>数据保留不删</strong>，但 PV 不能直接被
+            新 PVC 绑定，需管理员手动清理后才能复用。最安全，生产常用。
+          </p>
+        </div>
+        <div class="term-card">
+          <div class="term-name">Delete（删除）</div>
+          <p>
+            PVC 删除时，PV 和<strong>底层存储资源一起删除</strong>（云盘会被释放）。动态供给的
+            云盘默认常用此策略。<strong>数据会丢</strong>，谨慎。
+          </p>
+        </div>
+        <div class="term-card">
+          <div class="term-name">Recycle（回收，已废弃）</div>
+          <p>
+            旧策略，PVC 删除后执行 <code>rm -rf</code> 清空 PV 数据再释放。从 1.15 起废弃，
+            不再推荐，用动态供给替代。
+          </p>
+        </div>
+
+        <h3>3.4 AccessModes 访问模式</h3>
+        <ul>
+          <li><strong>ReadWriteOnce (RWO)</strong>：可被单节点读写。块存储（云盘、RBD）默认。</li>
+          <li><strong>ReadOnlyMany (ROX)</strong>：可被多节点只读挂载。</li>
+          <li><strong>ReadWriteMany (RWX)</strong>：可被多节点同时读写。需共享文件系统（NFS、CephFS）支持。</li>
+        </ul>
+        <div class="callout warn">
+          <div class="callout-title">AccessModes 由后端存储决定</div>
+          <p>
+            不是随便填——PV 能提供哪些模式由<strong>后端存储类型</strong>决定：NFS 支持 RWO/ROX/RWX
+            三种，云盘/ RBD 通常只支持 RWO。如果业务要多个 Pod 副本同时读写同一份数据（如共享上传目录），
+            必须选支持 RWX 的存储（NFS、CephFS、阿里云 NAS），用云盘会挂载失败。
+          </p>
+        </div>
+
+        <h2>4. StorageClass 和动态供给</h2>
+        <p>
+          静态供给要管理员手动建 PV，太繁琐。StorageClass 定义「供给模板」，用户只要写 PVC 并
+          指定 storageClassName，provisioner 就自动按需创建 PV 和底层存储，省去人工，是生产标配。
+        </p>
+
+        <h3>4.1 StorageClass 示例（NFS-Client provisioner）</h3>
+        <pre><code>apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nfs-client
+provisioner: nfs.csi.k8s.io        # 或 nfs-provisioner，按部署的 provisioner 填
+parameters:
+  server: 192.168.1.100
+  share: /data/share
+  mountOptions:
+    - hard
+    - nfsvers=4.1
+reclaimPolicy: Delete              # PVC 删除时自动删 PV 和底层目录
+volumeBindingMode: Immediate       # 立即绑定；WaitForFirstConsumer 延迟到 Pod 调度时</code></pre>
+
+        <h3>4.2 PVC 声明 storageClassName 触发动态供给</h3>
+        <pre><code>apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dynamic-pvc
+spec:
+  storageClassName: nfs-client     # 引用上面的 SC，触发自动供给
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi                # provisioner 自动创建 10Gi 的 PV 并绑定</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">动态供给流程</div>
+          <p>
+            ① 用户提交 PVC（带 storageClassName）→ ② 控制器发现有 SC 且无匹配 PV →
+            ③ 调用 provisioner 在后端存储（NFS/云盘/CSI）创建真实卷 → ④ 自动生成对应 PV →
+            ⑤ PV 与 PVC 绑定 → ⑥ Pod 通过 PVC 挂载使用。<strong>全程无需人工建 PV</strong>，
+            这是生产首选。注意 <code>volumeBindingMode: WaitForFirstConsumer</code> 会等 Pod 调度
+            到节点再绑定，避免「拓扑不对」的 PV 被绑上（云盘这类有地域限制的存储尤其重要）。
+          </p>
+        </div>
+
+        <h2>5. 有状态应用存储实战</h2>
+        <p>
+          StatefulSet 配合 <strong>volumeClaimTemplates</strong>，每个 Pod 自动拿到一块独立的
+          PVC（数据互不干扰、Pod 重建后 PVC 还在、还能稳定挂回原 Pod），这是有状态应用（数据库、
+          MQ）持久化存储的标准姿势。
+        </p>
+        <pre><code>apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  serviceName: mysql-headless      # 必须指向 Headless Service（见上一章）
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql   # 数据目录
+  volumeClaimTemplates:            # 关键：每个 Pod 自动创建独立 PVC
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: nfs-client
+        resources:
+          requests:
+            storage: 20Gi
+---
+# 结果：自动生成 3 个 PVC：data-mysql-0 / data-mysql-1 / data-mysql-2
+# mysql-0 永远挂 data-mysql-0，即使 Pod 重建，PVC 还在，数据不丢</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">volumeClaimTemplates 的妙处</div>
+          <p>
+            普通 Deployment 多个副本共享一个 PVC（或各自 emptyDir）不适合有状态数据。StatefulSet
+            的 <code>volumeClaimTemplates</code> 给<strong>每个序号 Pod 生成一个独立 PVC</strong>
+            （命名 <code>&lt;template-name&gt;-&lt;statefulset-name&gt;-&lt;ordinal&gt;</code>），
+            Pod 和 PVC 是<strong>序号绑定</strong>的：mysql-0 重建后挂回原来的 data-mysql-0，
+            实现数据「认人不认 IP」。这是数据库主从、消息队列等有状态服务的存储基础。
+          </p>
+        </div>
+
+        <h2>6. ConfigMap</h2>
+        <p>ConfigMap 存放非敏感配置（键值对或整份配置文件），让配置与镜像解耦——同一镜像配不同
+          ConfigMap 就能在多环境复用。</p>
+
+        <h3>6.1 创建：命令式 vs 声明式</h3>
+        <pre><code># 命令式：从字面量、文件、目录创建
+kubectl create configmap app-config \
+  --from-literal=APP_ENV=production \
+  --from-literal=LOG_LEVEL=info \
+  --from-file=app.conf            # 把 app.conf 文件作为 key=app.conf 的配置
+
+# 声明式（推荐，可纳入 GitOps）
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  APP_ENV: "production"           # 键值对
+  LOG_LEVEL: "info"
+  app.conf: |                      # 整份配置文件（多行用 |）
+    [server]
+    port=8080
+    workers=4
+    [db]
+    host=mysql.prod.svc.cluster.local</code></pre>
+
+        <h3>6.2 使用方式一：环境变量注入</h3>
+        <pre><code>spec:
+  containers:
+    - name: app
+      image: myapp
+      # 单个 key 注入
+      env:
+        - name: APP_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: APP_ENV
+      # 一次性把所有 key 注入为环境变量
+      envFrom:
+        - configMapRef:
+            name: app-config</code></pre>
+
+        <h3>6.3 使用方式二：Volume 挂载为文件</h3>
+        <pre><code>spec:
+  volumes:
+    - name: config
+      configMap:
+        name: app-config           # 每个 key 变成 /etc/app 下的一个文件
+        items:                      # 可选：只挂部分 key 并重命名
+          - key: app.conf
+            path: app.conf          # 文件名
+  containers:
+    - name: app
+      image: myapp
+      volumeMounts:
+        - name: config
+          mountPath: /etc/app
+          readOnly: true</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">热更新行为（高频考点）</div>
+          <p>
+            修改 ConfigMap 后：<strong>Volume 挂载方式</strong>会自动更新（有延迟，约 kubelet
+            的同步周期，最终 Pod 内文件内容刷新），应用需自己感知重载或 reload；<strong>环境变量
+            方式不会更新</strong>，因为环境变量是容器启动时写死进进程的，必须<strong>重启 Pod</strong>
+            才生效。<strong>结论</strong>：要支持配置热更新的服务，优先用 Volume 挂载文件方式；
+            用 envFrom 注入的只能靠重启 Pod。注意：用 <code>subPath</code> 挂载的单个文件
+            <strong>不会</strong>热更新（见下文 SubPath 的坑）。
+          </p>
+        </div>
+
+        <h2>7. Secret</h2>
+        <p>Secret 和 ConfigMap 类似，但用于敏感数据（密码、Token、证书）。<strong>关键认知：
+          Secret 默认只是 base64 编码，不是加密！</strong></p>
+
+        <h3>7.1 创建</h3>
+        <pre><code># 命令式
+kubectl create secret generic db-secret \
+  --from-literal=password=secretpass \
+  --from-literal=user=root
+
+# 声明式：data 字段值必须是 base64
+# echo -n 'secretpass' | base64   →   c2VjcmV0cGFzcw==
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret
+type: Opaque
+data:
+  password: c2VjcmV0cGFzcw==      # base64 编码，不是加密！
+  user: cm9vdA==</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">Secret 默认不安全（高频考点）</div>
+          <p>
+            K8s Secret 默认<strong>只是 base64 编码</strong>，<code>echo c2VjcmV0cGFzcw== | base64 -d</code>
+            就能还原明文，<strong>不等于加密</strong>。任何能 get Secret 的用户、能访问 etcd 的
+            人都能拿到明文。生产加固：<strong>① 开启 etcd 静态加密</strong>（EncryptionConfiguration
+            配置加密 provider）；<strong>② 用外部密钥管理</strong>（Vault、云厂商 KMS、Sealed Secrets、
+            External Secrets）；<strong>③ 严格 RBAC</strong>，限制谁能读 Secret；<strong>④ 用
+            ImagePolicyWebhook 等避免把密钥写进镜像</strong>。
+          </p>
+        </div>
+
+        <h3>7.2 使用方式</h3>
+        <p>和 ConfigMap 一样，支持环境变量注入和 Volume 挂载。</p>
+        <pre><code># 环境变量
+env:
+  - name: DB_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: db-secret
+        key: password
+# Volume 挂载（每个 key 一个文件，文件权限默认 0644，可设 0440）
+volumes:
+  - name: secret-vol
+    secret:
+      secretName: db-secret
+      defaultMode: 0440</code></pre>
+
+        <h3>7.3 dockerconfigjson 类型（拉取私有镜像）</h3>
+        <pre><code># 一行命令创建拉私有仓库的 Secret
+kubectl create secret docker-registry regcred \
+  --docker-server=registry.example.com \
+  --docker-username=admin \
+  --docker-password=hunter2 \
+  --docker-email=admin@example.com
+
+# Pod 引用，拉镜像时认证
+spec:
+  imagePullSecrets:
+    - name: regcred
+  containers:
+    - name: app
+      image: registry.example.com/myapp:v1</code></pre>
+
+        <h2>8. 配置最佳实践</h2>
+        <ul>
+          <li><strong>配置与镜像分离</strong>：同一镜像 + 不同 ConfigMap 跑多环境，不要把配置 bake 进镜像。</li>
+          <li><strong>敏感数据用 Secret</strong>：密码、Token、私钥绝不进 ConfigMap（明文）或镜像。</li>
+          <li><strong>选环境变量还是配置文件</strong>：少量简单配置用环境变量（12-factor 风格）；
+            复杂结构化配置（多 section、长配置）用 Volume 挂载文件，并优先用支持热更新的应用。</li>
+          <li><strong>给 Secret 设最小权限</strong>：Volume 挂载时 defaultMode 设 0440，配合 RBAC。</li>
+          <li><strong>配置变更走 GitOps</strong>：ConfigMap/Secret 用声明式纳入 Git，CI 改配置触发
+            kubectl apply，可审计可回滚。</li>
+        </ul>
+
+        <div class="callout warn">
+          <div class="callout-title">SubPath 的坑（高频翻车点）</div>
+          <p>
+            用 <code>subPath</code> 挂 ConfigMap 的某个 key 到容器，看似方便，但<strong>该文件不会
+            热更新</strong>——因为 subPath 用的是符号链接/绑定挂载单文件，绕过了 ConfigMap 卷的
+            原子更新机制。要热更新就别用 subPath 挂整个目录。同理 subPath 挂 emptyDir 单文件时，
+            宿主机上的目录更新（如 mounted via hostPath）也可能不刷新。生产配置热更新场景
+            <strong>避免 subPath</strong>，直接挂目录让应用读目录里的文件。
+          </p>
+        </div>
+
+        <h2>9. 面试高频题</h2>
+
+        <div class="callout">
+          <div class="callout-title">Q1：PV 和 PVC 的关系？</div>
+          <p>
+            <strong>答</strong>：PV 是<strong>管理员</strong>创建的持久化存储资源（描述存储后端、
+            容量、访问模式、回收策略），PVC 是<strong>用户</strong>对存储的申请。PVC 通过容量 +
+            accessModes + storageClassName 三要素匹配 PV，控制器把<strong>容量大于等于、模式兼容</strong>
+            的最小 PV 绑定给它，一对一绑定。Pod 通过 PVC 使用 PV 的存储。Pod 删除后 PVC 和 PV 仍
+            存在，数据保留；PVC 删除后 PV 按 reclaimPolicy（Retain/Delete）处理。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q2：什么是 StorageClass？</div>
+          <p>
+            <strong>答</strong>：StorageClass 是<strong>动态供给的模板</strong>，封装了 provisioner、
+            后端参数、回收策略、绑定模式。用户写 PVC 时指定 storageClassName，provisioner 自动按需
+            创建 PV 和底层存储卷，免去人工建 PV。相比静态供给，省运维、可伸缩。生产一般每个存储后端
+            一个 SC（如 nfs-client、fast-ssd、standard-hdd）。<code>WaitForFirstConsumer</code> 绑定
+            模式还能等 Pod 调度后再绑，避免拓扑错配。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q3：ConfigMap 热更新生效吗？</div>
+          <p>
+            <strong>答</strong>：分两种。<strong>Volume 挂载文件方式</strong>：会自动热更新，但有
+            延迟（kubelet 同步周期），最终 Pod 内文件刷新，应用需自己 reload；<strong>环境变量方式
+            不会热更新</strong>，必须重启 Pod。另外用 <strong>subPath 挂的单文件不热更新</strong>。
+            结论：要热更新就用 Volume 挂目录方式，避免 subPath，并让应用支持文件 reload。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q4：Secret 安全吗？</div>
+          <p>
+            <strong>答</strong>：默认<strong>不安全</strong>——只是 base64 编码，<strong>不是加密</strong>，
+            <code>base64 -d</code> 即可还原明文；能读 Secret 的人或能访问 etcd 的人都能拿到明文。
+            生产加固：<strong>① 开 etcd 静态加密</strong>（EncryptionConfiguration）；<strong>② 用外部
+            KMS</strong>（Vault、云厂商 KMS、Sealed Secrets、External Secrets）；<strong>③ 严格 RBAC</strong>
+            限制谁能读；<strong>④ 不要把密钥写进镜像或 ConfigMap</strong>。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>K8s 存储三档：Volume（Pod 级）→ PV/PVC（持久化）→ StorageClass（动态供给），抽象层次递增。</li>
+          <li>emptyDir 是 Pod 内临时共享，Pod 删即消失；hostPath 挂节点目录，生产慎用（破坏隔离）。</li>
+          <li>PV 是管理员建的存储资源，PVC 是用户申请，按容量+accessModes+SC 三要素匹配绑定，一对一。</li>
+          <li>回收策略：Retain（保留，最安全）、Delete（连存储一起删）、Recycle（已废弃）。</li>
+          <li>AccessModes 由后端存储决定：RWO 单节点读写、ROX 多节点只读、RWX 多节点读写（需 NFS/CephFS 等）。</li>
+          <li>StorageClass 是动态供给模板，PVC 指定 SC 后自动创建 PV，生产标配；WaitForFirstConsumer 等调度后绑定。</li>
+          <li>StatefulSet 用 volumeClaimTemplates 给每个序号 Pod 生成独立 PVC，实现数据「认序号」。</li>
+          <li>ConfigMap/Secret：Volume 挂载会热更新（有延迟）、环境变量不会、subPath 单文件不会。</li>
+          <li>Secret 默认只是 base64 编码不是加密，生产要开 etcd 加密或用外部 KMS，并严格 RBAC。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="PV 是管理员创建的存储资源，PVC 是用户对存储的申请；PVC 按容量+accessModes+storageClassName 匹配并绑定到 PV，Pod 通过 PVC 使用 PV 的存储。">
+            <div class="quiz-question">1. （单选）关于 PV 和 PVC 的关系，下列说法正确的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. PV 是用户申请，PVC 是管理员创建的存储资源</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. PVC 通过容量+访问模式匹配并绑定到一个 PV，Pod 再通过 PVC 使用</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 一个 PV 可以被多个 PVC 同时绑定</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. Pod 删除后 PVC 也会被自动删除</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="StorageClass 封装 provisioner 和后端参数，PVC 指定 storageClassName 后由 provisioner 自动创建 PV，免去人工建 PV，是动态供给的模板。">
+            <div class="quiz-question">2. （单选）StorageClass 的核心作用是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. 替代 PV，是新一代持久化存储资源</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. 给 Pod 提供临时存储，生命周期跟 Pod</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. 作为动态供给模板，PVC 引用后自动创建 PV</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. 用于存储敏感信息（密码、证书）</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="Volume 挂载文件方式会自动热更新（有延迟），环境变量方式不会热更新需重启 Pod，subPath 挂的单文件也不会热更新。">
+            <div class="quiz-question">3. （单选）修改 ConfigMap 后，下列哪种使用方式会自动热更新（无需重启 Pod）？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. 用 Volume 把 ConfigMap 挂载为目录</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. 用 envFrom 注入为环境变量</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. 用 env 单个 key 注入为环境变量</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. 用 subPath 挂载单个文件</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="base64"
+               data-explain="K8s Secret 默认只是 base64 编码，不是加密，用 base64 -d 即可还原明文。生产需要开启 etcd 静态加密或使用外部 KMS（如 Vault）。">
+            <div class="quiz-question">4. （填空）K8s Secret 默认只是哪种编码方式（不是加密）？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s 深度专题 · 第 30 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=3"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

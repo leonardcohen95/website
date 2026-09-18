@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第32章 调度与弹性伸缩 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="32-k8s-scheduling">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 32 章</span>
+          <span class="meta-tag">K8s 专题</span>
+          <span class="meta-tag">约 40 分钟</span>
+        </div>
+        <h1>调度与弹性伸缩</h1>
+        <p>
+          K8s 调度器决定「Pod 跑到哪个节点」，弹性伸缩决定「该跑多少副本」。本章从调度器
+          三段式流程（过滤→打分→绑定）切入，覆盖 nodeSelector、nodeAffinity、Pod 亲和/反亲和、
+          Taint/Toleration、ResourceQuota/LimitRange、HPA/VPA/Cluster Autoscaler 和 QoS 等级。
+          每节都贴了完整 YAML、生产经验和面试高频题，帮你把零散的调度知识点串成一条线。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解调度器 Filter → Score → Bind 三段式工作流程</li>
+          <li>掌握 nodeSelector、nodeAffinity、pod 亲和/反亲和的写法和适用场景</li>
+          <li>会用 Taint/Toleration 做节点专用化与维护驱逐</li>
+          <li>会用 ResourceQuota + LimitRange 给 namespace 做资源配额</li>
+          <li>掌握 HPA 工作原理和扩缩容算法，能落地 CPU/自定义指标扩缩</li>
+          <li>理解 QoS 三等级与驱逐顺序、PriorityClass 抢占调度</li>
+        </ul>
+
+        <h2>1. 调度器工作原理</h2>
+        <p>
+          kube-scheduler 是 Master 上的一个组件，它监听新建的、还没绑定节点的 Pod
+          （<code>spec.nodeName</code> 为空），按「<strong>过滤→打分→绑定</strong>」三段式
+          完成调度决策，最后通过 Patch 把 nodeName 写回给 apiserver，由目标节点的 kubelet 接手。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">调度流程一图流</div>
+          <pre><code>           新建 Pod (nodeName 为空)
+                  │
+                  ▼
+   ┌──────────────────────────────────┐
+   │ 1. Filter 过滤（不可调度的节点） │
+   │   - 资源不足 (CPU/Mem/GPU)      │
+   │   - nodeSelector / nodeAffinity  │
+   │   - taints (NoSchedule/NoExecute)│
+   │   - volume 限制 (zone/节点独占)  │
+   └──────────────┬───────────────────┘
+                  │ 剩余可调度节点
+                  ▼
+   ┌──────────────────────────────────┐
+   │ 2. Score 打分 (0~100，高者优)   │
+   │   - LeastResourceUsed (空闲多+分高) │
+   │   - BalancedResourceAllocation  │
+   │   - NodeAffinityPriority        │
+   │   - InterPodAffinityPriority    │
+   │   - TaintTolerationPriority     │
+   └──────────────┬───────────────────┘
+                  │ 选最高分节点
+                  ▼
+   ┌──────────────────────────────────┐
+   │ 3. Bind 绑定                     │
+   │   scheduler → apiserver Patch   │
+   │   spec.nodeName = 选中节点        │
+   └──────────────┬───────────────────┘
+                  │
+                  ▼
+            kubelet 在该节点创建 Pod</code></pre>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">调度决策考虑因素</div>
+          <p>
+            调度器综合考虑五大类因素：①<strong>资源</strong>（节点剩余 CPU/Mem/GPU 是否够 requests）；
+            ②<strong>亲和性</strong>（nodeSelector/nodeAffinity 硬性或软性要求）；
+            ③<strong>污点</strong>（节点 taint 是否被 Pod toleration 容忍）；
+            ④<strong>Pod 间亲和</strong>（podAffinity/AntiAffinity 把副本靠近或分散）；
+            ⑤<strong>volume 限制</strong>（如 EBS 单节点挂载上限、PV 的 nodeAffinity）。
+            只要过滤阶段不通过，Pod 就会一直是 Pending。
+          </p>
+        </div>
+
+        <h2>2. nodeSelector（最简单）</h2>
+        <p>
+          nodeSelector 是最老的节点选择方式：给节点打 label，Pod 里指定
+          <code>nodeSelector</code>，必须<strong>全部匹配</strong>才会被调度到该节点。
+        </p>
+
+        <pre><code># 1. 给节点打标签
+kubectl label nodes node-1 disktype=ssd
+kubectl label nodes node-1 gpu=true
+
+# 2. Pod 指定 nodeSelector
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db
+spec:
+  nodeSelector:
+    disktype: ssd        # 必须有这个标签的节点才考虑
+  containers:
+    - name: db
+      image: mysql:8</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">nodeSelector 是硬性要求</div>
+          <p>
+            nodeSelector 是<strong>逻辑 AND</strong>，所有条件都必须满足；只要没有任何节点满足，
+            Pod 直接 Pending，没有「软性偏好」。需要「优先但不强制」时，要用 nodeAffinity 的
+            preferredDuringScheduling。
+          </p>
+        </div>
+
+        <h2>3. nodeAffinity（更灵活）</h2>
+        <p>
+          nodeAffinity 是 nodeSelector 的增强版，支持 In/NotIn/Exists 等运算符，
+          还区分<strong>硬性</strong>（required）和<strong>软性</strong>（preferred）两种语义，
+          生产基本替代 nodeSelector。
+        </p>
+
+        <pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: web
+spec:
+  affinity:
+    nodeAffinity:
+      # 硬性：必须满足，否则 Pending
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: disktype
+                operator: In        # 在 [ssd, nvme] 中
+                values: ["ssd", "nvme"]
+      # 软性：能满足最好（按权重打分），不满足也调度
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 80              # 权重 1~100
+          preference:
+            matchExpressions:
+              - key: zone
+                operator: In
+                values: ["east-1"]   # 优先调度到 east-1
+  containers:
+    - name: web
+      image: nginx:1.25</code></pre>
+
+        <div class="term-card">
+          <div class="term-name">nodeSelector vs nodeAffinity</div>
+          <p>
+            <strong>nodeSelector</strong>：只支持「等值匹配 AND」，写法简单，老的、简单场景用。<br />
+            <strong>nodeAffinity</strong>：支持 In/NotIn/Exists/Gt/Lt 运算符，分 required（硬）和
+            preferred（软）两种语义，可以「优先但不强制」。<br />
+            <strong>命名注意</strong>：requiredDuringSchedulingIgnoredDuringExecution 里的
+            "IgnoredDuringExecution" 意思是<strong>运行中不再生效</strong>——
+            Pod 已经在跑后节点 label 变了也不会驱逐，调度只在调度时算数。
+          </p>
+        </div>
+
+        <h2>4. Pod 亲和与反亲和</h2>
+        <p>
+          Pod 亲和/反亲和不是「和节点的关系」，而是<strong>「和别的 Pod 的关系」</strong>。
+          调度器根据拓扑域（topologyKey，通常用 <code>kubernetes.io/hostname</code> 或
+          <code>topology.kubernetes.io/zone</code>）来计算 Pod 之间的位置。
+        </p>
+
+        <h3>4.1 podAffinity（靠近）</h3>
+        <pre><code># 前端 Pod 优先调度到有 app=backend 的节点
+apiVersion: v1
+kind: Pod
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+spec:
+  affinity:
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values: ["backend"]
+          topologyKey: kubernetes.io/hostname  # 在同一节点（主机域）
+      # preferred 写法：尽量和 backend 同 zone
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 50
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values: ["backend"]
+            topologyKey: topology.kubernetes.io/zone
+  containers:
+    - name: frontend
+      image: nginx:1.25</code></pre>
+
+        <h3>4.2 podAntiAffinity（分散）</h3>
+        <pre><code># 同 Deployment 的副本尽量分散到不同节点
+spec:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values: ["web"]
+            topologyKey: kubernetes.io/hostname
+  containers:
+    - name: web
+      image: nginx:1.25</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">生产建议用 podAntiAffinity 分散副本</div>
+          <p>
+            多副本 Deployment 必须用 podAntiAffinity 把副本分散到不同节点（或不同 zone），
+            避免单节点故障导致业务全挂。写法：用 <code>topologyKey: kubernetes.io/hostname</code>
+            做硬性分散（副本数≤节点数），或用 zone topologyKey 做软性偏好分散到不同可用区。
+          </p>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-title">大规模集群注意 AntiAffinity 性能</div>
+          <p>
+            podAntiAffinity 的 required 语义会让调度器遍历所有节点上所有 Pod 做 label 匹配，
+            节点和 Pod 数量上去后调度会变慢。超过几百节点建议改用
+            <strong>Topology Spread Constraints</strong>（topologySpread），效果接近但性能更好。
+          </p>
+        </div>
+
+        <h2>5. Taints 和 Tolerations</h2>
+        <p>
+          Taint 给节点打「污点」，让 Pod 默认不愿调度上去；Toleration 是 Pod 端的「容忍」声明，
+          写了对应 Toleration 才能上污点节点。这是「<strong>排斥 Pod</strong>」的核心机制，
+          常用于节点专用化和维护驱逐。
+        </p>
+
+        <h3>5.1 三种效果</h3>
+        <div class="term-card">
+          <div class="term-name">NoSchedule（不调度）</div>
+          <p>
+            不容忍该 taint 的<strong>新</strong> Pod 不会被调度到该节点；已经在跑的 Pod 不受影响。
+            最常用，用于专用节点（如 GPU 节点）。
+          </p>
+        </div>
+        <div class="term-card">
+          <div class="term-name">PreferNoSchedule（尽量不调度）</div>
+          <p>
+            软性版本，调度器尽量避开，没其它选择时仍可调度上去。适合「倾向于专用但不绝对」。
+          </p>
+        </div>
+        <div class="term-card">
+          <div class="term-name">NoExecute（驱逐）</div>
+          <p>
+            不容忍该 taint 的 Pod 会被<strong>立刻驱逐</strong>（可加 tolerationSeconds 延迟驱逐），
+            已有 Pod 也跑不掉。常用于节点维护时清场。
+          </p>
+        </div>
+
+        <h3>5.2 命令与 YAML 示例</h3>
+        <pre><code># 1. 给节点打污点：专用 GPU 节点
+kubectl taint nodes gpu-node-1 gpu=true:NoSchedule
+# 删除污点
+kubectl taint nodes gpu-node-1 gpu=true:NoSchedule-
+
+# 2. Pod 容忍该污点才能调度上去
+apiVersion: v1
+kind: Pod
+metadata:
+  name: train-job
+spec:
+  tolerations:
+    - key: "gpu"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"
+    # 维护场景：容忍 maintain 污点，但只容忍 60 秒后驱逐
+    - key: "node.kubernetes.io/maintenance"
+      operator: "Exists"
+      effect: "NoExecute"
+      tolerationSeconds: 60
+  containers:
+    - name: train
+      image: tensorflow/tensorflow:latest-gpu</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">Master 节点为什么默认不上业务 Pod？</div>
+          <p>
+            K8s 用 kubeadm init 后，Master 自动被打上
+            <code>node-role.kubernetes.io/control-plane:NoSchedule</code> 污点
+            （旧版叫 <code>master</code>）。业务 Pod 没有 Toleration 自然不会调度到 Master，
+            从而<strong>保护控制平面</strong>不被业务 Pod 抢资源。需要时打 Toleration 才能上。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">典型场景</div>
+          <p>
+            ①<strong>专用节点</strong>：GPU/高 IO 节点打 taint，只让带 Toleration 的任务上。
+            ②<strong>节点维护</strong>：给节点打 <code>node.kubernetes.io/maintenance:NoExecute</code>
+            把所有 Pod 驱逐出去，再 drain 节点做内核升级。<br />
+            ③<strong>特殊硬件</strong>：云厂商自动给带 GPU 的节点打 taint，避免误调度。
+          </p>
+        </div>
+
+        <h2>6. 资源配额管理</h2>
+        <p>
+          没有 ResourceQuota 的集群，一个团队一个 Pod 就能把整个 namespace 资源吃光，
+          把别的 namespace 拖死。生产必须配 ResourceQuota + LimitRange 两层防护。
+        </p>
+
+        <h3>6.1 ResourceQuota（namespace 总量限制）</h3>
+        <pre><code>apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: team-quota
+  namespace: team-a
+spec:
+  hard:
+    requests.cpu: "10"          # 所有 Pod 的 CPU requests 总和上限 10 核
+    requests.memory: "20Gi"    # 内存 requests 上限 20Gi
+    limits.cpu: "20"
+    limits.memory: "40Gi"
+    pods: "50"                  # 最多 50 个 Pod
+    services.loadbalancers: "2" # LB 类型 Service 上限
+    persistentvolumeclaims: "10"
+    # 注意：开了 ResourceQuota 后，Pod 必须设 requests/limits，否则创建失败</code></pre>
+
+        <h3>6.2 LimitRange（单个 Pod 限制）</h3>
+        <pre><code>apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: team-a
+spec:
+  limits:
+    # 没设 resources 的 Pod 自动用以下默认值
+    - type: Container
+      default:                  # 默认 limits
+        cpu: "500m"
+        memory: "512Mi"
+      defaultRequest:           # 默认 requests
+        cpu: "100m"
+        memory: "128Mi"
+      max:                      # 单容器上限
+        cpu: "2"
+        memory: "4Gi"
+      min:                      # 单容器下限
+        cpu: "50m"
+        memory: "64Mi"</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">生产必须配 ResourceQuota + LimitRange</div>
+          <p>
+            ResourceQuota 限总量（防 namespace 间互相挤兑），LimitRange 限单个 Pod
+            （防忘了设 requests 的 Pod 拿默认值炸节点）。两者一起，既能保护集群，
+            又能给开发者兜底默认值。开了 ResourceQuota 后，Pod 强制要求写 requests/limits。
+          </p>
+        </div>
+
+        <h2>7. HPA 自动扩缩容（重点）</h2>
+        <p>
+          HPA（HorizontalPodAutoscaler）根据 CPU/内存/自定义指标自动调整 Deployment/StatefulSet
+          副本数，是「<strong>横向扩缩</strong>」最常用的弹性能力。面试 K8s 弹性必考。
+        </p>
+
+        <h3>7.1 HPA YAML 示例</h3>
+        <pre><code>apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web-hpa
+  namespace: prod
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web-deploy
+  minReplicas: 3                 # 最少 3 副本（保底）
+  maxReplicas: 20                # 最多 20 副本（封顶）
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization      # 利用率指标
+          averageUtilization: 60 # 目标 CPU 利用率 60%
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:                      # v2 行为控制
+    scaleDown:
+      stabilizationWindowSeconds: 300  # 缩容冷却 5 分钟
+      policies:
+        - type: Percent
+          value: 50              # 每次最多缩 50%
+          periodSeconds: 60</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">HPA 需要 Pod 设 requests</div>
+          <p>
+            HPA 的 CPU 利用率 = 实际 CPU / Pod requests。<strong>不设 requests 的 Pod，
+            CPU 指标取不到，HPA 不工作</strong>。同时集群必须装
+            <strong>metrics-server</strong>（基础 CPU/Mem 指标），自定义指标需装
+            Prometheus Adapter 或 KEDA。
+          </p>
+        </div>
+
+        <h3>7.2 扩缩容算法详解</h3>
+        <pre><code># 公式：期望副本数 = ceil(当前副本数 × 当前指标值 / 目标指标值)
+
+# 例：当前 4 副本，CPU 平均 90%，目标 60%
+期望副本 = ceil(4 × 90 / 60) = ceil(6.0) = 6
+# 扩容到 6 副本
+
+# 例：当前 6 副本，CPU 平均 30%，目标 60%
+期望副本 = ceil(6 × 30 / 60) = ceil(3.0) = 3
+# 缩容到 3 副本（受 minReplicas 限制）</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">扩容快、缩容慢</div>
+          <p>
+            <strong>扩容</strong>：默认无冷却期，几秒内立即扩，配合流量突增。
+            但新 Pod 启动慢（拉镜像+应用启动）所以实际见效可能要几十秒到分钟级。<br />
+            <strong>缩容</strong>：默认有 5 分钟冷却（stabilizationWindowSeconds），
+            防止指标抖动频繁缩容。缩容还会优雅终止 Pod，避免瞬时下线导致 502。
+            生产建议通过 behavior.scaleDown 显式配置冷却窗口和速率。
+          </p>
+        </div>
+
+        <h2>8. VPA 和 Cluster Autoscaler 概述</h2>
+
+        <div class="term-card">
+          <div class="term-name">VPA（VerticalPodAutoscaler）</div>
+          <p>
+            自动调整 Pod 的 requests/limits，解决「容量预估不准」问题。
+            <strong>缺点</strong>：默认模式下改 requests 会<strong>重启 Pod</strong>
+            （K8s 不支持运行中改 resources），所以生产用得少，且与 HPA 不能同时作用于同一资源
+            的同一指标。主要用在预估困难的中间件、批处理任务。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Cluster Autoscaler</div>
+          <p>
+            云上 K8s 的<strong>节点级弹性</strong>组件，监控 Pending 的 Pod，
+            自动向云厂商 API 申请新节点加入集群；节点空闲超过阈值又会下线节点。
+            和 HPA 配合形成「HPA 横向扩 Pod，CA 纵向扩节点」的完整弹性链。
+            云原生等价物还有 Karpenter（AWS 出的开源新版，调度+扩缩节点一体）。
+          </p>
+        </div>
+
+        <h2>9. QoS 等级与调度优先级</h2>
+        <p>
+          K8s 根据 Pod 的 requests/limits 配置，把 Pod 分为三个 QoS
+          （Quality of Service）等级。节点资源不足时，按等级决定<strong>谁先被驱逐</strong>。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">Guaranteed（保证级）</div>
+          <p>
+            每个 container 的 <strong>requests == limits</strong>（且 CPU/Mem 都要设）。
+            优先级最高，资源紧张时最后被驱逐，是生产关键业务的推荐配置。
+          </p>
+        </div>
+        <div class="term-card">
+          <div class="term-name">Burstable（突发级）</div>
+          <p>
+            至少一个 container 设了 requests 或 limits，但 requests &lt; limits。
+            中间档，常见于一般业务。
+          </p>
+        </div>
+        <div class="term-card">
+          <div class="term-name">BestEffort（尽力级）</div>
+          <p>
+            完全不设 requests/limits 的 Pod。优先级最低，节点资源一紧张就先被驱逐，
+            不适合生产。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">节点资源不足时驱逐顺序</div>
+          <p>
+            kubelet 在节点资源紧张（如 MemoryPressure）时按以下顺序驱逐：
+            <strong>BestEffort → Burstable（超额的）→ Guaranteed（超额的）</strong>。
+            换句话说不设 requests/limits 的 Pod 最先被牺牲。生产 Pod 至少配成 Burstable，
+            关键业务配 Guaranteed。
+          </p>
+        </div>
+
+        <h3>9.1 PriorityClass 抢占调度</h3>
+        <pre><code># 1. 定义优先级
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 1000000               # 数值越大优先级越高
+globalDefault: false
+description: "Critical production workloads."
+
+---
+# 2. Pod 使用该优先级
+apiVersion: v1
+kind: Pod
+metadata:
+  name: critical-job
+spec:
+  priorityClassName: high-priority
+  containers:
+    - name: app
+      image: myapp</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">PriorityClass 与抢占</div>
+          <p>
+            高优先级 Pod 在资源不足无法调度时，可以<strong>抢占</strong>低优先级 Pod：
+            调度器先把节点上的低优先级 Pod 驱逐掉，把资源让给高优先级 Pod。
+            生产可用于关键业务（如支付、监控组件）保障，但要小心被抢占的 Pod 不要设
+            <code>terminationGracePeriodSeconds</code> 过大。
+          </p>
+        </div>
+
+        <h2>10. 面试高频题</h2>
+
+        <h3>10.1 「K8s 调度器怎么工作的？」</h3>
+        <div class="callout tip">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            ①kube-scheduler 监听 spec.nodeName 为空的新 Pod，做三段式调度：
+            <strong>Filter 过滤</strong> → <strong>Score 打分</strong> → <strong>Bind 绑定</strong>。
+            ②Filter 用 Predicates 把不可调度节点排除（资源不足、nodeSelector 不匹配、taint 不被容忍、
+            volume 限制等）。③Score 用 Priorities 给剩余节点打分（LeastResourceUsed、
+            BalancedAllocation、Affinity、Toleration 等），选最高分节点。
+            ④通过 Patch 把 nodeName 写回 apiserver，kubelet 在该节点拉起容器。
+            ⑤调度只考虑过滤/打分时刻的状态，运行后节点 label 变了默认不影响已调度 Pod
+            （IgnoredDuringExecution）。
+          </p>
+        </div>
+
+        <h3>10.2 「说说 Taint 和 Toleration」</h3>
+        <div class="callout tip">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            ①Taint 给节点打「污点」，Toleration 是 Pod 端的容忍声明，写了对应 Toleration 才能上污点节点。
+            ②三种 effect：NoSchedule（不调度新 Pod）、PreferNoSchedule（软性避开）、
+            NoExecute（驱逐已有 Pod，可用 tolerationSeconds 延迟）。③典型场景：
+            Master 自动有 control-plane 污点挡业务 Pod；GPU/专用节点打 taint 做节点专用化；
+            节点维护用 NoExecute + drain 驱逐 Pod；云厂商对带 GPU 的节点自动打 taint。
+            ④和 nodeAffinity 区别：Taint 是「节点主动排斥 Pod」，Affinity 是「Pod 主动挑节点」，
+            二者配合能实现「专用节点 + 专用 Pod」双向匹配。
+          </p>
+        </div>
+
+        <h3>10.3 「HPA 怎么工作的？」</h3>
+        <div class="callout tip">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            ①HPA（HorizontalPodAutoscaler）根据 CPU/内存/自定义指标自动调整 Deployment 副本数。
+            ②依赖 metrics-server 拿基础指标，自定义指标需 Prometheus Adapter 或 KEDA。
+            ③核心算法：<code>期望副本 = ceil(当前副本 × 当前指标 / 目标指标)</code>，
+            每 15 秒（默认）算一次。④前置条件：Pod 必须设 requests，否则 CPU 利用率算不出来。
+            ⑤行为：扩容无冷却快速扩，缩容有默认 5 分钟冷却 + 速率限制防抖动。
+            ⑥配合 Cluster Autoscaler 形成「横向扩 Pod + 纵向扩节点」的完整弹性链。
+          </p>
+        </div>
+
+        <h3>10.4 「QoS 等级有什么用？」</h3>
+        <div class="callout tip">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            ①QoS 是 K8s 根据 Pod 的 requests/limits 自动算出来的等级，分 Guaranteed、Burstable、BestEffort。
+            ②Guaranteed 要求每个 container 的 requests==limits 且 CPU/Mem 都设，是最稳的等级。
+            ③作用：节点资源不足时 kubelet 按 BestEffort → Burstable → Guaranteed 的顺序
+            <strong>驱逐 Pod</strong>，QoS 高的最后被驱逐，等于给关键业务上了资源保险。
+            ④生产建议：关键业务配 Guaranteed，普通业务至少 Burstable，禁止 BestEffort 跑生产。
+            ⑤PriorityClass 控制的是<strong>调度</strong>优先级（能不能抢占别人），
+            和 QoS 的<strong>运行</strong>优先级（能不能不被驱逐）是两件事，但都重要。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>调度器三段式：Filter 过滤 → Score 打分 → Bind 绑定 nodeName，调度只看调度时刻状态。</li>
+          <li>nodeSelector 是硬性等值匹配；nodeAffinity 支持 In/NotIn/Exists 和软硬两种语义，生产优先选。</li>
+          <li>podAntiAffinity + topologyKey 把副本分散到不同节点/zone，避免单节点故障全挂。</li>
+          <li>Taint 排斥 Pod，Toleration 容忍污点；Master 默认有 control-plane 污点挡业务 Pod。</li>
+          <li>三种 effect：NoSchedule（不调度新 Pod）、PreferNoSchedule（软避）、NoExecute（驱逐已有 Pod）。</li>
+          <li>ResourceQuota 限 namespace 总量、LimitRange 限单 Pod 默认值和上下限，生产两层必配。</li>
+          <li>HPA 公式：期望副本 = ceil(当前副本 × 当前指标 / 目标指标)，扩容快、缩容有冷却，依赖 requests 和 metrics-server。</li>
+          <li>QoS 三等级：Guaranteed（requests==limits）> Burstable > BestEffort，节点压力下 BestEffort 先被驱逐。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="kube-scheduler 的三段式调度流程是：Filter（过滤不可调度节点）→ Score（对剩余节点打分）→ Bind（绑定 nodeName）。">
+            <div class="quiz-question">1. （单选）kube-scheduler 的三段式调度流程，正确顺序是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. Score → Filter → Bind</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. Filter → Score → Bind</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. Bind → Filter → Score</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. Filter → Bind → Score</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="NoExecute 效果不仅不让新 Pod 调度，还会把已经在节点上跑的不容忍 Pod 驱逐掉；NoSchedule 只挡新 Pod，已有 Pod 不动；PreferNoSchedule 是软性避开。">
+            <div class="quiz-question">2. （单选）关于 Taint 三种 effect，下列说法正确的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. NoSchedule 会驱逐已经在节点上跑的 Pod</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. PreferNoSchedule 是硬性要求不容忍就不调度</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. NoExecute 会驱逐节点上已有的不容忍 Pod</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. NoSchedule 等同于 PreferNoSchedule</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="HPA 的 CPU 利用率 = 实际 CPU / Pod requests，4 × 90 / 60 = 6，向上取整为 6 副本。注意 HPA 要求 Pod 设 requests，否则指标取不到。">
+            <div class="quiz-question">3. （单选）当前 Deployment 有 4 副本，CPU 平均 90%，HPA 目标 CPU 60%，期望副本数是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. 6</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. 4</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. 5</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. 8</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="BestEffort|besteffort|BestEffort 级"
+               data-explain="节点资源不足时，kubelet 按 BestEffort → Burstable → Guaranteed 的顺序驱逐 Pod，完全不设 requests/limits 的 BestEffort Pod 最先被牺牲，所以生产禁止 BestEffort。">
+            <div class="quiz-question">4. （填空）节点资源不足触发驱逐时，QoS 三等级中哪一级的 Pod 会被最先驱逐？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s 深度专题 · 第 32 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=3"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

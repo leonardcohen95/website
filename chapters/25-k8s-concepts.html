@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第25章 K8s 概念与架构 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="25-k8s-concepts">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 25 章</span>
+          <span class="meta-tag">K8s 专题</span>
+          <span class="meta-tag">约 40 分钟</span>
+        </div>
+        <h1>K8s 概念与架构</h1>
+        <p>
+          本章是 K8s 深度专题的开篇。我们将从「为什么需要 K8s」讲起，把运维演进路径
+          理清楚；再系统拆解 K8s 的核心概念（Pod、Deployment、Service 等）和
+          Master/Node 架构；最后带你用 kubectl 部署第一个应用，理解 K8s 的灵魂——
+          声明式模型。学完你能用大白话讲清楚 K8s 是什么、怎么工作，从容应对
+          「说说 K8s 架构」「K8s 和 Docker 啥关系」这类高频面试题。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>能说清运维从手工到编排的演进路径，以及 K8s 解决了什么痛点</li>
+          <li>掌握 Pod、Deployment、Service、Namespace、ConfigMap 等核心概念</li>
+          <li>理解 Master 控制平面与 Node 节点各组件的职责</li>
+          <li>能用 kubectl 完成部署、查看、扩缩容、删除等基本操作</li>
+          <li>深刻理解声明式模型与 reconciliation loop 的工作原理</li>
+          <li>能回答「K8s 架构」「K8s 与 Docker 关系」「声明式模型」等面试题</li>
+        </ul>
+
+        <h2>1. 为什么需要 K8s</h2>
+        <p>
+          理解一个工具最好的方式是看它解决了什么问题。运维管理应用的方式经历了几次
+          演进，每次演进都是被上一阶段的痛点逼出来的。
+        </p>
+
+        <h3>1.1 演进路径</h3>
+        <ul>
+          <li><strong>手工部署</strong>：SSH 登录服务器，下载包、改配置、起进程。一台台搞，慢、易错、不可复现。</li>
+          <li><strong>脚本自动化</strong>：写 Shell/Ansible 脚本批量执行。解决了「一台台」的问题，但机器坏了要手动换，进程挂了要手动拉起。</li>
+          <li><strong>Docker 容器化</strong>：把应用和依赖打成镜像，<code>docker run</code> 一键起。解决了环境一致性问题，但单机管理几十个容器就手忙脚乱。</li>
+          <li><strong>容器编排</strong>：多机管理、自动调度、故障自愈、滚动升级、服务发现——这就是 K8s 干的事。</li>
+        </ul>
+
+        <div class="callout">
+          <div class="callout-title">Docker 解决了什么，又留下了什么</div>
+          <p>
+            Docker 让「我的机器上能跑」变成了「镜像在哪都能跑」，这是巨大进步。
+            但生产环境里你会面临：一台机器挂了上面 20 个容器怎么办？灰度发布怎么做？
+            流量怎么自动转发到新容器？这些问题 Docker 自身不解决，需要编排系统。
+          </p>
+        </div>
+
+        <h3>1.2 编排系统的痛点</h3>
+        <p>一个合格的容器编排系统要解决这些问题：</p>
+        <ul>
+          <li><strong>调度</strong>：容器放哪台机器？资源够不够？要不要分散避免单点？</li>
+          <li><strong>自愈</strong>：容器挂了自动重启，机器挂了把容器迁到别的机器。</li>
+          <li><strong>扩缩容</strong>：流量来了自动加副本，流量下去自动减。</li>
+          <li><strong>服务发现</strong>：容器 IP 一直在变，调用方怎么找到它？</li>
+          <li><strong>滚动升级与回滚</strong>：不中断业务的情况下更新版本，出问题一键回滚。</li>
+          <li><strong>配置与密钥管理</strong>：不同环境不同配置，密码不能写死在镜像里。</li>
+        </ul>
+
+        <h2>2. K8s 是什么</h2>
+        <p>
+          Kubernetes（简称 K8s，因为 K 和 s 之间有 8 个字母）是 Google 基于 Borg 系统
+          的经验开源的容器编排平台，现由 CNCF 维护，是<strong>容器编排的事实标准</strong>。
+        </p>
+        <p>一句话定义：<strong>K8s 是一个用于自动部署、扩缩容和管理容器化应用的开源平台。</strong></p>
+
+        <div class="callout">
+          <div class="callout-title">与同类工具的一句话对比</div>
+          <p>
+            <strong>Docker Swarm</strong>：Docker 原生，简单轻量，但功能少、生态弱，适合小规模。
+            <strong>Mesos + Marathon</strong>：偏资源调度底层，支持多种负载，但复杂度高、社区萎缩。
+            <strong>K8s</strong>：功能最全、生态最丰富、社区最活跃，学习曲线陡但回报高，是行业标准。
+          </p>
+        </div>
+
+        <h2>3. 核心概念速览</h2>
+        <p>
+          先建立概念地图，后面章节会逐个深入。这里每个概念配一个最简 YAML，让你有
+          直观印象，不用死记。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">Pod —— K8s 最小调度单元</div>
+          <p>
+            Pod 是 K8s 调度的最小单位，一个 Pod 里可以跑多个容器（共享网络和存储）。
+            通常一个 Pod 一个容器，多容器场景如 Sidecar。Pod 是临时的，IP 会变，
+            所以<strong>不要直接用 Pod IP 访问</strong>，要用 Service。
+          </p>
+        </div>
+        <pre><code># 最简 Pod
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  labels:
+    app: nginx           # 标签，Service 靠它选中 Pod
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.25  # 用哪个镜像
+      ports:
+        - containerPort: 80</code></pre>
+
+        <div class="term-card">
+          <div class="term-name">Deployment —— 管理 Pod 副本</div>
+          <p>
+            生产环境不会直接创建 Pod，而是用 Deployment 描述「我要 3 个 nginx 副本」。
+            Deployment 帮你保证副本数、做滚动升级和回滚。它是「Pod 的管理者」。
+          </p>
+        </div>
+        <pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-deploy
+spec:
+  replicas: 3                    # 期望 3 个副本
+  selector:
+    matchLabels:
+      app: web                   # 选中 app=web 的 Pod
+  template:                      # Pod 模板
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.25</code></pre>
+
+        <div class="term-card">
+          <div class="term-name">Service —— 稳定的访问入口</div>
+          <p>
+            Pod IP 会变，Service 给一组 Pod 提供一个稳定的虚拟 IP（ClusterIP）和 DNS 名，
+            并做负载均衡。ClusterIP 集群内访问，NodePort 暴露到节点端口，LoadBalancer
+            走云厂商 ELB。
+          </p>
+        </div>
+        <pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: web-svc
+spec:
+  type: ClusterIP                # 集群内访问
+  selector:
+    app: web                     # 选中所有 app=web 的 Pod
+  ports:
+    - port: 80                   # Service 端口
+      targetPort: 80             # 转发到 Pod 的 80 端口</code></pre>
+
+        <div class="term-card">
+          <div class="term-name">Namespace —— 逻辑隔离</div>
+          <p>
+            Namespace 是集群内的逻辑分区，用于多团队/多环境隔离。不同 Namespace 的
+            资源名可以重复，可以做资源配额（ResourceQuota）限制。默认有 default、
+            kube-system（系统组件）等。
+          </p>
+        </div>
+        <pre><code># 创建 Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+
+# 使用时指定 namespace
+kubectl get pods -n dev</code></pre>
+
+        <div class="term-card">
+          <div class="term-name">ConfigMap —— 配置管理</div>
+          <p>
+            ConfigMap 存非敏感配置，解耦镜像和配置（同一镜像跑不同环境靠它）。
+            敏感信息用 Secret（注意 Secret 默认只是 base64 编码，不是加密）。
+          </p>
+        </div>
+        <pre><code>apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  app.env: "production"          # 配置项
+  log.level: "info"
+  nginx.conf: |                  # 也可以存整个配置文件
+    server {
+      listen 80;
+    }</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">概念关系一图懂</div>
+          <p>
+            <strong>Deployment</strong>（管理者）→ 创建多个 <strong>Pod</strong>（实际跑应用）→
+            <strong>Service</strong>（访问入口）通过 selector 选中这些 Pod → 配置从
+            <strong>ConfigMap</strong> 注入 → 全部跑在某个 <strong>Namespace</strong> 里。
+          </p>
+        </div>
+
+        <h2>4. 架构详解</h2>
+        <p>
+          K8s 是典型的<strong>主从架构</strong>：Master 负责「大脑」（决策），Node 负责「手脚」
+          （干活）。理解架构是回答面试题「说说 K8s 架构」的基础。
+        </p>
+
+        <h3>4.1 Master 控制平面</h3>
+        <p>Master 也叫控制平面（Control Plane），是集群的大脑，做全局决策和响应事件。</p>
+
+        <div class="callout">
+          <div class="callout-title">K8s 架构图</div>
+          <pre><code>          ┌─────────────────────────────────────┐
+          │         Master 控制平面               │
+          │                                      │
+          │  ┌────────────┐    ┌──────────────┐  │
+          │  │ kube-      │    │   scheduler  │  │
+          │  │ apiserver  │    │  (调度器)     │  │
+          │  │ (统一入口)  │    └──────────────┘  │
+          │  └─────┬──────┘    ┌──────────────┐  │
+          │        │           │  controller  │  │
+          │        ▼           │   manager    │  │
+          │  ┌──────────┐      │ (控制器大脑)  │  │
+          │  │  etcd    │      └──────────────┘  │
+          │  │ (状态库)  │                        │
+          │  └──────────┘                        │
+          └────────────────┬────────────────────┘
+                           │ apiserver 通信
+        ┌──────────────────┼──────────────────┐
+        ▼                  ▼                  ▼
+  ┌───────────┐      ┌───────────┐      ┌───────────┐
+  │  Node 1   │      │  Node 2   │      │  Node N   │
+  │           │      │           │      │           │
+  │ ┌───────┐ │      │ ┌───────┐ │      │ ┌───────┐ │
+  │ │kubelet│ │      │ │kubelet│ │      │ │kubelet│ │
+  │ └───────┘ │      │ └───────┘ │      │ └───────┘ │
+  │ ┌───────┐ │      │ ┌───────┐ │      │ ┌───────┐ │
+  │ │kube-  │ │      │ │kube-  │ │      │ │kube-  │ │
+  │ │proxy  │ │      │ │proxy  │ │      │ │proxy  │ │
+  │ └───────┘ │      │ └───────┘ │      │ └───────┘ │
+  │ ┌───────┐ │      │ ┌───────┐ │      │ ┌───────┐ │
+  │ │container│ │    │ │container│ │    │ │container│ │
+  │ │runtime│ │      │ │runtime│ │      │ │runtime│ │
+  │ └───┬───┘ │      │ └───┬───┘ │      │ └───┬───┘ │
+  │     │     │      │     │     │      │     │     │
+  │  ┌──▼──┐  │      │  ┌──▼──┐  │      │  ┌──▼──┐  │
+  │  │ Pod │  │      │  │ Pod │  │      │  │ Pod │  │
+  │  └─────┘  │      │  └─────┘  │      │  └─────┘  │
+  └───────────┘      └───────────┘      └───────────┘</code></pre>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">kube-apiserver</div>
+          <p>
+            所有操作的<strong>唯一入口</strong>，提供 REST API。kubectl、kubelet、
+            scheduler 都通过它读写集群状态。它做认证、授权、准入控制，再写入 etcd。
+            可以多副本部署做高可用。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">etcd</div>
+          <p>
+            分布式 KV 数据库，是<strong>集群状态的唯一持久化存储</strong>。所有资源对象
+            （Pod、Service、Secret…）都存在这里。它是 K8s 的「大脑记忆」，一旦数据丢失
+            集群就完了，所以必须做备份。生产通常 3 或 5 节点组成集群保证高可用。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">kube-scheduler</div>
+          <p>
+            <strong>调度器</strong>：当有新 Pod 待调度时，根据资源请求、节点选择器、亲和性、
+            污点容忍等规则，挑一个合适的 Node。只负责「决定放哪」，不负责「实际创建」。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">kube-controller-manager</div>
+          <p>
+            <strong>控制器的大脑</strong>，运行一堆控制器，每个负责一种资源的协调：
+            副本控制器保证 Deployment 副本数、节点控制器监控节点健康、端点控制器
+            维护 Service 的 endpoints 等。本质都是 reconciliation loop。
+          </p>
+        </div>
+
+        <h3>4.2 Node 节点</h3>
+        <p>Node 是干活的机器（物理机或虚拟机），跑实际业务的 Pod。</p>
+
+        <div class="term-card">
+          <div class="term-name">kubelet</div>
+          <p>
+            每个节点上的<strong>代理人</strong>，与 apiserver 通信。它看着本节点的 Pod 列表，
+            负责让 Pod 真正起来：调用容器运行时拉镜像、起容器，并上报节点状态和 Pod 状态。
+            Pod 不健康时按重启策略重启容器。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">kube-proxy</div>
+          <p>
+            每个节点上的<strong>网络代理</strong>，负责维护 Service 的网络规则（默认 iptables，
+            也可配 IPVS）。它让访问 Service IP 的流量能被负载均衡到后端某个 Pod。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">container runtime</div>
+          <p>
+            <strong>容器运行时</strong>：真正跑容器的软件。K8s 通过 CRI（容器运行时接口）
+            解耦，支持 containerd、CRI-O、Docker（新版已废弃 dockershim，推荐 containerd）。
+          </p>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-title">apiserver 是唯一入口</div>
+          <p>
+            注意所有组件都不直接读写 etcd，<strong>只有 apiserver 直接操作 etcd</strong>。
+            其他组件（scheduler、controller-manager、kubelet）都通过 apiserver 通信。
+            这是 K8s 架构的关键设计——保证状态一致性和访问控制。
+          </p>
+        </div>
+
+        <h3>4.3 声明式 vs 命令式</h3>
+        <p>这是 K8s 区别于传统运维的根本范式，也是面试高频点。</p>
+        <ul>
+          <li><strong>命令式</strong>：「帮我起 3 个 nginx 容器」。你告诉系统<strong>做什么</strong>。系统照做，但不关心后续状态。容器挂了你得再喊一次。</li>
+          <li><strong>声明式</strong>：「我要 3 个 nginx 副本一直存在」。你告诉系统<strong>要什么状态</strong>。系统持续监控，发现副本变少就补上，变多就删掉。</li>
+        </ul>
+
+        <div class="callout">
+          <div class="callout-title">声明式 vs 命令式 对比</div>
+          <p>
+            <strong>命令式</strong>（如 docker run、Ansible 任务）：关注动作，执行完就结束，
+            一次性的，状态漂移要人工修复。<br />
+            <strong>声明式</strong>（如 kubectl apply YAML）：关注期望状态，系统持续收敛到
+            期望状态，自愈、幂等、可重入。改了就 apply 新 YAML，不用关心怎么从旧到新。
+          </p>
+        </div>
+
+        <h2>5. kubectl 初体验</h2>
+        <p>
+          kubectl 是操作 K8s 的命令行工具，所有运维操作都从它开始。下面走一遍完整流程。
+          （假设你已有集群，下一章教你怎么搭。）
+        </p>
+
+        <h3>5.1 安装 kubectl</h3>
+        <pre><code># Linux（x86_64）
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+kubectl version --client    # 验证安装
+
+# macOS（用 brew）
+brew install kubectl
+
+# 配置自动补全（bash）
+echo 'source &lt;(kubectl completion bash)' >> ~/.bashrc</code></pre>
+
+        <h3>5.2 验证连接</h3>
+        <pre><code># 查看集群节点
+kubectl get nodes
+# NAME         STATUS   ROLES           AGE   VERSION
+# minikube     Ready    control-plane   10d   v1.29.0
+
+# 集群信息
+kubectl cluster-info
+# 看控制平面跑在哪、kube-dns 跑在哪
+
+# 查看 kubectl 配置（连接信息在 ~/.kube/config）
+kubectl config view</code></pre>
+
+        <h3>5.3 部署第一个应用</h3>
+        <pre><code># 命令式快速创建一个 Deployment（学习用，生产写 YAML）
+kubectl create deployment nginx --image=nginx:1.25
+# deployment.apps/nginx created
+
+# 查看 Pod（应用正在拉镜像、起容器）
+kubectl get pods
+# NAME                     READY   STATUS    RESTARTS   AGE
+# nginx-xxxx-yyyy          1/1     Running   0          30s
+
+# 查看 Deployment
+kubectl get deploy
+# NAME    READY   UP-TO-DATE   AVAILABLE   AGE
+# nginx   1/1     1            1           35s</code></pre>
+
+        <h3>5.4 暴露服务</h3>
+        <pre><code># 用 NodePort 把 nginx 暴露到节点端口
+kubectl expose deployment nginx --port=80 --type=NodePort
+# service/nginx exposed
+
+# 查看 Service（自动分配了一个 30000+ 的端口）
+kubectl get svc
+# NAME         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE
+# nginx        NodePort    10.96.123.45    &lt;none&gt;       80:31234/TCP   5s
+
+# 访问测试（节点IP:NodePort）
+curl http://节点IP:31234</code></pre>
+
+        <h3>5.5 扩缩容</h3>
+        <pre><code># 扩容到 5 个副本
+kubectl scale deployment nginx --replicas=5
+# deployment.apps/nginx scaled
+
+kubectl get pods    # 会看到 5 个 Pod
+# 持续观察
+kubectl get pods -w    # -w 是 watch，实时刷新
+
+# 缩容到 2 个
+kubectl scale deployment nginx --replicas=2</code></pre>
+
+        <h3>5.6 删除应用</h3>
+        <pre><code># 删除 Service
+kubectl delete svc nginx
+
+# 删除 Deployment（会连带删除它管理的 Pod）
+kubectl delete deployment nginx
+
+# 一键查看所有资源是否清理干净
+kubectl get all</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">kubectl 三种操作模式</div>
+          <p>
+            ①<strong>命令式（imperative）</strong>：<code>kubectl create/scale/delete</code>，快但不可复现，适合临时操作；
+            ②<strong>声明式（declarative）</strong>：<code>kubectl apply -f xxx.yaml</code>，可版本化、可复现，生产推荐；
+            ③<strong>查看类</strong>：<code>kubectl get/describe/logs/exec</code>，只读不影响状态。
+          </p>
+        </div>
+
+        <h2>6. 声明式模型深入</h2>
+        <p>
+          声明式模型是 K8s 的灵魂。深刻理解它，后面学所有资源都事半功倍。
+        </p>
+
+        <h3>6.1 期望状态 vs 实际状态</h3>
+        <p>
+          K8s 里每个资源都描述一个<strong>期望状态</strong>（spec，你写在 YAML 里的），
+          系统持续观测<strong>实际状态</strong>（status，集群里真实发生的），并不断让
+          实际状态收敛到期望状态。这个过程叫 <strong>reconciliation（协调）</strong>，
+          执行它的循环叫 <strong>reconciliation loop（协调循环）</strong>。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">生活类比：恒温空调</div>
+          <p>
+            把 K8s 想象成恒温空调：你在遥控器上设 26℃（<strong>期望状态</strong>），
+            空调里的温度传感器读室温（<strong>实际状态</strong>），控制器不停比较两者——
+            实际高于 26℃ 就制冷，低于就停机。你只管「我要 26℃」，不用管空调怎么开。
+            K8s 同理：你写「我要 3 个 nginx 副本」，它自己保证副本数永远是 3。
+          </p>
+        </div>
+
+        <h3>6.2 reconciliation loop 怎么工作</h3>
+        <p>以 Deployment 为例，整个协调流程：</p>
+        <ol>
+          <li>你 <code>kubectl apply</code> 一个 replicas=3 的 Deployment，写入 etcd。</li>
+          <li>Deployment 控制器发现期望 3 个副本，创建 ReplicaSet。</li>
+          <li>ReplicaSet 控制器发现期望 3 个 Pod，实际 0 个，创建 3 个 Pod。</li>
+          <li>scheduler 给每个 Pod 选一个 Node，写到 Pod 的 spec.nodeName。</li>
+          <li>对应 Node 的 kubelet 看到有分配给自己的 Pod，调容器运行时起容器。</li>
+          <li>Pod 挂了一个，实际副本变 2，ReplicaSet 控制器发现差异，再创建 1 个。</li>
+        </ol>
+        <p>
+          每一层都是独立的 reconciliation loop，互不直接调用，只通过 etcd 间接通信。
+          这种设计让系统<strong>解耦、自愈、最终一致</strong>。
+        </p>
+
+        <div class="callout warn">
+          <div class="callout-title">apply 的幂等性</div>
+          <p>
+            声明式的好处是<strong>幂等</strong>：同一个 YAML 你 apply 100 次结果都一样
+            （只关心最终状态）。而命令式 <code>docker run</code> 跑 100 次会起 100 个容器。
+            这也是为什么生产都用 <code>kubectl apply -f</code> 而不是 <code>kubectl create</code>。
+          </p>
+        </div>
+
+        <h2>7. 面试角度</h2>
+        <p>下面三个是 K8s 入门面试必考题，给出参考答案要点。</p>
+
+        <h3>7.1 「说说 K8s 的架构」</h3>
+        <div class="callout">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            K8s 是主从架构，分<strong>控制平面（Master）</strong>和工作节点（Node）。
+            控制平面四大组件：① <strong>kube-apiserver</strong> 是所有操作唯一入口，做认证授权；
+            ② <strong>etcd</strong> 是分布式 KV 存储，存集群所有状态；③ <strong>scheduler</strong>
+            负责把 Pod 调度到合适节点；④ <strong>controller-manager</strong> 运行各种控制器，
+            通过 reconciliation loop 维持期望状态。Node 上三组件：kubelet 管本节点 Pod、
+            kube-proxy 维护 Service 网络规则、container runtime 跑容器。所有组件只通过
+            apiserver 读写 etcd，不直接访问。
+          </p>
+        </div>
+
+        <h3>7.2 「K8s 和 Docker 的关系」</h3>
+        <div class="callout">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            两者<strong>不是替代关系，而是不同层级</strong>。Docker 是容器运行时，解决
+            「应用打包和环境一致性」；K8s 是容器编排平台，解决「多机管理、调度、自愈、
+            服务发现」。K8s 本身不跑容器，它调用容器运行时（containerd/CRI-O）来跑。
+            早期 K8s 内置 dockershim 支持 Docker，1.24 起移除，现在推荐直接用 containerd。
+            一句话：<strong>Docker 是「造容器」，K8s 是「管容器」</strong>。
+          </p>
+        </div>
+
+        <h3>7.3 「什么是声明式模型」</h3>
+        <div class="callout">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            声明式是<strong>描述「要什么状态」而非「做什么动作」</strong>。你写 YAML 描述期望
+            （如 replicas: 3），K8s 通过 reconciliation loop 持续让实际状态收敛到期望状态：
+            副本少了补、多了删、容器挂了重启、节点挂了迁移。好处是：① <strong>自愈</strong>，
+            状态漂移自动修复；② <strong>幂等</strong>，apply 多次结果一致；③ <strong>可版本化</strong>，
+            YAML 入 Git 可回溯。对比命令式（如 docker run、Ansible）是一次性动作，状态变化
+            要人工干预。K8s 几乎所有资源（Deployment、Service…）都是声明式的。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>运维演进：手工 → 脚本 → Docker → 编排。K8s 解决多机调度、自愈、扩缩容、服务发现等编排痛点。</li>
+          <li>核心概念：Pod 是最小调度单元，Deployment 管副本，Service 提供稳定入口，Namespace 做逻辑隔离，ConfigMap 管配置。</li>
+          <li>Master 控制平面四组件：apiserver（唯一入口）、etcd（状态存储）、scheduler（调度）、controller-manager（控制器大脑）。</li>
+          <li>Node 三组件：kubelet（管 Pod）、kube-proxy（管网络）、container runtime（跑容器）。所有组件只通过 apiserver 访问 etcd。</li>
+          <li>声明式模型：描述期望状态，reconciliation loop 持续收敛实际状态，带来自愈、幂等、可版本化。</li>
+          <li>kubectl 三类操作：命令式（create/scale）快但不可复现、声明式（apply）生产推荐、查看类（get/describe/logs）只读。</li>
+          <li>K8s 与 Docker 是不同层级：Docker 造容器，K8s 管容器，1.24 起推荐 containerd 替代 Docker 作为运行时。</li>
+          <li>面试高频：架构（主从+四组件+三组件）、声明式模型、K8s 与 Docker 关系，要能用大白话讲清。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="kube-apiserver 是所有操作的唯一入口，做认证授权后写入 etcd；scheduler、controller-manager、kubelet 都通过 apiserver 间接操作 etcd，不直接访问。">
+            <div class="quiz-question">1. （单选）K8s 集群中，哪个组件直接读写 etcd？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. kube-scheduler</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. kube-apiserver</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. kube-controller-manager</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. kubelet</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="声明式模型描述期望状态，通过 reconciliation loop 持续让实际状态收敛到期望状态，具有自愈、幂等、可版本化的特点，而不是描述具体执行动作。">
+            <div class="quiz-question">2. （单选）关于 K8s 声明式模型，下列说法正确的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. 它描述的是「做什么动作」，执行完即结束</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. 同一个 YAML apply 多次会创建多个副本</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. 它描述「要什么状态」，系统持续收敛实际状态到期望状态</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. 容器挂了需要人工重新创建</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D"
+               data-explain="Pod 是 K8s 调度的最小单位，可包含多个共享网络和存储的容器；Pod 是临时的，IP 会变，所以不应直接用 Pod IP 访问，而要用 Service 提供稳定入口。">
+            <div class="quiz-question">3. （单选）关于 Pod，下列说法错误的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. Pod 是 K8s 中最小的调度单位</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. 一个 Pod 里可以包含多个容器</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. Pod 内的容器共享网络和存储</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. Pod 的 IP 固定不变，可以直接用 IP 访问</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="apply|kubectl apply"
+               data-explain="生产环境推荐用 kubectl apply -f xxx.yaml 进行声明式部署，它具有幂等性，可版本化、可复现；而 kubectl create 是命令式的一次性操作，不适合生产。">
+            <div class="quiz-question">4. （填空）生产环境推荐用哪条 kubectl 命令以声明式方式部署 YAML？（写命令动词，2 个单词）</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s 深度专题 · 第 25 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=3"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

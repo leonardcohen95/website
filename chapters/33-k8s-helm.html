@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第33章 Helm 包管理 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="33-k8s-helm">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 33 章</span>
+          <span class="meta-tag">K8s 专题</span>
+          <span class="meta-tag">约 35 分钟</span>
+        </div>
+        <h1>Helm 包管理</h1>
+        <p>
+          当应用从一两个 YAML 变成十几个、几十个，纯手工 kubectl apply 就力不从心了。
+          Helm 是 K8s 的事实标准包管理器，它把一组 YAML 打包成 Chart，
+          支持版本管理、参数化、多环境差异化部署和一键回滚。本章从安装、使用现有 Chart，
+          到编写自定义 Chart、模板语法、Release 管理，覆盖 Helm 生产的全流程。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Helm 解决的问题，掌握 Chart / Release / Repository 三大核心概念</li>
+          <li>能安装 Helm CLI，搜索、安装、卸载公共仓库中的 Chart</li>
+          <li>能用 <code>helm create</code> 生成 Chart 骨架并编写 Deployment/Service 模板</li>
+          <li>掌握模板语法（Values、Release、if/range/with、include）</li>
+          <li>能用 values 文件实现多环境差异化部署</li>
+          <li>掌握 Release 的安装、升级、回滚和版本历史管理</li>
+        </ul>
+
+        <h2>1. 为什么需要 Helm</h2>
+        <p>
+          原生 K8s 部署应用有几个痛点：一是 YAML 文件多，一个中等应用动辄
+          Deployment、Service、ConfigMap、Secret、Ingress、HPA 七八个文件；
+          二是环境差异难处理，开发/测试/生产只是镜像版本、副本数、资源、域名不同，
+          却得维护几套几乎一样的 YAML；三是版本回滚困难，<code>kubectl rollout undo</code>
+          只能回 Deployment 的镜像，回不了 ConfigMap、Service 的变更。
+        </p>
+        <p>
+          Helm 把这些 YAML 打包成一个 <strong>Chart</strong>（类似 rpm/deb 包），
+          用模板 + 参数的方式生成最终 YAML，再一次性提交给 K8s。它就像是 K8s 的 yum/apt，
+          让复杂应用的部署、版本管理、多环境复用变得简单。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">Helm 三大核心概念</div>
+          <p>
+            <strong>Chart</strong>：一个 Helm 包，包含一组 K8s 资源的模板和默认配置，
+            可以理解为「应用的打包模板」，类似 yum 的 rpm 包。
+          </p>
+          <p>
+            <strong>Release</strong>：Chart 在集群中运行的一个实例。同一个 Chart
+            可以安装多次，每次产生一个独立 Release（用 Release Name 区分），
+            类似「rpm 包安装后产生的已安装实例」。
+          </p>
+          <p>
+            <strong>Repository</strong>：Chart 仓库，存放和共享 Chart 的地方，
+            类似 yum 仓库。可以是公共的（如 bitnami、ingress-nginx 官方仓库），
+            也可以是自建的私有仓库（Harbor、ChartMuseum）。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">一句话区分三者</div>
+          <p>
+            <strong>Chart 是食谱，Release 是按食谱做出来的一桌菜，Repository 是食谱库。</strong>
+            同一个食谱可以在不同时间做很多桌菜（同名 Release 不允许，但不同名可以）。
+          </p>
+        </div>
+
+        <h2>2. Helm 3 安装与使用</h2>
+        <p>Helm 3 相比 Helm 2 去掉了 Tiller（服务端组件），完全在客户端渲染模板，
+          安全性和易用性都更好。生产环境一律用 Helm 3。</p>
+
+        <pre><code># === 安装 Helm CLI（Linux）===
+# 官方脚本
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+chmod 700 get_helm.sh
+./get_helm.sh
+
+# 或用包管理器
+yum install -y helm            # CentOS（需 EPEL 或官方 repo）
+apt install -y helm            # Ubuntu
+
+# 验证
+helm version
+# version.BuildInfo{Version:"v3.13.0", ...}
+
+# === 添加公共仓库 ===
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update                 # 拉取最新索引
+
+# === 搜索 Chart ===
+helm search repo redis           # 在已加仓库里搜
+helm search hub nginx            # 在 Helm Hub 上搜公共仓库
+
+# === 安装 Chart（产生 Release）===
+helm install my-redis bitnami/redis -n redis --create-namespace
+#  my-redis：自定义的 Release 名
+#  bitnami/redis：仓库名/Chart 名
+#  -n redis --create-namespace：装到 redis 命名空间，不存在就建
+
+# === 查看 Release ===
+helm list -A                     # 列出所有命名空间的 Release
+helm list -n redis                # 只看 redis 命名空间
+helm status my-redis -n redis     # 查看某个 Release 的详细状态和资源
+
+# === 卸载 Release ===
+helm uninstall my-redis -n redis  # 删除 Release 及其管理的所有资源</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">Helm 命令速记</div>
+          <p>
+            <code>repo add/update</code> 管仓库 → <code>search</code> 找包 →
+            <code>install</code> 装包 → <code>list</code> 看包 →
+            <code>upgrade</code> 改包 → <code>uninstall</code> 删包。和 yum 用法高度相似。
+          </p>
+        </div>
+
+        <h2>3. 使用现有 Chart 实战</h2>
+        <p>大部分中间件都有现成的 Helm Chart，不要自己造轮子。下面实战安装两个常用组件。</p>
+
+        <h3>3.1 安装 ingress-nginx Controller</h3>
+        <pre><code># 添加仓库
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+
+# 拉取并解包，方便改 values
+helm pull ingress-nginx/ingress-nginx --untar --version 4.8.3
+cd ingress-nginx
+
+# 用 --set 临时覆盖一两个参数（适合测试）
+helm install ingress-nginx ingress-nginx/ingress-nginx \
+  -n ingress-nginx --create-namespace \
+  --set controller.kind=DaemonSet \
+  --set controller.hostNetwork=true
+
+# 验证
+kubectl get pods -n ingress-nginx
+kubectl get svc -n ingress-nginx</code></pre>
+
+        <h3>3.2 安装 Redis 并自定义 values.yaml</h3>
+        <p>命令行 <code>--set</code> 只适合改一两个值，参数一多就乱。生产做法是
+          把要覆盖的配置写进 <code>values.yaml</code>，再用 <code>--values</code> 传入。</p>
+        <pre><code># my-redis-values.yaml
+architecture: replication        # 用主从架构而非单机
+auth:
+  password: "Redis@2024Prod"    # 设访问密码
+master:
+  persistence:
+    size: 20Gi
+    storageClass: "fast-ssd"
+replica:
+  replicaCount: 2
+  resources:
+    requests: { cpu: 200m, memory: 256Mi }
+    limits:   { cpu: 1,    memory: 1Gi }</code></pre>
+
+        <pre><code># 用自定义 values 安装
+helm install my-redis bitnami/redis \
+  -n redis --create-namespace \
+  -f my-redis-values.yaml
+
+# 查看 Chart 的所有可配置参数
+helm show values bitnami/redis > all-values.yaml   # 导出默认 values 参考</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">生产环境别用 --set</div>
+          <p>
+            <code>--set</code> 写在命令行里，<strong>不在版本控制中，没有审计、无法回滚配置</strong>。
+            生产环境一律把配置写成 <code>values-xxx.yaml</code> 文件，纳入 Git 管理，
+            用 <code>-f</code> 传入。命令行只保留 Release 名和命名空间。
+          </p>
+        </div>
+
+        <h2>4. 编写自定义 Chart</h2>
+        <p>公司内部应用没有现成 Chart，需要自己写。Helm 提供 <code>helm create</code> 生成骨架。</p>
+
+        <pre><code>helm create myapp
+# 会在当前目录生成 myapp/ 目录，包含完整骨架</code></pre>
+
+        <p>生成的 Chart 目录结构如下：</p>
+        <pre><code>myapp/
+├── Chart.yaml          # Chart 元数据（名字、版本、描述）
+├── values.yaml         # 默认配置（模板里引用的变量）
+├── templates/          # 模板文件（渲染后变成 K8s YAML）
+│   ├── deployment.yaml
+│   ├── service.yaml
+│   ├── ingress.yaml
+│   ├── serviceaccount.yaml
+│   ├── hpa.yaml
+│   ├── _helpers.tpl    # 辅助模板（定义可复用的命名片段）
+│   └── NOTES.txt       # 安装成功后打印的提示信息
+├── charts/             # 依赖的子 Chart（手动放或用 dependencies 拉）
+└── .helmignore          # 打包时忽略的文件</code></pre>
+
+        <p><code>Chart.yaml</code> 是 Chart 的身份证：</p>
+        <pre><code>apiVersion: v2
+name: myapp
+description: A simple web application Helm chart
+type: application
+version: 0.1.0           # Chart 自身版本（改模板就升这个）
+appVersion: "1.16.0"     # 应用版本（镜像版本，和 Chart 版本独立）
+dependencies:            # 依赖的子 Chart
+  - name: redis
+    version: 18.x.x
+    repository: https://charts.bitnami.com/bitnami</code></pre>
+
+        <h3>4.1 编写一个简单的 Deployment + Service 模板</h3>
+        <p><code>templates/deployment.yaml</code>：</p>
+        <pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-myapp
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 80
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}</code></pre>
+
+        <p><code>templates/service.yaml</code>：</p>
+        <pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-myapp
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: {{ .Chart.Name }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 80</code></pre>
+
+        <p>渲染检查（不实际部署，只看生成的 YAML 是否正确）：</p>
+        <pre><code>helm template myapp ./myapp          # 渲染并打印到屏幕
+helm install myapp ./myapp --dry-run   # 模拟安装，会校验 K8s schema
+helm lint ./myapp                      # 静态检查 Chart 是否合规</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">开发循环三连</div>
+          <p>
+            改模板 → <code>helm lint</code> 查错 → <code>helm template</code> 看渲染结果 →
+            <code>--dry-run</code> 模拟安装。养成这个习惯，能避免 80% 的低级错误上线。
+          </p>
+        </div>
+
+        <h2>5. 模板语法</h2>
+        <p>Helm 模板用的是 Go text/template 语法，用 <code>{{ }}</code> 包裹。</p>
+
+        <h3>5.1 引用 Values 和 Release</h3>
+        <pre><code># 引用 values.yaml 中的值
+{{ .Values.replicaCount }}              # values.yaml 顶层字段
+{{ .Values.image.tag }}                 # 嵌套字段用 . 分隔
+
+# 引用 Release 信息（helm install 时自动生成）
+{{ .Release.Name }}                     # Release 名
+{{ .Release.Namespace }}               # 命名空间
+{{ .Release.Service }}                  # 调用方，固定 "Helm"
+
+# 引用 Chart 元信息
+{{ .Chart.Name }}                       # 来自 Chart.yaml
+{{ .Chart.Version }}
+{{ .Chart.AppVersion }}</code></pre>
+
+        <h3>5.2 控制结构 if / range / with</h3>
+        <pre><code># if：条件渲染（注意空格控制，{{- 去左侧空白，-}} 去右侧空白）
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+# ... 只有 enabled: true 才渲染
+{{- end }}
+
+# range：循环遍历列表或 map
+{{- range .Values.service.ports }}
+- port: {{ .port }}
+  name: {{ .name }}
+{{- end }}
+
+# with：切换作用域，简化深层引用
+{{- with .Values.resources }}
+resources:
+  {{- toYaml . | nindent 12 }}      # 这里的 . 就是 .Values.resources
+{{- end }}</code></pre>
+
+        <h3>5.3 include / template 复用</h3>
+        <pre><code># _helpers.tpl 中定义命名模板
+{{- define "myapp.name" -}}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+# 在其它模板里调用
+{{ include "myapp.name" . }}      # include 是函数，结果可继续管道处理
+{{ template "myapp.name" . }}     # template 是动作，结果不能继续管道</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">常用内置对象</div>
+          <ul>
+            <li><code>.Values</code>：来自 values.yaml 和 -f 传入的配置</li>
+            <li><code>.Release</code>：Release 运行时信息（Name、Namespace、IsInstall、IsUpgrade）</li>
+            <li><code>.Chart</code>：来自 Chart.yaml 的元数据</li>
+            <li><code>.Files</code>：访问 Chart 内的非模板文件（如额外配置）</li>
+            <li><code>.Capabilities</code>：集群能力（K8s 版本、可用 API）</li>
+          </ul>
+          <p>常用函数：<code>default</code>（设默认值）、<code>quote</code>（加引号）、
+            <code>toYaml</code>（对象转 YAML）、<code>nindent</code>（换行缩进）、
+            <code>trunc</code>（截断，K8s 名字限 63 字符）。</p>
+        </div>
+
+        <h2>6. Values 文件与多环境部署</h2>
+        <p>同一个 Chart 部署到开发、测试、生产，差别通常只是镜像版本、副本数、资源、域名、配置。
+          Helm 用多套 values 文件解决。</p>
+
+        <pre><code>myapp/
+├── values.yaml              # 默认值（开发环境用）
+├── values-test.yaml         # 测试环境覆盖
+└── values-prod.yaml         # 生产环境覆盖</code></pre>
+
+        <pre><code># values-prod.yaml（只写要覆盖的，其余沿用默认）
+replicaCount: 5
+image:
+  tag: "1.16.3-prod"
+resources:
+  requests: { cpu: 500m, memory: 512Mi }
+  limits:   { cpu: 2,    memory: 2Gi }
+ingress:
+  enabled: true
+  hosts:
+    - host: myapp.example.com</code></pre>
+
+        <pre><code># 部署到不同环境
+helm install myapp ./myapp -f values.yaml                    # 开发
+helm install myapp-test ./myapp -f values-test.yaml          # 测试
+helm install myapp-prod ./myapp -f values-prod.yaml -n prod  # 生产</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">多环境差异化方案对比</div>
+          <ul>
+            <li><strong>多 values 文件</strong>（最常用）：简单直观，适合环境差异不大的场景。</li>
+            <li><strong>Chart 体内置环境分支</strong>：在 values.yaml 用 <code>env: prod</code> 字段，
+              模板里 <code>{{ if eq .Values.env "prod" }}</code> 分支。差异大时可用，但模板会变复杂。</li>
+            <li><strong>每个环境独立 Chart 仓库</strong>：环境完全隔离，适合多团队、强隔离场景。</li>
+          </ul>
+          <p>三种方案都应把 values 文件纳入 Git 管理，<strong>values 即环境配置的真源</strong>。</p>
+        </div>
+
+        <h2>7. Release 管理</h2>
+        <p>Release 的核心操作是安装、升级、回滚，对应 Helm 的版本历史机制。</p>
+
+        <pre><code># 1. 首次安装
+helm install myapp ./myapp -n prod
+
+# 2. 升级（改了 Chart 或 values 后）
+helm upgrade myapp ./myapp -n prod -f values-prod-v2.yaml
+#  每次升级都会生成一个新的 Revision 号（1, 2, 3...）
+
+# 3. 幂等安装（最常用）——没装就装，装了就升级
+helm upgrade --install myapp ./myapp -n prod -f values-prod.yaml
+#  适合 CI/CD：不用判断 Release 是否已存在
+
+# 4. 查看版本历史
+helm history myapp -n prod
+#  REVISION  UPDATED                   STATUS      ...
+#  1        2024-09-01 10:00:00       superseded
+#  2        2024-09-05 14:30:00       deployed
+#  3        2024-09-06 09:00:00       failed     ← 升级失败
+
+# 5. 回滚到指定版本
+helm rollback myapp 2 -n prod     # 回到 Revision 2（成功的那个）
+#  回滚本身也是一个新的 Revision，可以继续回滚</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">Helm 3 把 Release 存哪里</div>
+          <p>
+            Helm 3 不再依赖服务端组件，Release 的元信息和版本历史
+            <strong>存在 K8s Secret 中</strong>（命名空间默认和 Release 相同），名字形如
+            <code>sh.helm.release.v1.myapp.v2</code>。可以用
+            <code>kubectl get secret -n prod | grep helm</code> 看到。
+            这意味着：<strong>Release 历史跟集群走，不会因为 Helm 客户端重装而丢失</strong>，
+            但也意味着这些 Secret 必须和 etcd 一起备份。
+          </p>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-title">helm upgrade 失败的处理</div>
+          <p>
+            默认情况下 <code>helm upgrade</code> 失败不会自动回滚，会停留在失败的 Revision。
+            生产环境建议加 <code>--atomic --timeout 5m</code>：
+            <code>--atomic</code> 让升级失败时自动回滚到上一个成功的 Revision，
+            <code>--timeout</code> 控制等待时间，避免卡死。
+          </p>
+        </div>
+
+        <h2>8. 生产实践</h2>
+
+        <h3>8.1 Chart 版本管理（SemVer）</h3>
+        <p>Chart 版本遵循语义化版本 <code>MAJOR.MINOR.PATCH</code>：
+          不兼容改动升 MAJOR，新增功能升 MINOR，Bug 修复升 PATCH。
+          <strong>Chart 版本和 appVersion 是两个独立维度</strong>：改了模板升 Chart version，
+          只换了应用镜像升 appVersion。CI 中应校验每次提交都升了 version。</p>
+
+        <h3>8.2 依赖管理</h3>
+        <p>应用依赖 Redis、MySQL 等子 Chart 时，在 <code>Chart.yaml</code> 声明 dependencies，
+          再用 <code>helm dependency build</code> 拉取到 <code>charts/</code> 目录。</p>
+        <pre><code># Chart.yaml
+dependencies:
+  - name: redis
+    version: 18.x.x
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled   # values 里 redis.enabled=false 时不装
+
+# 拉依赖
+helm dependency build ./myapp
+#  会下载到 myapp/charts/redis-18.x.x.tgz</code></pre>
+
+        <h3>8.3 私有 Chart 仓库</h3>
+        <p>公司内部 Chart 不应该放公共仓库，需要私有 Chart 仓库。</p>
+        <ul>
+          <li><strong>Harbor</strong>：最常用，集成了镜像仓库 + Chart 仓库 + 漏洞扫描，一站式。</li>
+          <li><strong>ChartMuseum</strong>：轻量，只做 Chart 仓库，适合小团队。</li>
+          <li><strong>OCI 仓库</strong>：Helm 3.8+ 支持把 Chart 推到 OCI 镜像仓库
+            （和镜像同仓库），用 <code>helm push</code>，是官方推荐方向。</li>
+        </ul>
+        <pre><code># Harbor 私有仓库用法
+helm repo add myrepo https://harbor.example.com/chartrepo/library \
+  --username admin --password 'xxx'
+
+helm push myapp-0.1.0.tgz oci://harbor.example.com/library
+helm install myapp myrepo/myapp --version 0.1.0</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">Helm 生产最佳实践清单</div>
+          <ul>
+            <li>所有 values 文件纳入 Git，命令行只传 Release 名和 -f 文件。</li>
+            <li>Chart 版本严格遵守 SemVer，CI 校验每次 MR 都升了 version。</li>
+            <li>升级用 <code>helm upgrade --install --atomic --timeout</code>，失败自动回滚。</li>
+            <li>模板渲染结果先 <code>helm template</code> + <code>kubeval</code> 校验 YAML 合法性。</li>
+            <li>Chart 别写得太大，一个 Chart 一个应用，依赖用子 Chart 而不是塞进一个模板。</li>
+            <li>用 <code>{{ .Release.Name }}</code> 前缀资源名，避免同名 Release 冲突。</li>
+            <li>私有 Chart 用 Harbor 或 OCI 仓库，开权限控制和漏洞扫描。</li>
+          </ul>
+        </div>
+
+        <h2>9. 面试高频题</h2>
+
+        <div class="callout">
+          <div class="callout-title">Q1：Helm 是什么？解决了什么问题？</div>
+          <p>
+            Helm 是 K8s 的包管理器。它解决原生 K8s 的三个痛点：
+            YAML 文件多难管理（打包成 Chart 复用）、
+            多环境配置差异难处理（values 参数化）、
+            应用版本回滚困难（Release 版本历史 + rollback 一键回滚）。
+            类比 yum 之于 Linux 包，Helm 之于 K8s 应用。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q2：Chart、Release、Repository 的关系？</div>
+          <p>
+            Repository 是 Chart 仓库，集中存放可复用的 Chart 模板；
+            Chart 是打包好的应用模板（一组参数化 YAML）；
+            Release 是 Chart 被安装到集群后产生的一个运行实例。
+            一个 Chart 可以安装多次，每次产生不同名的 Release，互不影响；
+            Repository 可以有多个，用 <code>helm repo add</code> 管理。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q3：怎么做多环境部署？</div>
+          <p>
+            为每个环境准备一份 values 文件（values-dev/test/prod.yaml），
+            只写该环境需要覆盖的差异项，其余沿用默认。
+            部署时 <code>helm install/upgrade --install -f values-xxx.yaml</code>。
+            values 文件纳入 Git，作为环境配置的唯一真源。
+            环境差异大时也可用 Chart 内 <code>env</code> 字段分支渲染，或每环境独立 Chart 仓库。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Helm 是 K8s 的包管理器，解决 YAML 多、环境差异、回滚难三大痛点。</li>
+          <li>Chart 是模板包，Release 是运行实例，Repository 是 Chart 仓库，三者关系类似食谱/菜/食谱库。</li>
+          <li>核心命令：repo add/search、install、list、upgrade、rollback、uninstall。</li>
+          <li>生产用 <code>-f values.yaml</code> 而非 <code>--set</code>，配置必须纳入 Git。</li>
+          <li><code>helm create</code> 生成骨架，模板用 Go text/template 语法，<code>{{ .Values }}</code>/<code>{{ .Release }}</code> 是最常用对象。</li>
+          <li>多环境靠多套 values 文件覆盖，Chart 主体保持一致。</li>
+          <li>Release 历史存在 K8s Secret 中，<code>helm rollback</code> 一键回滚到历史版本。</li>
+          <li>升级用 <code>upgrade --install --atomic</code> 实现幂等 + 失败自动回滚，是 CI/CD 标配。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="Chart 是打包好的模板，Release 是 Chart 安装到集群后的运行实例，Repository 是存放 Chart 的仓库。">
+            <div class="quiz-question">1. （单选）关于 Helm 的 Chart 和 Release，下列说法正确的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q33-1" value="A" /> A. Chart 和 Release 是同一个东西</label></li>
+              <li><label><input type="radio" name="q33-1" value="B" /> B. Chart 是模板包，Release 是它在集群中运行的一个实例</label></li>
+              <li><label><input type="radio" name="q33-1" value="C" /> C. 一个 Chart 只能产生一个 Release</label></li>
+              <li><label><input type="radio" name="q33-1" value="D" /> D. Release 是 Chart 仓库的另一个名字</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="{{ .Values.xxx }} 引用 values.yaml 和 -f 传入的配置，{{ .Release.Name }} 引用 Release 运行时信息，{{ .Chart.Name }} 引用 Chart.yaml 元数据。">
+            <div class="quiz-question">2. （单选）Helm 模板中引用 values.yaml 里的配置，用哪个对象？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q33-2" value="A" /> A. {{ .Values.xxx }}</label></li>
+              <li><label><input type="radio" name="q33-2" value="B" /> B. {{ .Release.xxx }}</label></li>
+              <li><label><input type="radio" name="q33-2" value="C" /> C. {{ .Chart.xxx }}</label></li>
+              <li><label><input type="radio" name="q33-2" value="D" /> D. {{ .Config.xxx }}</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D"
+               data-explain="helm upgrade --install 实现幂等安装：Release 不存在就装、存在就升级，是 CI/CD 标配写法。">
+            <div class="quiz-question">3. （单选）在 CI/CD 中希望「Release 不存在就安装、存在就升级」，用哪个命令？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q33-3" value="A" /> A. helm install --force</label></li>
+              <li><label><input type="radio" name="q33-3" value="B" /> B. helm reinstall</label></li>
+              <li><label><input type="radio" name="q33-3" value="C" /> C. helm apply</label></li>
+              <li><label><input type="radio" name="q33-3" value="D" /> D. helm upgrade --install</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="rollback|helm rollback"
+               data-explain="helm rollback <release> <revision> 把 Release 回滚到指定历史版本，回滚本身也是一个新 Revision。">
+            <div class="quiz-question">4. （填空）Helm 中把 Release 回滚到某个历史版本，用哪个子命令？（英文，helm 后的子命令）</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s 深度专题 · 第 33 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=3"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第34章 生产运维、监控与面试高频题 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="34-k8s-production">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 34 章</span>
+          <span class="meta-tag">K8s 专题</span>
+          <span class="meta-tag">约 50 分钟</span>
+        </div>
+        <h1>生产运维、监控与面试高频题</h1>
+        <p>
+          这是 K8s 深度专题的压轴章。前面学了概念、集群、Pod、Workload、网络、存储、安全、调度、Helm，
+          本章把它们拼成完整的生产运维能力：监控告警、日志收集、故障排查手册、
+          etcd 备份恢复、集群升级、GitOps，最后用一道「部署完整微服务应用」的综合实战收口，
+          并汇总 30+ 道面试高频题。学完你能独立 hold 住一个生产 K8s 集群。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>搭建 Prometheus + Grafana 监控体系，掌握关键监控指标和告警配置</li>
+          <li>了解 EFK、Loki+Promtail 两类日志方案及选型</li>
+          <li>掌握 Pod / Service / 节点 / 网络 / 存储五大故障排查流程</li>
+          <li>能备份和恢复 etcd，掌握集群升级的正确步骤</li>
+          <li>理解 GitOps 理念和 ArgoCD/Flux 的工作方式</li>
+          <li>能回答 30+ 道 K8s 面试高频题，并能部署一个完整微服务应用</li>
+        </ul>
+
+        <h2>1. 监控体系搭建</h2>
+        <p>K8s 监控的事实标准是 <strong>Prometheus + Grafana</strong>。
+          Prometheus 负责采集和存储时序指标，Grafana 负责可视化看板，Alertmanager 负责告警分发。</p>
+
+        <div class="callout">
+          <div class="callout-title">监控架构一图流</div>
+<pre><code>   ┌──────────────────────────────────────────────────────────┐
+   │                      K8s 集群                              │
+   │                                                            │
+   │  ┌────────────┐  ┌────────────┐  ┌────────────┐           │
+   │  │ kubelet    │  │ API Server │  │ etcd       │           │
+   │  │ /metrics   │  │ /metrics   │  │ /metrics   │           │
+   │  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘           │
+   │        │               │               │                    │
+   │  ┌─────┴───────────────┴───────────────┴──────┐           │
+   │  │  Exporter / ServiceMonitor（指标暴露）       │           │
+   │  └────────────────────┬────────────────────────┘           │
+   └───────────────────────┼────────────────────────────────────┘
+                           │ 抓取（pull）
+                           ▼
+              ┌────────────────────────┐
+              │      Prometheus        │  ← 时序数据库
+              │  (采集 + 存储 + 查询)   │
+              └──┬──────────────────┬──┘
+                 │                  │
+        ┌────────┴───────┐   ┌──────┴─────────┐
+        │  Grafana       │   │  Alertmanager  │
+        │  (看板/图表)    │   │  (告警分发)     │
+        └────────────────┘   └───────┬────────┘
+                                     │
+                              邮件 / 钉钉 / 飞书 / PagerDuty</code></pre>
+        </div>
+
+        <h3>1.1 一键安装 kube-prometheus-stack</h3>
+        <p>社区维护的 kube-prometheus-stack 把 Prometheus、Grafana、Alertmanager、
+          NodeExporter、kube-state-metrics 全打包，一条命令装好整套监控。</p>
+        <pre><code>helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+helm install monitoring prometheus-community/kube-prometheus-stack \
+  -n monitoring --create-namespace \
+  --set grafana.adminPassword='Grafana@2024' \
+  --set prometheus.service.type=NodePort \
+  --set grafana.service.type=NodePort
+
+# 查看
+kubectl get pods -n monitoring
+#  grafana-xxx                       2/2 Running
+#  prometheus-monitoring-prometheus  2/2 Running
+#  alertmanager-xxx                  2/2 Running
+#  monitoring-prometheus-node-exporter-xxx  (DaemonSet，每节点一个)
+
+# 访问 Grafana（拿到 NodePort 端口）
+kubectl get svc -n monitoring grafana -o jsonpath='{.spec.ports[0].nodePort}'
+# 浏览器访问 http://节点IP:上述端口，账号 admin / 上面设的密码</code></pre>
+
+        <h3>1.2 关键监控指标</h3>
+        <ul>
+          <li><strong>节点资源</strong>：CPU/内存使用率、磁盘剩余、inode、网络收发。
+            <code>node:node_memory_MemAvailable_bytes</code>、<code>node:node_cpu_utilisation</code>。</li>
+          <li><strong>Pod 状态</strong>：kube-state-metrics 暴露 Pod 的 Phase、
+            重启次数、OOM 计数。关注 <code>kube_pod_container_status_restarts_total</code>。</li>
+          <li><strong>API Server 延迟</strong>：<code>apiserver_request_duration_seconds</code>，
+            P99 延迟 &gt; 1s 就要查控制面负载。</li>
+          <li><strong>etcd 性能</strong>：<code>etcd_disk_wal_fsync_duration_seconds</code>、
+            <code>etcd_server_proposals_failed_total</code>，etcd 慢会拖垮整个集群。</li>
+          <li><strong>容器资源</strong>：<code>container_cpu_usage_seconds_total</code>、
+            <code>container_memory_working_set_bytes</code>（注意是 working_set，接近 OOM 判定值）。</li>
+        </ul>
+
+        <div class="callout">
+          <div class="callout-title">metrics-server 和 Prometheus 不是一回事</div>
+          <p>
+            <strong>metrics-server</strong>：轻量，只采集实时 CPU/内存用于
+            <code>kubectl top</code> 和 HPA 弹性伸缩，<strong>不存历史</strong>。
+            <strong>Prometheus</strong>：完整时序数据库，存历史、做查询、做告警看板。
+            生产两者都要：metrics-server 喂 HPA，Prometheus 喂监控告警。
+          </p>
+        </div>
+
+        <h3>1.3 告警规则配置示例</h3>
+        <pre><code># PrometheusRule（kube-prometheus-stack 自动识别）
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: my-alerts
+  namespace: monitoring
+spec:
+  groups:
+    - name: k8s-alerts
+      rules:
+        - alert: NodeHighCpuUsage
+          expr: node:node_cpu_utilisation:ratio_avg > 0.85
+          for: 5m                  # 持续 5 分钟才告警，避免抖动
+          labels:
+            severity: warning
+          annotations:
+            summary: "节点 {{ $labels.node }} CPU 使用率过高"
+            description: "当前 {{ $value | humanizePercentage }}，超过 85%"
+
+        - alert: PodCrashLooping
+          expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.pod }} 反复重启"
+
+        - alert: EtcdHighFsyncDuration
+          expr: histogram_quantile(0.99, rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m])) > 0.01
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "etcd 写盘延迟过高，可能影响整个集群"</code></pre>
+
+        <h2>2. 日志收集</h2>
+        <p>K8s 容器日志默认写到 stdout/stderr，由容器运行时落到
+          <code>/var/log/containers/</code>。三种主流收集方案：</p>
+
+        <ul>
+          <li><strong>方案一：EFK</strong>（Elasticsearch + Fluentd/Fluent Bit + Kibana）。
+            功能最全，支持全文检索、复杂查询，适合日志量大、需深度检索的场景。
+            缺点是 Elasticsearch 重，资源消耗高。</li>
+          <li><strong>方案二：Loki + Promtail</strong>。Prometheus 团队出品，标签化索引而非全文索引，
+            轻量、和 Grafana 原生集成，适合中小规模、日志查询以标签筛选为主。</li>
+          <li><strong>方案三：直接 <code>kubectl logs</code></strong>。开发调试用，
+            不适合生产长期留存和检索。</li>
+        </ul>
+
+        <pre><code># 开发调试：看实时日志
+kubectl logs -f myapp-pod -c myapp
+kubectl logs --previous myapp-pod     # 看上次崩溃前的日志
+kubectl logs -l app=web --tail=100    # 按 label 看多个 Pod
+
+# Loki 安装（Helm，和 Grafana 同生态）
+helm repo add grafana https://grafana.github.io/helm-charts
+helm install loki grafana/loki-stack -n logging --create-namespace
+#  Grafana 里直接添加 Loki 数据源，用 LogQL 查询</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">日志方案选型建议</div>
+          <p>
+            中小规模、追求轻量 → <strong>Loki + Promtail</strong>，资源省、和 Grafana 一体化。
+            日志量大、需复杂全文检索和审计 → <strong>EFK</strong>，功能全但要养一套 ES 集群。
+            无论哪种，应用日志必须输出到 stdout/stderr，别写本地文件（Pod 漂移后日志就没了）。
+          </p>
+        </div>
+
+        <h2>3. 故障排查手册（核心实战）</h2>
+        <p>这是生产运维最值钱的能力。下面按五大场景给出排查流程、命令和输出分析。</p>
+
+        <h3>3.1 Pod 排障流程</h3>
+        <pre><code># 第一步：看 Pod 状态（看 STATUS 列）
+kubectl get pods -n myapp
+#  NAME      READY  STATUS              RESTARTS
+#  web-0     1/1   Running              0
+#  web-1     0/1   CrashLoopBackOff     6
+#  api-0     0/1   Pending              0
+#  api-1     0/1   ImagePullBackOff     0
+
+# 第二步：不同状态走不同分支
+#  Pending        → 调度失败，看 describe 的 Events
+#  ContainerCreating → 镜像拉取/挂载失败，看 Events
+#  ImagePullBackOff → 镜像地址错或仓库没权限
+#  CrashLoopBackOff → 容器启动后崩溃，看 logs
+#  ErrImagePull    → 镜像名拼写错或不存在
+
+# 第三步：describe 看 Events（重点看底部 Events 部分）
+kubectl describe pod web-1 -n myapp
+#  Events:
+#    Warning  FailedScheduling  3m  default-scheduler
+#      0/3 nodes are available: 3 Insufficient memory.
+#      ↑ 资源不足，调小 requests 或加节点
+#    Normal   Pulling  2m  kubelet  Pulling "nginx:v1"
+#    Warning  Failed   2m  kubelet  Failed to pull image "nginx:v1":
+#      manifest unknown   ↑ 镜像 tag 不存在
+
+# 第四步：看日志（容器已启动但崩溃）
+kubectl logs web-1 -n myapp
+kubectl logs --previous web-1 -n myapp    # 看上一次（崩溃前）的日志
+
+# 第五步：进容器内部排查（容器还活着时）
+kubectl exec -it web-1 -n myapp -- /bin/sh
+#  进去看：env、cat 配置文件、telnet/nc 测下游依赖是否通</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">Pod 排障命令清单</div>
+          <ul>
+            <li><code>kubectl get pods</code> → 看 STATUS 决定下一步</li>
+            <li><code>kubectl describe pod 名字</code> → 看 Events（调度、拉镜像、挂载错误都在这）</li>
+            <li><code>kubectl logs 名字</code> → 看当前日志</li>
+            <li><code>kubectl logs --previous 名字</code> → 看上次崩溃前日志（CrashLoopBackOff 必看）</li>
+            <li><code>kubectl exec -it 名字 -- /bin/sh</code> → 进容器内部排查依赖、配置</li>
+            <li><code>crictl logs &lt;containerID&gt;</code> → kubelet 都连不上时在节点上直接看容器日志</li>
+          </ul>
+        </div>
+
+        <h3>3.2 Service 排障流程</h3>
+        <pre><code># 1. 看 Service 是否选中了 Pod（最常见：endpoints 空）
+kubectl get svc web-svc -n myapp
+kubectl get endpoints web-svc -n myapp
+#  NAME      ENDPOINTS
+#  web-svc   &lt;none&gt;          ← 空！selector 没匹配到 Pod
+
+# 2. 对照 selector 和 Pod labels（最常踩的坑）
+kubectl get svc web-svc -o jsonpath='{.spec.selector}'   # Service 选什么
+kubectl get pods -n myapp --show-labels                  # Pod 实际有什么 label
+#  常见：label 拼写不一致、namespace 不对、Pod 没 Ready（readinessProbe 没过）
+
+# 3. 在 Pod 内访问 ClusterIP
+kubectl exec -it debug -- sh -c "curl -v http://web-svc:80"
+#  通 → kube-proxy 规则正常
+#  不通 → 往下查 kube-proxy / iptables
+
+# 4. 看 kube-proxy 是否正常
+kubectl get pods -n kube-system | grep kube-proxy
+kubectl logs -n kube-system kube-proxy-xxx --tail=50
+
+# 5. 在节点上看 iptables 规则（IPVS 模式看 ipvsadm -L）
+iptables -t nat -L -n | grep web-svc
+#  应能看到 DNAT 把 Service IP 改写成 Pod IP
+ipvsadm -Ln | grep &lt;ClusterIP&gt;       # IPVS 模式</code></pre>
+
+        <h3>3.3 节点排障流程</h3>
+        <pre><code># 1. 看节点状态
+kubectl get nodes
+#  NAME      STATUS     ROLES    VERSION
+#  node-1    Ready      &lt;none&gt;   v1.28.0
+#  node-2    NotReady   &lt;none&gt;   v1.28.0     ← 异常
+
+# 2. describe 看 Conditions
+kubectl describe node node-2
+#  Conditions:
+#    Ready            False  ... KubeletNotReady  container runtime not ready
+#    MemoryPressure   True   ← 内存压力
+#    DiskPressure     True   ← 磁盘压力
+#    PIDPressure      False
+
+# 3. 登录节点，看 kubelet 和运行时
+systemctl status kubelet
+journalctl -u kubelet --since "30 min ago" | tail -50
+systemctl status containerd
+crictl ps                        # 看运行中的容器
+
+# 4. 看资源
+free -h                           # 内存
+df -h /var/lib/containerd /var   # 磁盘（容器磁盘满会让节点 NotReady）
+df -i /var                        # inode（小文件太多会耗尽 inode）
+
+# 5. NotReady 常见原因
+#  - kubelet 崩溃/被 OOM → 看 journalctl
+#  - 磁盘满（容器镜像、日志）→ 清理 docker/containerd 存储
+#  - 容器运行时挂了 → systemctl restart containerd
+#  - 网络插件问题 → CNI Pod 状态</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">节点 NotReady 排查命令清单</div>
+          <ul>
+            <li><code>kubectl describe node 名字</code> → 看 Conditions（Memory/Disk/PID Pressure）</li>
+            <li><code>systemctl status kubelet</code> → kubelet 是否在跑</li>
+            <li><code>journalctl -u kubelet -f</code> → kubelet 实时日志</li>
+            <li><code>systemctl status containerd</code> + <code>crictl ps</code> → 运行时和容器</li>
+            <li><code>df -h /var</code> + <code>df -i /var</code> → 磁盘空间和 inode</li>
+            <li><code>free -h</code> → 内存</li>
+          </ul>
+        </div>
+
+        <h3>3.4 网络排障流程</h3>
+        <pre><code># 1. DNS 解析
+kubectl exec -it debug -- nslookup web-svc
+#  能解析出 ClusterIP → DNS（kube-dns/CoreDNS）正常
+#  解析失败 → 看 kube-system 里 coredns Pod、看 /etc/resolv.conf
+
+# 2. Pod 间直接通信（用 Pod IP）
+kubectl exec -it debug -- ping &lt;另一个PodIP&gt;
+#  同节点不通 → CNI 问题（calico/flannel）
+#  跨节点不通 → 节点间隧道/IPIP/BGP 问题
+
+# 3. Service 访问（见 3.2）
+
+# 4. 跨节点通信排查
+#  - 看 CNI 插件 Pod 是否正常：kubectl get pods -n kube-system | grep -E "calico|flannel"
+#  - 看节点路由表：ip route
+#  - 看网络策略是否误伤：kubectl get networkpolicy -A
+
+# 5. 外部访问不通
+#  - Ingress：kubectl get ingress、kubectl describe ingress、看 ingress-controller 日志
+#  - NodePort：节点防火墙/安全组是否放行
+#  - LoadBalancer：云厂商 LB 后端是否注册了节点</code></pre>
+
+        <h3>3.5 存储排障流程</h3>
+        <pre><code># 1. PVC 一直 Pending（最常见）
+kubectl get pvc
+#  NAME        STATUS    VOLUME   CAPACITY
+#  data-pvc    Pending                       ← 没绑上 PV
+
+kubectl describe pvc data-pvc
+#  Events:
+#    Warning  ProvisioningFailed  storageclass
+#      storageclass "fast-ssd" not found   ← StorageClass 名字错
+#    或: no persistent volumes available   ← 静态 PV 没有匹配的
+#    或: volume binding is waiting         ← 等待调度（WaitForFirstConsumer）
+
+# 2. PV 绑定问题
+kubectl get pv
+#  看是否有 ACCESS MODES、容量匹配 PVC 的可用 PV
+
+# 3. StorageClass 是否存在、是否默认
+kubectl get storageclass
+#  fast-ssd (default)   kubernetes.io/no-provisioner
+#  如果需要动态供给但 SC 是 no-provisioner，就不会自动建 PV
+
+# 4. 挂载错误（Pod 卡在 ContainerCreating）
+kubectl describe pod 名字
+#  Events:
+#    Warning  FailedMount  ...  Unable to attach or mount volume
+#      volume "data" not found   ← PV 被删了或不存在
+#    Warning  FailedMount  ...  mount /dev/xxx on /data failed
+#      no such file or directory  ← 节点上挂载路径/权限问题
+
+# 5. 节点上看挂载情况
+mount | grep data
+ls -l /var/lib/kubelet/pods/&lt;podUID&gt;/volumes</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">排障铁律：从上往下，别跳步</div>
+          <p>
+            排障永远遵循「表象 → 资源状态 → 事件 → 日志 → 进容器」的顺序。
+            <code>get</code> 看 STATUS → <code>describe</code> 看 Events →
+            <code>logs</code> 看应用日志 → <code>exec</code> 进容器验证。
+            跳过 describe 直接猜原因，是大多数排障时间被浪费的根源。
+          </p>
+        </div>
+
+        <h2>4. etcd 备份与恢复</h2>
+        <p>etcd 是集群的大脑——所有 Pod、Service、Secret、ConfigMap、RBAC 都存在 etcd 里。
+          <strong>etcd 丢了，整个集群就没了</strong>。生产必须定期备份。</p>
+
+        <pre><code># === 备份 ===
+# 在任一 master 节点执行（需 etcdctl，装 etcd 时自带）
+ETCDCTL_API=3 etcdctl snapshot save /backup/etcd-$(date +%Y%m%d).db \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key
+
+# 验证备份完整性
+ETCDCTL_API=3 etcdctl snapshot status /backup/etcd-20240901.db -w table
+#  +----------+------------+-----------+-----------+
+#  |  HASH    | REVISION   | TOTAL KEYS| TOTAL SIZE|
+#  +----------+------------+-----------+-----------+
+#  | ...      | 123456     | 8900      | 12 MB     |</code></pre>
+
+        <pre><code># === 恢复（在灾难恢复场景）===
+# 1. 停掉所有 master 的 etcd 和控制面
+systemctl stop kube-apiserver
+systemctl stop etcd
+
+# 2. 清空旧的 etcd 数据目录（非常重要，否则恢复会失败）
+mv /var/lib/etcd /var/lib/etcd.bak
+
+# 3. 从备份恢复
+ETCDCTL_API=3 etcdctl snapshot restore /backup/etcd-20240901.db \
+  --data-dir=/var/lib/etcd
+
+# 4. 启动 etcd 和 apiserver
+systemctl start etcd
+systemctl start kube-apiserver
+
+# 5. 多 master 集群：恢复一个后，其它 master 用 etcdctl member add 重新加入</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">生产必须定期备份 etcd！</div>
+          <p>
+            建议<strong>每天至少备份一次</strong>，备份文件异机/异地存放（别和 etcd 放同一台机器，
+            机器挂了备份也跟着没）。恢复前<strong>必须</strong>停 etcd 并清空旧数据目录，
+            否则恢复会因目录非空而失败。重大操作（升级、迁移）前务必先做一次手动备份。
+          </p>
+        </div>
+
+        <h2>5. 集群升级</h2>
+        <p>K8s 版本升级有严格原则，乱升会出大问题。</p>
+
+        <ul>
+          <li><strong>升级顺序</strong>：先升 kubeadm（工具）→ 再升控制面组件（apiserver/scheduler/controller/etcd）→ 最后升 kubelet。
+            apiserver 版本不能比 kubelet 低超过 2 个小版本。</li>
+          <li><strong>一次只升一个小版本</strong>：如 1.27 → 1.28，不能跨 1.27 → 1.30。</li>
+          <li><strong>先升 master，再升 worker</strong>，worker 滚动升级避免业务全停。</li>
+        </ul>
+
+        <pre><code># 升级前：备份 etcd（见第 4 节）
+# 升级前：排空一个 worker 节点测试
+kubectl cordon node-2
+kubectl drain node-2 --ignore-daemonsets --delete-emptydir-data
+
+# 1. 升级 kubeadm
+yum install -y kubeadm-1.28.x-0 --disableexcludes=kubernetes
+
+# 2. 升级控制面（master 节点）
+kubeadm upgrade apply v1.28.x
+
+# 3. 升级 kubelet 和 kubectl
+yum install -y kubelet-1.28.x-0 kubectl-1.28.x-0 --disableexcludes=kubernetes
+systemctl daemon-reload
+systemctl restart kubelet
+
+# 4. 升级 worker 节点
+kubeadm upgrade node       # 在 worker 上执行
+yum install -y kubelet-1.28.x-0 --disableexcludes=kubernetes
+systemctl restart kubelet
+kubectl uncordon node-2    # 恢复调度</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">升级前必须备份 etcd</div>
+          <p>
+            集群升级失败最严重的后果是 etcd 数据损坏、整个集群不可用。
+            <strong>升级前做一次 etcd 快照备份是硬性要求</strong>，且要先在测试集群演练全流程。
+            生产窗口选业务低峰期，准备好回滚预案（恢复 etcd 备份 + 回退 kubelet/kubeadm 版本）。
+          </p>
+        </div>
+
+        <h2>6. CI/CD 与 GitOps</h2>
+        <p>应用从代码到 K8s 集群，有两代主流模式。</p>
+
+        <h3>6.1 传统 CI/CD</h3>
+        <p>代码 push → Jenkins/GitLab CI 构建镜像 → 流水线执行
+          <code>kubectl apply -f deploy.yaml</code> 或 <code>helm upgrade</code>。
+          简单直接，但<strong>集群状态不在 Git 里</strong>，手动改了集群配置后 Git 不会感知，漂移难发现。</p>
+
+        <h3>6.2 GitOps</h3>
+        <p>把<strong>整个集群的期望状态</strong>（YAML/Helm values）放在 Git 仓库，
+          由 ArgoCD / Flux 持续把 Git 的状态同步到集群。Git 是唯一真源（Single Source of Truth）。</p>
+
+        <div class="callout">
+          <div class="callout-title">GitOps 流程一图流</div>
+<pre><code>  开发 push 代码
+       │
+       ▼
+  ┌──────────┐   构建镜像   ┌──────────┐
+  │  GitLab  │ ──────────→ │ Registry │
+  │  CI/CD   │             │ (镜像仓库)│
+  └────┬─────┘             └──────────┘
+       │ 更新 K8s 清单仓库（改镜像 tag）
+       ▼
+  ┌──────────────────────────┐
+  │   Git 配置仓库（YAML /   │  ← 唯一真源
+  │   Helm values / Kustomize│
+  └──────────┬───────────────┘
+             │ 监听变更
+             ▼
+  ┌──────────────────────────┐
+  │   ArgoCD / Flux          │  ← 持续同步
+  │  (Compare & Apply)        │
+  └──────────┬───────────────┘
+             │ apply
+             ▼
+  ┌──────────────────────────┐
+  │      K8s 集群             │
+  └──────────────────────────┘</code></pre>
+        </div>
+
+        <div class="callout tip">
+          <div class="callout-title">GitOps 的好处</div>
+          <ul>
+            <li><strong>可审计</strong>：每次集群变更都有 Git commit，谁改的、改了啥、何时改的一清二楚。</li>
+            <li><strong>可回滚</strong>：出问题就 <code>git revert</code>，ArgoCD 自动把集群回退到上一个版本。</li>
+            <li><strong>防漂移</strong>：有人手动 kubectl 改了集群，ArgoCD 检测到与 Git 不一致会告警甚至自动纠正。</li>
+            <li><strong>多环境一致</strong>：dev/test/prod 只是不同的 Git 目录或分支，部署方式完全一致。</li>
+          </ul>
+        </div>
+
+        <h2>7. K8s 面试高频题汇总</h2>
+        <p>下面按模块汇总 30+ 道高频题，每题给精要参考答案要点。</p>
+
+        <h3>7.1 架构类</h3>
+
+        <div class="callout">
+          <div class="callout-title">说说 K8s 架构和各组件职责</div>
+          <p>
+            分 Master 控制面和 Node。Master：apiserver（请求入口，操作 etcd）、
+            etcd（状态存储）、scheduler（调度 Pod 到 Node）、controller-manager（维护期望状态如副本数）。
+            Node：kubelet（管理本节点 Pod，与容器运行时交互）、kube-proxy（维护 Service 网络规则）、
+            容器运行时（containerd/CRI-O 真正跑容器）。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">K8s 和 Docker 的关系</div>
+          <p>
+            Docker 是容器引擎，解决单机容器构建运行。K8s 是容器编排系统，解决多机多容器的调度、
+            服务发现、扩缩容、滚动更新。K8s 早期用 Docker 作为运行时，1.24 起弃用 dockershim，
+            改用 containerd/CRI-O（符合 CRI 标准）。K8s 不强绑 Docker，但二者常配合使用：Docker 构建，K8s 编排。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">什么是声明式模型</div>
+          <p>
+            用户向 K8s 提交「期望状态」（YAML，如 replicas: 3），
+            controller 持续对比期望状态和实际状态，发现偏差就自动调整使其一致。
+            和命令式（执行命令改状态）不同，声明式可重入、可自愈、易审计。
+            典型：kubectl apply 同一个 YAML 多次结果一致；Pod 挂了 controller 自动拉起新的。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">etcd 的作用是什么</div>
+          <p>
+            etcd 是强一致分布式 KV 存储，保存 K8s 集群所有状态数据（Pod/Service/Secret/ConfigMap/RBAC 等）。
+            是整个集群的「大脑」和唯一持久化真源。apiserver 是唯一直接读写 etcd 的组件。
+            etcd 挂了等于集群大脑死亡，生产用 3/5 节点 Raft 集群保证高可用，必须用 SSD 并定期备份。
+          </p>
+        </div>
+
+        <h3>7.2 Pod 类</h3>
+
+        <div class="callout">
+          <div class="callout-title">Pod 有哪些状态</div>
+          <p>
+            Pending（等待调度/拉镜像）、ContainerCreating（创建中）、Running（运行中，但容器未必就绪）、
+            Succeeded（正常退出，Job 专用）、Failed（容器退出且非 0）、
+            CrashLoopBackOff（反复崩溃重启）、ImagePullBackOff（镜像拉取失败）、
+            Unknown（apiserver 联系不上 kubelet）。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">三类探针的区别</div>
+          <p>
+            livenessProbe（存活）：失败就重启容器，解决死锁/hang 住。
+            readinessProbe（就绪）：失败就从 Service 摘流量但不重启，解决启动慢/过载。
+            startupProbe（启动）：启动期独占，通过后另两个才生效，适合慢启动应用避免被 liveness 误杀。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">QoS 等级是什么</div>
+          <p>
+            按资源 requests/limits 配置自动分三档：
+            Guaranteed（requests=limits，最高优先级，最后被驱逐）、
+            Burstable（至少一个有 requests，中等）、
+            BestEffort（无 requests/limits，最先被驱逐）。
+            节点资源紧张时按 QoS 从低到高驱逐 Pod。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Init Container 和 Sidecar 的区别</div>
+          <p>
+            Init Container：在主容器前<strong>顺序执行完退出</strong>，用于初始化（等依赖、改配置、迁移数据），
+            必须成功主容器才会启动。
+            Sidecar：和主容器<strong>并行长期运行</strong>，辅助主容器（如日志 agent、service mesh proxy）。
+            K8s 1.28+ 原生支持 Sidecar 容器（initContainers 设 restartPolicy: Always）。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Pod 怎么优雅终止</div>
+          <p>
+            删除 Pod 时：1) 把 Pod 从 Service endpoints 摘除；2) 发送 SIGTERM 给主容器
+            （可设 preStop hook 做清理如反注册）；3) 等 terminationGracePeriodSeconds（默认 30s）；
+            4) 还没退出就 SIGKILL 强杀。要点：preStop + readinessProbe 配合，避免流量打到正在退出的 Pod。
+          </p>
+        </div>
+
+        <h3>7.3 Workload 类</h3>
+
+        <div class="callout">
+          <div class="callout-title">Deployment 和 StatefulSet 的区别</div>
+          <p>
+            Deployment：无状态，Pod 名随机（web-xxx），可任意扩缩，适合 Web/API。
+            StatefulSet：有状态，Pod 名稳定有序（db-0/db-1），每个 Pod 有独立 PVC 和稳定网络标识
+            （db-0.headless-svc），适合数据库、消息队列、需主从拓扑的应用。扩缩要按序，不能乱序删。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">滚动更新的原理</div>
+          <p>
+            Deployment 用 maxSurge（最多多几个新 Pod）和 maxUnavailable（最多少几个旧 Pod）控制节奏。
+            新建新 Pod → 新 Pod Ready → 删一个旧 Pod → 重复，整个过程渐进替换。
+            可设 maxUnavailable: 0 保证不中断服务。回滚用 <code>kubectl rollout undo</code>，
+            切回上一个 ReplicaSet。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">什么场景用 DaemonSet</div>
+          <p>
+            每个 Node 上跑一个 Pod 的场景：日志采集（Fluentd）、监控 agent（node-exporter）、
+            网络插件（calico-node）、存储 agent、Ingress Controller（hostNetwork 模式）。
+            新节点加入自动起 Pod，节点删除自动清理。配合 toleration 可在 master 上也跑。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Job 和 CronJob 的区别</div>
+          <p>
+            Job：跑一次就结束的任务（数据迁移、批处理），完成次数/并行度可控。
+            CronJob：按 cron 表达式定时触发 Job（每日备份、每时报表）。
+            注意 <code>.spec.concurrencyPolicy</code> 控制任务重叠时的行为（Allow/Forbid/Replace）。
+          </p>
+        </div>
+
+        <h3>7.4 网络类</h3>
+
+        <div class="callout">
+          <div class="callout-title">Service 有几种类型</div>
+          <p>
+            ClusterIP（默认，集群内访问）、NodePort（暴露到节点端口 30000+）、
+            LoadBalancer（云厂商提供 LB，外部访问）、
+            ExternalName（DNS CNAME 到外部域名，不发 IP）。
+            另有 Headless（clusterIP: None，DNS 直接返回所有 Pod IP，StatefulSet 用）。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Ingress 和 Service 的区别</div>
+          <p>
+            Service 是 L4（TCP/UDP）负载均衡，给一组 Pod 稳定入口，但不支持按域名/路径路由。
+            Ingress 是 L7（HTTP/HTTPS），按域名和路径把流量路由到不同 Service，还支持 TLS 终结、虚拟主机。
+            Ingress 需 Ingress Controller（如 ingress-nginx）真正转发流量，Ingress 资源只是路由规则。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">kube-proxy iptables 和 IPVS 的区别</div>
+          <p>
+            iptables 模式：规则线性匹配，Service 多时性能下降明显，但兼容性好。
+            IPVS 模式：基于哈希表，O(1) 查找，Service 量大（千级以上）时性能更好，
+            还支持更多负载算法（rr/lc/sh 等）。生产 Service 量大建议 IPVS。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Service 不通怎么排查</div>
+          <p>
+            1) 看 endpoints 是否为空（selector 没匹配到 Pod）；2) Pod 是否 Ready（readinessProbe 没过会摘除）；
+            3) Pod 内 curl Pod IP；4) curl ClusterIP；5) 看 kube-proxy 和 iptables/ipvs 规则；
+            6) NodePort 看节点防火墙。从 selector → Pod 状态 → kube-proxy 逐层查。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Headless Service 是什么</div>
+          <p>
+            clusterIP 设为 None 的 Service，不分配 ClusterIP，DNS 查询直接返回所有 Pod 的 IP。
+            用于客户端需要直连每个 Pod 的场景（StatefulSet 主从、gRPC 客户端负载均衡、
+            服务发现返回实例列表）。配合 StatefulSet，每个 Pod 有稳定的「Pod名.服务名」DNS 记录。
+          </p>
+        </div>
+
+        <h3>7.5 存储类</h3>
+
+        <div class="callout">
+          <div class="callout-title">PV 和 PVC 的关系</div>
+          <p>
+            PV 是集群的存储资源（管理员创建或动态供给），PVC 是用户对存储的申请（容量、访问模式）。
+            PVC 绑定匹配的 PV 后，Pod 通过 PVC 使用存储。解耦了「谁提供存储」和「谁用存储」，
+            用户不用关心后端是 NFS 还是云盘。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">什么是 StorageClass</div>
+          <p>
+            StorageClass 是动态供给 PV 的模板，定义 provisioner（如云盘 CSI）、参数、绑定策略。
+            用户只声明 PVC，StorageClass 自动创建对应 PV 并绑定，省去管理员手动建 PV。
+            生产标配：按 SC 名（fast-ssd / hdd）区分存储性能档位。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">ConfigMap 热更新生效吗</div>
+          <p>
+            部分生效。环境变量方式<strong>不更新</strong>（Pod 重启才生效）；
+            Volume 挂载方式<strong>会自动更新</strong>（kubelet 周期同步，约 1 分钟内），
+            但应用是否重读取决于应用自身是否 watch 文件变化。
+            不重读就需要滚动重启 Pod。subPath 挂载的不会热更新。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Secret 安全吗</div>
+          <p>
+            默认<strong>不安全</strong>，只是 base64 编码，能被 <code>kubectl get secret -o yaml</code> 直接解码。
+            生产加固：开启 etcd 静态加密（EncryptionConfiguration）、用 RBAC 限制 Secret 访问权限、
+            敏感凭据走外部 KMS（Vault、云厂商 KMS）或 Sealed Secrets 加密后再入 Git。
+          </p>
+        </div>
+
+        <h3>7.6 安全类</h3>
+
+        <div class="callout">
+          <div class="callout-title">说说 RBAC 模型</div>
+          <p>
+            Role-Based Access Control。三要素：Subject（用户/组/ServiceAccount）、
+            Role（权限规则）、RoleBinding（把 Role 绑给 Subject）。
+            权限＝动词（get/list/create/...）＋资源（pods/deployments/...）。
+            最小权限原则：按需授权，CI/CD 用独立 ServiceAccount 而非共享 admin。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Role 和 ClusterRole 的区别</div>
+          <p>
+            Role 是<strong>命名空间级</strong>权限，只在该 namespace 生效；
+            ClusterRole 是<strong>集群级</strong>权限，可授权集群范围资源（nodes/pv/namespace）或跨 namespace 共享。
+            对应 RoleBinding（绑 Role，namespace 内）和 ClusterRoleBinding（绑 ClusterRole，集群级）。
+            常见做法：定义 ClusterRole，用 RoleBinding 绑到具体 namespace，实现权限复用 + 作用域限制。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">怎么保证 Pod 安全运行</div>
+          <p>
+            1) SecurityContext 限制：禁止特权（privileged: false）、只读根文件系统、设 runAsNonRoot；
+            2) Pod Security Standards（PSS）策略（privileged/baseline/restricted 三档）；
+            3) NetworkPolicy 限制 Pod 间网络访问；
+            4) RBAC 限制 ServiceAccount 权限；
+            5) 镜像漏洞扫描 + 只信可信镜像仓库；
+            6) 资源 requests/limits 防 OOM 和资源耗尽。
+          </p>
+        </div>
+
+        <h3>7.7 调度类</h3>
+
+        <div class="callout">
+          <div class="callout-title">调度器怎么工作</div>
+          <p>
+            两阶段：1) 预选（Filter）：用一系列 Predicate 过滤不满足的节点（资源不足、污点不匹配、nodeSelector 不符）；
+            2) 优选（Score）：对剩余节点打分排序（资源均衡、亲和性、反亲和）。选最高分节点绑定 Pod。
+            新版调度器用 Scheduling Framework，支持插件化扩展自定义调度逻辑。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Taint 和 Toleration</div>
+          <p>
+            Taint（污点）打在<strong>节点</strong>上，标记「不让 Pod 来」（如 master 节点 NoSchedule）。
+            Toleration（容忍）写在<strong>Pod</strong>上，声明「我能容忍某污点」。
+            用于：把专用节点（GPU/高内存）留给特定 Pod、把 master 排除掉业务 Pod、
+            节点维护时先打 NoSchedule 再 drain。effect 有 NoSchedule/PreferNoSchedule/NoExecute。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">HPA 怎么工作</div>
+          <p>
+            Horizontal Pod Autoscaler 根据 CPU/内存/自定义指标自动扩缩 Deployment/StatefulSet 副本数。
+            控制循环（默认 15s）从 metrics-server/Prometheus Adapter 取指标，对比目标值算期望副本数，
+            调 scale 子资源改 replicas。要点：必须设 resources.requests（HPA 算 CPU 利用率要分母）、
+            扩容快缩容慢（避免抖动）、有 min/max replicas 上下限。
+          </p>
+        </div>
+
+        <h3>7.8 运维类</h3>
+
+        <div class="callout">
+          <div class="callout-title">怎么备份 K8s 集群</div>
+          <p>
+            核心是备份 etcd：用 <code>ETCDCTL_API=3 etcdctl snapshot save</code> 定期快照，异机存放。
+            集群配置（kube-apiserver/etcd 的证书和静态 Pod YAML）单独备份 /etc/kubernetes。
+            应用层用 Velero 备份 PVC 和命名空间资源，方便跨集群迁移。备份要做恢复演练，没演练过的备份等于没有。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">怎么排查 Pod 起不来</div>
+          <p>
+            看 STATUS 分流：Pending 看 describe 的 FailedScheduling（资源不足/污点）；
+            ContainerCreating 看 Events 的镜像拉取/挂载错误；
+            CrashLoopBackOff 看 <code>logs --previous</code> 上一次崩溃前日志（应用启动失败、配置错、依赖不通）。
+            流程：get → describe → logs → exec。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">怎么做滚动更新和回滚</div>
+          <p>
+            更新：<code>kubectl set image deploy/web web=nginx:1.26</code> 或 <code>kubectl apply -f</code> 改镜像，
+            看 <code>kubectl rollout status</code>。回滚：<code>kubectl rollout undo deploy/web</code>
+            回上一版，<code>rollout undo --to-revision=N</code> 回指定版本。Helm 用 <code>helm rollback</code>。
+            要点：设 maxUnavailable: 0 + readinessProbe 保证不中断。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">怎么限制 namespace 资源</div>
+          <p>
+            用 ResourceQuota 限制 namespace 总量（CPU/内存/PVC/对象数上限），
+            用 LimitRange 设默认 requests/limits 和单个 Pod 上下限。
+            组合使用：ResourceQuota 卡总量上限，LimitRange 卡单个最小/默认值，
+            防止某团队一个 Pod 吃光整个集群资源。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Helm 是什么</div>
+          <p>
+            K8s 的包管理器（类似 yum/apt）。把一组 YAML 打包成 Chart，支持参数化、版本管理、一键回滚。
+            三大概念：Chart（模板包）、Release（运行实例）、Repository（Chart 仓库）。
+            生产用 <code>helm upgrade --install --atomic</code> 实现幂等安装 + 失败自动回滚，
+            配置走 values 文件纳入 Git。
+          </p>
+        </div>
+
+        <h2>8. 综合实战项目</h2>
+        <p>部署一个完整的微服务应用：前端 Nginx + 后端 Python API + MySQL + Redis，
+          覆盖 Deployment、Service、ConfigMap、Secret、Ingress、HPA 等前面所有章节的知识点。</p>
+
+        <div class="callout">
+          <div class="callout-title">项目架构</div>
+<pre><code>       外部用户
+          │
+          ▼
+   ┌──────────────────┐
+   │  Ingress (L7)    │  按路径路由
+   └──────┬─────┬─────┘
+          │     │
+          ▼     ▼
+   ┌──────────┐  ┌──────────────┐
+   │ Nginx    │  │ Python API   │
+   │ Frontend │  │ Backend (Flask)│
+   │ Deploy   │  │ Deploy + HPA  │
+   └──────────┘  └──┬───────┬───┘
+                    │       │
+            ┌───────▼───┐ ┌─▼─────────┐
+            │  MySQL    │ │  Redis     │
+            │ StatefulSet│ │ StatefulSet│
+            │  +PVC     │ │  +PVC     │
+            └───────────┘ └───────────┘</code></pre>
+        </div>
+
+        <h3>8.1 完整 YAML 清单</h3>
+        <pre><code>---
+# 1. Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: myapp
+
+---
+# 2. ConfigMap（非敏感配置）
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: myapp
+data:
+  DB_HOST: "mysql"
+  DB_NAME: "myapp"
+  REDIS_HOST: "redis"
+  LOG_LEVEL: "info"
+
+---
+# 3. Secret（敏感凭据，base64 编码）
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+  namespace: myapp
+type: Opaque
+stringData:                 # stringData 直接写明文，提交时自动编码
+  DB_USER: "myapp"
+  DB_PASSWORD: "Db@2024Prod"
+  REDIS_PASSWORD: "Redis@2024"
+
+---
+# 4. MySQL（StatefulSet + Headless Service + PVC）
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: myapp
+spec:
+  clusterIP: None          # Headless，StatefulSet 需要
+  selector: { app: mysql }
+  ports: [{ port: 3306 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  namespace: myapp
+spec:
+  serviceName: mysql
+  replicas: 1
+  selector: { matchLabels: { app: mysql } }
+  template:
+    metadata: { labels: { app: mysql } }
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: app-secret, key: DB_PASSWORD } }
+            - name: MYSQL_DATABASE
+              valueFrom: { configMapKeyRef: { name: app-config, key: DB_NAME } }
+          ports: [{ containerPort: 3306 }]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+  volumeClaimTemplates:      # 每个 Pod 自动建独立 PVC
+    - metadata: { name: data }
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: "fast-ssd"
+        resources: { requests: { storage: 20Gi } }
+
+---
+# 5. Redis（StatefulSet）
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: myapp
+spec:
+  clusterIP: None
+  selector: { app: redis }
+  ports: [{ port: 6379 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: myapp
+spec:
+  serviceName: redis
+  replicas: 1
+  selector: { matchLabels: { app: redis } }
+  template:
+    metadata: { labels: { app: redis } }
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args: ["--requirepass", "$(REDIS_PASSWORD)"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom: { secretKeyRef: { name: app-secret, key: REDIS_PASSWORD } }
+          ports: [{ containerPort: 6379 }]
+
+---
+# 6. Python API Backend（Deployment + Service + HPA）
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: myapp
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: api } }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }   # 不中断升级
+  template:
+    metadata: { labels: { app: api } }
+    spec:
+      containers:
+        - name: api
+          image: myregistry/api:v1.0
+          ports: [{ containerPort: 5000 }]
+          envFrom:
+            - configMapRef: { name: app-config }
+            - secretRef: { name: app-secret }
+          resources:
+            requests: { cpu: 200m, memory: 256Mi }     # HPA 需要 requests 算利用率
+            limits:   { cpu: 1,    memory: 512Mi }
+          readinessProbe:                                # 通过才接流量
+            httpGet: { path: /health, port: 5000 }
+            initialDelaySeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: 5000 }
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: myapp
+spec:
+  selector: { app: api }
+  ports: [{ port: 80, targetPort: 5000 }]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api
+  namespace: myapp
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: api }
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } }
+
+---
+# 7. Nginx 前端
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: myapp
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: frontend } }
+  template:
+    metadata: { labels: { app: frontend } }
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.25-alpine
+          ports: [{ containerPort: 80 }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: myapp
+spec:
+  selector: { app: frontend }
+  ports: [{ port: 80, targetPort: 80 }]
+
+---
+# 8. Ingress（L7 路由）
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: myapp-ingress
+  namespace: myapp
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: myapp.example.com
+      http:
+        paths:
+          - path: /            # 前端
+            pathType: Prefix
+            backend: { service: { name: frontend, port: { number: 80 } } }
+          - path: /api         # 后端 API
+            pathType: Prefix
+            backend: { service: { name: api, port: { number: 80 } } }</code></pre>
+
+        <h3>8.2 部署步骤</h3>
+        <pre><code># 1. 应用所有资源
+kubectl apply -f myapp-all.yaml
+
+# 2. 等待 StatefulSet 的 PVC 绑定和 Pod 启动
+kubectl get pvc -n myapp
+kubectl get pods -n myapp -w
+
+# 3. 验证服务
+kubectl get svc,ingress -n myapp
+#  本地测试（绑定 Ingress host）
+curl -H "Host: myapp.example.com" http://&lt;ingress-node-ip&gt;/
+curl -H "Host: myapp.example.com" http://&lt;ingress-node-ip&gt;/api/health
+
+# 4. 测试 HPA
+kubectl autoscale deploy api --min=2 --max=10 --cpu-percent=70 -n myapp
+#  压测 api，观察副本数自动变化
+kubectl get hpa -n myapp -w
+
+# 5. 验证滚动更新不中断
+kubectl set image deploy/api api=myregistry/api:v1.1 -n myapp
+kubectl rollout status deploy/api -n myapp</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">这个项目覆盖了整个 K8s 专题</div>
+          <ul>
+            <li>第 25 章概念：Namespace、声明式 <code>apply</code></li>
+            <li>第 27 章 Pod：resources/requests、liveness/readiness 探针、QoS（Burstable）</li>
+            <li>第 28 章 Workload：Deployment 滚动更新、StatefulSet 有状态、maxUnavailable: 0</li>
+            <li>第 29 章网络：ClusterIP Service、Headless Service、Ingress L7 路由</li>
+            <li>第 30 章存储：PVC、storageClassName 动态供给</li>
+            <li>第 31 章安全：Secret、Namespace 隔离</li>
+            <li>第 32 章调度：HPA 弹性伸缩、resources.requests</li>
+            <li>第 33 章 Helm：可用 <code>helm create</code> 把这套 YAML 重构成 Chart</li>
+          </ul>
+          <p>建议把这个 YAML 改写成 Helm Chart 练习，把环境差异（镜像 tag、副本数、域名）抽成 values，
+            分 dev/prod 两套部署——这正是生产环境的标准做法。</p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>K8s 生产监控标准是 Prometheus + Grafana + Alertmanager，kube-prometheus-stack 一键装好，metrics-server 喂 HPA，Prometheus 喂监控告警。</li>
+          <li>日志方案选型：轻量选 Loki + Promtail，需深度检索选 EFK，应用日志一律输出 stdout/stderr。</li>
+          <li>Pod 排障五步：get 看状态 → describe 看 Events → logs 看日志 → logs --previous 看崩溃前 → exec 进容器验证，别跳步。</li>
+          <li>Service 不通先查 endpoints 是否为空（selector 匹配 + Pod Ready），再逐层查 kube-proxy / iptables。</li>
+          <li>节点 NotReady 看 describe Conditions（Memory/Disk/PID Pressure）+ journalctl kubelet + df/free。</li>
+          <li>etcd 是集群大脑，必须每天备份并异机存放，恢复前停 etcd 清空数据目录，灾难恢复靠它。</li>
+          <li>集群升级一次只升一个小版本，顺序 kubeadm → 控制面 → kubelet，升级前必备份 etcd。</li>
+          <li>GitOps 让 Git 成为集群状态唯一真源，ArgoCD/Flux 自动同步，可审计可回滚防漂移。</li>
+          <li>面试高频题按架构/Pod/Workload/网络/存储/安全/调度/运维八模块准备，重点是讲清原理和取舍。</li>
+          <li>综合实战项目（前端+后端+MySQL+Redis）串联了整个 K8s 专题知识点，改成 Helm Chart 后就是生产标准形态。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="metrics-server 只采集实时 CPU/内存喂 HPA 和 kubectl top，不存历史；Prometheus 是完整时序库，存历史、做查询和告警。生产两者都要。">
+            <div class="quiz-question">1. （单选）关于 metrics-server 和 Prometheus，下列说法正确的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q34-1" value="A" /> A. 两者功能完全相同，可以互相替代</label></li>
+              <li><label><input type="radio" name="q34-1" value="B" /> B. metrics-server 喂 HPA 但不存历史，Prometheus 存历史做告警看板</label></li>
+              <li><label><input type="radio" name="q34-1" value="C" /> C. metrics-server 功能比 Prometheus 更全</label></li>
+              <li><label><input type="radio" name="q34-1" value="D" /> D. Prometheus 不能做告警，告警只能靠 metrics-server</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="etcd 是集群唯一持久化真源，丢了所有资源都没了。生产必须每天备份并异机存放，恢复前要停 etcd 并清空旧数据目录。">
+            <div class="quiz-question">2. （单选）关于 K8s 集群的 etcd，下列做法最稳妥的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q34-2" value="A" /> A. etcd 数据存在节点本地就行，不用备份</label></li>
+              <li><label><input type="radio" name="q34-2" value="B" /> B. 备份文件和 etcd 放同一台机器方便恢复</label></li>
+              <li><label><input type="radio" name="q34-2" value="C" /> C. 每天备份并异机存放，恢复前停 etcd 清空数据目录</label></li>
+              <li><label><input type="radio" name="q34-2" value="D" /> D. 升级集群时不需要备份 etcd</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="GitOps 把集群期望状态放 Git，由 ArgoCD/Flux 持续同步。好处是可审计（有 commit 记录）、可回滚（git revert）、防漂移（检测集群与 Git 偏差）。">
+            <div class="quiz-question">3. （单选）关于 GitOps，下列说法正确的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q34-3" value="A" /> A. Git 是集群状态的唯一真源，ArgoCD/Flux 自动同步，可审计可回滚防漂移</label></li>
+              <li><label><input type="radio" name="q34-3" value="B" /> B. GitOps 就是把代码 push 到 Git 后 Jenkins 自动构建镜像</label></li>
+              <li><label><input type="radio" name="q34-3" value="C" /> C. GitOps 不支持回滚，出问题只能手动 kubectl 改</label></li>
+              <li><label><input type="radio" name="q34-3" value="D" /> D. GitOps 要求每个 Pod 单独一个 Git 仓库</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D"
+               data-explain="Pod 排障铁律是从上往下别跳步：get 看 STATUS → describe 看 Events → logs 看日志 → logs --previous 看崩溃前日志 → exec 进容器验证。">
+            <div class="quiz-question">4. （单选）Pod 一直 CrashLoopBackOff，正确的排查顺序是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q34-4" value="A" /> A. 直接重启节点</label></li>
+              <li><label><input type="radio" name="q34-4" value="B" /> B. 先 kubectl exec 进容器</label></li>
+              <li><label><input type="radio" name="q34-4" value="C" /> C. 直接删掉 Pod 重建</label></li>
+              <li><label><input type="radio" name="q34-4" value="D" /> D. get 看状态 → describe 看 Events → logs → logs --previous 看崩溃前日志</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="endpoints|endpoint|Endpoints|get endpoints"
+               data-explain="kubectl get endpoints 可以看 Service 选中了哪些 Pod，为空说明 selector 没匹配到 Pod 或 Pod 没 Ready（readinessProbe 没过），是 Service 不通最常见的原因。">
+            <div class="quiz-question">5. （填空）排查 Service 不通时，用 kubectl get 什么资源来确认 Service 是否选中了可用的 Pod？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s 深度专题 · 第 34 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=3"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

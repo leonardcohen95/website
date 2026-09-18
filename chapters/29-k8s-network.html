@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第29章 服务发现与网络 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="29-k8s-network">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 29 章</span>
+          <span class="meta-tag">K8s 专题</span>
+          <span class="meta-tag">约 40 分钟</span>
+        </div>
+        <h1>服务发现与网络</h1>
+        <p>
+          Pod 是会消失重建的，IP 随之变化，直接连 Pod IP 在生产上不可行。K8s 用 Service
+          提供稳定的访问入口和负载均衡，配合 DNS、Ingress、NetworkPolicy 构成完整的
+          服务发现与网络体系。本章从 Service 四种类型讲到 kube-proxy 内部实现、CoreDNS
+          解析、Ingress 七层路由与 NetworkPolicy 网络隔离，并给出故障排查命令清单。学完你能
+          回答面试中「Service 有几种类型」「Ingress 和 Service 的区别」「kube-proxy 的
+          iptables 和 IPVS 模式有什么区别」等高频问题。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解为什么需要 Service，以及它如何解决 Pod IP 漂移问题</li>
+          <li>掌握 Service 四种类型（ClusterIP/NodePort/LoadBalancer/ExternalName）的使用场景与 YAML 写法</li>
+          <li>理解 kube-proxy 的 userspace/iptables/IPVS 三种模式及性能差异</li>
+          <li>掌握 Endpoints、Headless Service、CoreDNS 服务发现机制</li>
+          <li>能编写 Ingress 实现 L7 域名路由与 TLS 终止，理解 NetworkPolicy 网络隔离</li>
+          <li>掌握 Service/DNS/跨节点网络故障的排查命令清单</li>
+        </ul>
+
+        <h2>1. 为什么需要 Service</h2>
+        <p>
+          直接访问 Pod IP 在生产上行不通，原因有三：第一，Pod 重建（滚动更新、节点故障、OOM
+          重启）后 IP 必然变化；第二，Deployment 副本数会动态伸缩，客户端不知道有几个 Pod；
+          第三，Pod 之间需要负载均衡。Service 就是为解决这三件事而生的——它给一组 Pod 提供一个
+          <strong>稳定的虚拟 IP（ClusterIP）+ 端口</strong>，并在后端做四层负载均衡。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">Pod IP 漂移一图流</div>
+          <pre><code>   时刻 T1：web-0=10.244.1.5   web-1=10.244.2.7   web-2=10.244.1.9
+            │
+            ▼  滚动更新 → web-0 被删，新 web-0 重建
+   时刻 T2：web-0=10.244.1.12  web-1=10.244.2.7   web-2=10.244.1.9
+            │
+            ▼  客户端若直连 10.244.1.5，已经不通了！
+
+   有了 Service（ClusterIP=10.96.10.10 永远不变）：
+        客户端 ──► 10.96.10.10:80 ──► [ web-0 / web-1 / web-2 ]  自动负载均衡</code></pre>
+        </div>
+
+        <p>
+          Service 通过 <strong>label selector</strong> 选中后端 Pod，Pod 怎么换 IP 都不影响
+          Service 这个稳定入口。这种「用一个稳定虚拟 IP 代理一组后端」的模式，是 K8s 服务发现
+          的基石。
+        </p>
+
+        <h2>2. Service 四种类型详解</h2>
+        <p>Service 通过 <code>spec.type</code> 字段区分四种类型，从集群内访问到暴露公网层层递进。</p>
+
+        <h3>2.1 ClusterIP（默认，集群内访问）</h3>
+        <p>分配一个集群内可达的虚拟 IP，只能在集群内访问。这是最常用的类型。</p>
+        <pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: web-svc
+spec:
+  type: ClusterIP            # 默认值，可省略
+  selector:
+    app: web                 # 选中所有 app=web 的 Pod
+  ports:
+    - port: 80               # Service 对外暴露的端口
+      targetPort: 8080       # 转发到 Pod 的端口（可省略，默认同 port）
+      protocol: TCP</code></pre>
+
+        <div class="term-card">
+          <div class="term-name">ClusterIP</div>
+          <p>
+            分配一个虚拟 IP（来自 service CIDR，如 10.96.0.0/12），<strong>仅在集群内可达</strong>，
+            集群外无法访问。适合集群内部服务互相调用，如 web 调 db、api 调 cache。这是默认类型。
+          </p>
+        </div>
+
+        <h3>2.2 NodePort（暴露到节点端口）</h3>
+        <p>在 ClusterIP 基础上，在每个 Node 上开一个端口（默认范围 30000-32767），外部可通过
+          <code>NodeIP:NodePort</code> 访问。</p>
+        <pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: web-svc-np
+spec:
+  type: NodePort
+  selector:
+    app: web
+  ports:
+    - port: 80               # ClusterIP 上暴露的端口（集群内访问）
+      targetPort: 8080       # Pod 端口
+      nodePort: 30080        # 节点端口，范围 30000-32767；不写则自动分配</code></pre>
+
+        <div class="term-card">
+          <div class="term-name">NodePort</div>
+          <p>
+            在 ClusterIP 之上，于<strong>每个 Node</strong> 上开一个固定端口（30000-32767）。
+            外部用 <code>任意NodeIP:NodePort</code> 即可访问。<strong>缺点</strong>：端口范围有限、
+            节点 IP 变动后客户端要跟着改、暴露的是节点 IP 不优雅，生产一般不直接用，而是作为
+            LoadBalancer 的底层实现。
+          </p>
+        </div>
+
+        <h3>2.3 LoadBalancer（云厂商负载均衡）</h3>
+        <p>在 NodePort 之上，自动调用云厂商 API 创建一个外部负载均衡器（如阿里云 SLB、AWS ELB）。</p>
+        <pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: web-svc-lb
+spec:
+  type: LoadBalancer
+  selector:
+    app: web
+  ports:
+    - port: 80
+      targetPort: 8080
+  externalTrafficPolicy: Cluster   # Cluster(默认，流量可能跨节点)/Local(只本节点)
+---
+# 创建后会在 status.externalIP 写入云 LB 的公网 IP
+# kubectl get svc web-svc-lb 可看到 EXTERNAL-IP 列</code></pre>
+
+        <div class="term-card">
+          <div class="term-name">LoadBalancer</div>
+          <p>
+            依赖云厂商的负载均衡服务，自动创建一个外部 LB 并把流量导到 NodePort。
+            <strong>优点</strong>：拿到稳定公网 IP。<strong>缺点</strong>：每个 Service 一个 LB，
+            贵且浪费；裸金属集群无云 LB 时需装 MetalLB 模拟。生产对外暴露 HTTP 多用 Ingress 替代。
+          </p>
+        </div>
+
+        <h3>2.4 ExternalName（CNAME 到外部域名）</h3>
+        <p>不做端口转发，只做 DNS 别名——把 Service 名解析到外部域名，常用于把外部服务包装成
+          集群内 Service。</p>
+        <pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: my-db             # 集群内访问 my-db.prod.svc.cluster.local
+spec:
+  type: ExternalName
+  externalName: db.example.com   # 会被 CNAME 到这个外部域名
+  # 注意：ExternalName 没有 selector、没有 ports、没有 ClusterIP</code></pre>
+
+        <div class="term-card">
+          <div class="term-name">ExternalName</div>
+          <p>
+            返回一个 CNAME 记录，把 <code>&lt;service&gt;.&lt;ns&gt;.svc.cluster.local</code>
+            指向 <code>externalName</code>。不做代理、不分配 ClusterIP。适合把外部数据库/SaaS
+            服务包装成集群内 Service，方便后续切换后端而不改调用方。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">四种类型如何选</div>
+          <ul>
+            <li>集群内服务互调 → <strong>ClusterIP</strong></li>
+            <li>临时暴露、调试、自建 LB 后端 → <strong>NodePort</strong></li>
+            <li>云上对外暴露 TCP/非 HTTP 服务 → <strong>LoadBalancer</strong></li>
+            <li>对外暴露大量 HTTP 服务 → <strong>Ingress</strong>（一个 LB 复用多域名）</li>
+            <li>把外部服务包装成集群内 Service → <strong>ExternalName</strong></li>
+          </ul>
+        </div>
+
+        <h2>3. Service 工作原理</h2>
+        <p>
+          Service 的稳定访问入口真正落地，靠的是节点上的 <strong>kube-proxy</strong>。它监听
+          apiserver 上 Service 和 Endpoints 的变化，在本地（每个 Node）写转发规则，把访问
+          ClusterIP 的流量劫持到后端 Pod。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">Service → Endpoints → Pod 关系</div>
+          <pre><code>   客户端 Pod（在 Node1）
+        │  curl http://web-svc:80   (或 ClusterIP 10.96.10.10:80)
+        ▼
+   ┌─────────────────────────────────────────────┐
+   │  内核（被 kube-proxy 写入的规则拦截）          │
+   │  DNAT: 10.96.10.10:80  ──►  10.244.2.7:8080  │  (随机/轮询选一个后端)
+   └─────────────────────────────────────────────┘
+        │
+        ▼
+   Endpoints 对象（由 controller-manager 维护）:
+        web-svc  →  [ 10.244.1.5:8080, 10.244.2.7:8080, 10.244.1.9:8080 ]
+                         │                │                │
+                         ▼                ▼                ▼
+                        web-0            web-1            web-2   (selector app=web 选中)</code></pre>
+        </div>
+
+        <p>kube-proxy 有三种工作模式：</p>
+        <ul>
+          <li><strong>userspace</strong>：最早的实现，kube-proxy 自己监听端口做代理转发，性能差，已淘汰。</li>
+          <li><strong>iptables</strong>（默认）：kube-proxy 在内核 iptables 的 NAT 表写规则，由内核做 DNAT，性能好。规则数随 Service 线性增长，大规模集群规则匹配是 O(n)。</li>
+          <li><strong>IPVS</strong>：基于 Netfilter 的 IPVS 模块，用哈希表存后端，查找 O(1)，支持多种调度算法（rr/lc/sh 等），大规模集群首选。</li>
+        </ul>
+
+        <pre><code># 查看当前 kube-proxy 模式（看 kube-proxy 的配置）
+kubectl -n kube-system get cm kube-proxy -o yaml | grep mode
+#   mode: "iptables"     # 默认；改成 ipvs 需在此处并重启 kube-proxy
+
+# 开启 IPVS 需加载内核模块
+modprobe ip_vs ip_vs_rr ip_vs_wrr ip_vs_sh nf_conntrack
+# 然后修改 kube-proxy configmap：mode: "ipvs"，再重启 kube-proxy
+kubectl -n kube-system rollout restart ds kube-proxy
+
+# IPVS 模式下查看负载规则
+ipvsadm -L -n</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">iptables vs IPVS 性能对比</div>
+          <p>
+            <strong>iptables</strong>：规则是一条条顺序匹配的链，Service 多时（几千个）规则数爆炸，
+            增删规则要重建整条链，延迟变高。<strong>IPVS</strong>：用哈希表存后端，查找 O(1)，
+            增删后端只改哈希表，支持 rr/wrr/lc 等调度算法。<strong>生产经验</strong>：Service 数
+            超过 ~1000、或对转发延迟敏感的场景，建议切到 IPVS 模式；小集群用 iptables 足够。
+          </p>
+        </div>
+
+        <h2>4. Endpoints</h2>
+        <p>
+          Endpoints 对象记录了 Service 实际选中的后端 Pod IP:Port 列表，由 controller-manager
+          根据 Service 的 selector 自动维护。Service 不通时，<strong>第一件事就是看 Endpoints</strong>。
+        </p>
+        <pre><code># 查看 Service 选中的后端
+kubectl get endpoints web-svc
+# NAME      ENDPOINTS                           AGE
+# web-svc   10.244.1.5:8080,10.244.2.7:8080,...  5m
+
+# 看详细信息（含就绪/未就绪端点）
+kubectl describe endpoints web-svc</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">Endpoints 为空 = Service 不通（最常见故障）</div>
+          <p>
+            Endpoints 为空通常是 <strong>selector 和 Pod label 不匹配</strong>。排查步骤：
+          </p>
+          <ol>
+            <li><code>kubectl get endpoints &lt;svc&gt;</code> 看 ENDPOINTS 列是不是 &lt;none&gt;</li>
+            <li><code>kubectl get svc &lt;svc&gt; -o yaml</code> 看 spec.selector</li>
+            <li><code>kubectl get pods --show-labels</code> 看 Pod 的 label</li>
+            <li>两边对不上：改 selector 或改 Pod label。注意大小写、空格、key 拼写。</li>
+            <li>另一种情况：Pod <strong>readinessProbe 没通过</strong>，未就绪的 Pod 不进 Endpoints。</li>
+          </ol>
+        </div>
+
+        <h2>5. Headless Service</h2>
+        <p>
+          把 <code>clusterIP: None</code>，Service 就成了 Headless Service——不分配 ClusterIP，
+          DNS 查询直接返回后端 Pod IP 列表（轮询）。适合需要直连每个 Pod 的场景（如 StatefulSet
+          下每个 Pod 有独立身份、主从复制的数据库需要分别连主从）。
+        </p>
+        <pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-headless
+spec:
+  clusterIP: None         # 关键：Headless
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
+---
+# StatefulSet 下每个 Pod 有稳定的 DNS 名（依赖 Headless Service）
+# 解析 mysql-headless  →  返回所有 Pod IP（轮询）
+# 解析 mysql-0.mysql-headless  →  返回 mysql-0 的 IP（直连单个 Pod）</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">Headless + StatefulSet 的稳定身份</div>
+          <p>
+            StatefulSet 要求 <code>serviceName</code> 指向一个 Headless Service，这样每个 Pod 拿到
+            稳定的 DNS 名：<code>&lt;pod-name&gt;.&lt;headless-svc&gt;.&lt;namespace&gt;.svc.cluster.local</code>。
+            例如 <code>mysql-0.mysql-headless.prod.svc.cluster.local</code>。即使 Pod 重建 IP 变了，
+            这个名字解析到的也是新 IP，客户端用名字访问永远稳定。这是主从数据库、ZooKeeper 等
+            有状态服务的基础。
+          </p>
+        </div>
+
+        <h2>6. DNS 服务发现</h2>
+        <p>
+          记不住 ClusterIP 怎么办？K8s 用 CoreDNS 提供集群内 DNS。每个 Service 自动获得一个
+          DNS 记录，Pod 直接用 Service 名访问即可，不用记 IP。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">CoreDNS 工作原理</div>
+          <p>
+            CoreDNS 以 Deployment 形式跑在 kube-system，监听 apiserver 的 Service/Endpoint 变化，
+            实时生成 DNS 记录。每个 Pod 的 <code>/etc/resolv.conf</code> 的 nameserver 指向
+            CoreDNS 的 ClusterIP（一般是 10.96.0.10）。Pod 发起 DNS 查询 → CoreDNS → 返回
+            ClusterIP → 客户端再访问该 ClusterIP（命中 kube-proxy 规则）。
+          </p>
+        </div>
+
+        <pre><code># Service DNS 格式
+&lt;service&gt;.&lt;namespace&gt;.svc.cluster.local
+# 例：web-svc.prod.svc.cluster.local  →  解析到 web-svc 的 ClusterIP
+
+# Headless Service 下 Pod 的 DNS
+&lt;pod-name&gt;.&lt;service&gt;.&lt;namespace&gt;.svc.cluster.local
+# 例：mysql-0.mysql-headless.prod.svc.cluster.local
+
+# 测试解析
+kubectl exec -it debug -- nslookup web-svc
+kubectl exec -it debug -- nslookup mysql-0.mysql-headless.prod.svc.cluster.local</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">短名解析只在同 namespace 生效</div>
+          <p>
+            在 prod 命名空间里，<code>web-svc</code> 这种短名会被自动补全为
+            <code>web-svc.prod.svc.cluster.local</code>，能解析。但如果在 default 命名空间访问
+            prod 的服务，<strong>必须用全名</strong> <code>web-svc.prod</code> 或
+            <code>web-svc.prod.svc</code>。跨 namespace 用短名会解析失败，这是高频踩坑点。
+            另外 <code>cluster.local</code> 是默认 cluster domain，可在 CoreDNS 配置里改。
+          </p>
+        </div>
+
+        <h2>7. Ingress 实战</h2>
+        <p>
+          Service 只能做四层（TCP/UDP）转发，且 LoadBalancer 每个 Service 一个 LB 太贵。Ingress
+          是<strong>七层（HTTP/HTTPS）路由</strong>，用一个入口（一个 LB/IP）按域名、路径路由到
+          不同 Service，还支持 TLS 终止、虚拟主机、灰度发布。
+        </p>
+
+        <h3>7.1 安装 Ingress Controller</h3>
+        <p>Ingress 资源本身只是规则，真正干活的是 Ingress Controller，最常用的是 ingress-nginx。</p>
+        <pre><code># 安装 ingress-nginx（官方 manifests）
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/baremetal/deploy.yaml
+# 云上可改用 LoadBalancer 类型的 Service 暴露 ingress-nginx
+
+kubectl get pods -n ingress-nginx
+kubectl get svc -n ingress-nginx   # ingress-nginx-controller 这个 Service 是入口</code></pre>
+
+        <h3>7.2 Ingress 资源：基于域名路由</h3>
+        <pre><code>apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /   # 路径重写
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.example.com            # 域名 1
+      http:
+        paths:
+          - path: /v1                  # /v1 路由到 api-v1 Service
+            pathType: Prefix
+            backend:
+              service:
+                name: api-v1
+                port:
+                  number: 80
+    - host: web.example.com            # 域名 2
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-svc
+                port:
+                  number: 80</code></pre>
+
+        <h3>7.3 TLS 终止</h3>
+        <pre><code># 1. 先把证书放进 Secret（tls 类型）
+kubectl create secret tls web-tls --cert=web.crt --key=web.key
+
+# 2. Ingress 引用这个 Secret，TLS 在 ingress-nginx 处终止，后端走 HTTP
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-tls
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - web.example.com
+      secretName: web-tls          # 引用上面创建的 tls Secret
+  rules:
+    - host: web.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-svc
+                port:
+                  number: 80</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">Ingress vs LoadBalancer</div>
+          <p>
+            <strong>LoadBalancer</strong> 是四层，每个 Service 一个云 LB，贵且端口有限。
+            <strong>Ingress</strong> 是七层，一个 ingress-nginx 入口（背后通常也是一个
+            LoadBalancer/NodePort Service）按域名+路径路由到任意多个 Service，支持 TLS 终止、
+            虚拟主机、灰度。生产对外暴露 HTTP 网站几乎都用 Ingress，省 LB 又灵活。
+          </p>
+        </div>
+
+        <h2>8. NetworkPolicy</h2>
+        <p>
+          默认 K8s 里 <strong>所有 Pod 之间网络全通</strong>，没有隔离。NetworkPolicy 用来做
+          网络隔离，按 label 选择 Pod，并限定它只能被哪些来源访问、只能访问哪些目标。
+        </p>
+        <pre><code>apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db-allow-web
+  namespace: prod
+spec:
+  podSelector:
+    matchLabels:
+      app: mysql              # 对 app=mysql 的 Pod 应用策略
+  policyTypes:
+    - Ingress                # 限制入站
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: web        # 只允许 app=web 的 Pod 访问 mysql
+      ports:
+        - protocol: TCP
+          port: 3306          # 只允许访问 3306 端口</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">NetworkPolicy 需要 CNI 插件支持</div>
+          <p>
+            NetworkPolicy <strong>本身只是声明</strong>，真正执行隔离的是 CNI 插件。
+            <strong>Calico、Cilium、Weave</strong> 等支持，<strong>Flannel 原生不支持</strong>
+            （需配 Calico 网络策略）。在不支持的 CNI 上建 NetworkPolicy 不报错但<strong>不生效</strong>，
+            这是隐性坑。默认策略是「无策略=全通」，要实现「默认全禁」需建一个匹配所有 Pod 的
+            deny-all 策略。
+          </p>
+        </div>
+
+        <h2>9. CNI 插件概述</h2>
+        <p>
+          CNI（Container Network Interface）负责 Pod 之间、Pod 与集群外的跨节点网络。选型
+          直接决定能不能用 NetworkPolicy、性能、可观测性。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">Flannel</div>
+          <p>
+            最简单，基于 VXLAN 隧道封装二层网络。部署一条命令，适合入门和小集群。
+            <strong>不支持 NetworkPolicy</strong>，无流量加密，功能最基础。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Calico</div>
+          <p>
+            支持 NetworkPolicy，可用 BGP 做路由（无封装、性能好，适合裸金属大集群），
+            也可用 VXLAN/IP-in-IP。生产主流选择之一，策略能力强、社区活跃。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Cilium</div>
+          <p>
+            基于 <strong>eBPF</strong>，在内核态处理网络，性能高、可观测性强（Hubble 流量可视化）。
+            支持 NetworkPolicy + 增强 CRD（CiliumNetworkPolicy）。大规模、对性能和可观测性有要求的
+            集群首选，是当下趋势。
+          </p>
+        </div>
+
+        <h2>10. 网络故障排查</h2>
+        <p>网络问题按「从近到远」逐层排查：Pod 本身 → Endpoints → ClusterIP → NodePort → kube-proxy → CNI/DNS。</p>
+
+        <h3>10.1 Service 不通</h3>
+        <pre><code># 1. Endpoints 是否为空（selector 是否匹配 / Pod 是否就绪）
+kubectl get endpoints &lt;svc&gt;
+# 2. Pod 本身能否访问（直连 PodIP 排除 Service 层）
+kubectl exec -it debug -- curl -v http://&lt;podIP&gt;:&lt;targetPort&gt;
+# 3. ClusterIP 是否能通
+kubectl exec -it debug -- curl -v http://&lt;svc&gt;:&lt;port&gt;
+# 4. NodePort 是否能通（注意节点防火墙/安全组放行 30000-32767）
+curl -v http://&lt;nodeIP&gt;:&lt;nodePort&gt;
+# 5. kube-proxy 是否正常、规则是否写入
+kubectl get pods -n kube-system | grep kube-proxy
+# iptables 模式看规则
+iptables -t nat -L KUBE-SERVICES -n | grep &lt;svc&gt;
+# IPVS 模式看规则
+ipvsadm -L -n | grep &lt;clusterIP&gt;</code></pre>
+
+        <h3>10.2 DNS 不通</h3>
+        <pre><code># 1. CoreDNS 是否运行
+kubectl get pods -n kube-system -l k8s-app=kube-dns
+# 2. Pod 的 resolv.conf 是否指向 CoreDNS
+kubectl exec -it debug -- cat /etc/resolv.conf
+#   nameserver 10.96.0.10   (CoreDNS 的 ClusterIP)
+# 3. 测试解析
+kubectl exec -it debug -- nslookup kubernetes.default
+# 4. 解析失败看 CoreDNS 日志
+kubectl logs -n kube-system -l k8s-app=kube-dns --tail=50
+# 5. ndots 问题：长名会触发多次查询，可改 Pod dnsPolicy/ndots</code></pre>
+
+        <h3>10.3 跨节点 Pod 不通</h3>
+        <pre><code># 1. 检查 CNI 插件 Pod 是否正常（Calico/Cilium 在每个节点的 agent）
+kubectl get pods -n kube-system | grep -E 'calico|cilium|flannel'
+# 2. 检查节点转发和路由
+kubectl exec -it debug -- ping &lt;对端节点 PodIP&gt;
+# 3. 检查节点 iptables FORWARD 链是否被默认策略 DROP（常见坑）
+iptables -L FORWARD -n --line-numbers
+# 4. 检查 CNI 的 IPIP/VXLAN 隧道或 BGP 邻居状态
+# Calico: calicoctl node status
+# Cilium: cilium status, cilium service list</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">网络排查命令清单</div>
+          <ul>
+            <li><code>kubectl get svc/endpoints</code>：看 Service 和后端是否匹配</li>
+            <li><code>kubectl exec -- curl podIP / svc / nslookup</code>：分层层验证</li>
+            <li><code>iptables -t nat -L KUBE-SERVICES -n</code>：iptables 模式查 Service 规则</li>
+            <li><code>ipvsadm -L -n</code>：IPVS 模式查虚拟服务和后端</li>
+            <li><code>tcpdump -i any port 80 -nn</code>：在节点/容器抓包定位丢包位置</li>
+            <li><code>conntrack -L | grep &lt;podIP&gt;</code>：看连接跟踪表，排查 SNAT/丢会话</li>
+          </ul>
+        </div>
+
+        <h2>11. 面试高频题</h2>
+
+        <div class="callout">
+          <div class="callout-title">Q1：Service 有几种类型？</div>
+          <p>
+            <strong>答</strong>：四种。<strong>ClusterIP</strong>（默认，集群内虚拟 IP）、
+            <strong>NodePort</strong>（在每节点开 30000-32767 端口）、<strong>LoadBalancer</strong>
+            （云厂商自动创建外部 LB）、<strong>ExternalName</strong>（CNAME 到外部域名，无 ClusterIP）。
+            后三者都基于 ClusterIP 递进（ExternalName 除外）。生产对外 HTTP 一般用 Ingress 而非
+            LoadBalancer，省钱又灵活。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q2：Ingress 和 Service 的区别？</div>
+          <p>
+            <strong>答</strong>：Service 是<strong>四层</strong>（TCP/UDP）转发，提供一个稳定
+            ClusterIP/端口 + 负载均衡，不关心 HTTP 内容。Ingress 是<strong>七层</strong>（HTTP/HTTPS）
+            路由，按域名+路径把流量分发到不同 Service，支持 TLS 终止、虚拟主机、灰度。Ingress
+            背后通常是一个 LoadBalancer/NodePort Service + Ingress Controller（如 ingress-nginx）。
+            一个 Ingress 入口能复用几十个 Service，而 LoadBalancer 一个 Service 就要一个 LB。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q3：kube-proxy 的 iptables 和 IPVS 模式有什么区别？</div>
+          <p>
+            <strong>答</strong>：iptables 模式在内核 NAT 表写规则链，<strong>顺序匹配 O(n)</strong>，
+            规则数随 Service 增长，增删规则要重建链，大集群延迟高，但小集群够用且默认。
+            IPVS 模式用<strong>哈希表 O(1)</strong> 查找后端，支持 rr/wrr/lc 等调度算法，增删后端只改哈希表，
+            大规模（Service &gt;1000）和对延迟敏感场景首选。<strong>切换</strong>：改 kube-proxy
+            configmap 的 mode 字段并加载 ip_vs 等内核模块后重启 kube-proxy。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q4：Service 不通怎么排查？</div>
+          <p>
+            <strong>答</strong>：分层排查——①<code>kubectl get endpoints</code> 看后端是否为空
+            （selector 不匹配 / Pod 未就绪）；②直连 PodIP 排除 Service 层；③访问 ClusterIP 验证
+            kube-proxy 规则；④NodePort 不通看节点防火墙/安全组；⑤查 kube-proxy 是否运行、
+            <code>iptables/ipvsadm</code> 看规则是否写入；⑥Headless Service 直接返回 Pod IP，不走
+            ClusterIP，注意区分。<strong>最常见原因</strong>：selector label 写错和 readinessProbe 没过。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Pod IP 会随重建变化，Service 用稳定 ClusterIP + selector + 负载均衡解决访问入口问题。</li>
+          <li>Service 四种类型：ClusterIP（集群内）、NodePort（节点端口 30000-32767）、LoadBalancer（云 LB）、ExternalName（CNAME 别名），生产对外 HTTP 用 Ingress。</li>
+          <li>kube-proxy 三种模式：userspace（已淘汰）、iptables（默认，O(n)）、IPVS（哈希 O(1)，大集群首选）。</li>
+          <li>Endpoints 记录后端 Pod 列表，Service 不通第一件事就是看 Endpoints 是否为空。</li>
+          <li>Headless Service（clusterIP: None）直接返回 Pod IP，配合 StatefulSet 给每个 Pod 稳定 DNS 身份。</li>
+          <li>CoreDNS 提供 Service DNS（&lt;svc&gt;.&lt;ns&gt;.svc.cluster.local），短名解析只在同 namespace 生效。</li>
+          <li>Ingress 是七层路由，按域名+路径分发到多 Service，支持 TLS 终止；NetworkPolicy 做网络隔离但需 CNI 支持（Flannel 不支持）。</li>
+          <li>CNI 选型：Flannel 简单无策略、Calico 支持 BGP+策略、Cilium 基于 eBPF 高性能。</li>
+          <li>网络故障排查：Endpoints → PodIP → ClusterIP → NodePort → kube-proxy → CNI/DNS，层层定位。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="NodePort 在每个节点开一个端口，默认范围 30000-32767，外部用 NodeIP:NodePort 访问。">
+            <div class="quiz-question">1. （单选）K8s NodePort 类型 Service 默认使用的端口范围是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 1-1023</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 30000-32767</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 1024-65535</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 8080-9000</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="Ingress 是七层（HTTP/HTTPS）路由，按域名+路径把流量分发到不同 Service，还支持 TLS 终止和虚拟主机；Service 本身是四层转发。">
+            <div class="quiz-question">2. （单选）关于 Ingress，下列说法正确的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. Ingress 是一种 Service 类型，替代 ClusterIP</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. Ingress 只能做四层 TCP 转发</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. Ingress 做七层 HTTP 路由，按域名+路径分发到不同 Service</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. Ingress 不支持 TLS 终止</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D"
+               data-explain="IPVS 用哈希表存储后端，查找复杂度 O(1)，支持多种调度算法，大规模集群性能优于 iptables 的顺序匹配 O(n)。">
+            <div class="quiz-question">3. （单选）大规模集群推荐使用 IPVS 模式而非 iptables，主要原因是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. IPVS 不需要内核模块</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. IPVS 规则数随 Service 减少</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. IPVS 不支持负载均衡</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. IPVS 哈希查找 O(1)，iptables 顺序匹配 O(n)</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="endpoints|Endpoints"
+               data-explain="用 kubectl get endpoints 查看 Service 选中的后端 Pod 列表，若为空说明 selector 不匹配或 Pod 未就绪，是 Service 不通最常见原因。">
+            <div class="quiz-question">4. （填空）排查 Service 不通时，用 kubectl get 哪个资源来确认 Service 是否选中了后端 Pod？（英文资源名）</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s 深度专题 · 第 29 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=3"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>
