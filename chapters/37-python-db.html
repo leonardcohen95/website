@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第37章 数据库与缓存优化 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="37-python-db">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 37 章</span>
+          <span class="meta-tag">Python 后端开发</span>
+          <span class="meta-tag">约 45 分钟</span>
+        </div>
+        <h1>数据库与缓存优化</h1>
+        <p>
+          岗位要求掌握 MySQL / PostgreSQL、Redis 以及 SQL 编写与基本性能优化。
+          本章从关系型数据库基础讲起，覆盖 Python 操作数据库的原生驱动与 ORM、
+          SQL 性能优化的核心方法论（索引、执行计划、慢查询），再到 Redis 缓存策略与三大经典问题，
+          最后以一个债券数据缓存服务实战串联全章知识点，让你面试时能答得有深度。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解关系型数据库 ACID 特性与四种事务隔离级别</li>
+          <li>掌握 pymysql / psycopg2 原生 CRUD 与 SQLAlchemy ORM 基本用法</li>
+          <li>理解数据库连接池的作用并能在项目中落地</li>
+          <li>能用 EXPLAIN 分析执行计划，掌握索引优化的核心原则</li>
+          <li>掌握 Redis 五种数据结构与典型使用场景</li>
+          <li>理解缓存穿透、击穿、雪崩的区别及解决方案</li>
+        </ul>
+
+        <h2>1. 关系型数据库基础</h2>
+
+        <h3>1.1 MySQL 与 PostgreSQL 对比</h3>
+        <p>
+          两者都是最流行的开源关系型数据库，但在定位、特性和适用场景上有明显差异。
+          面试时如果被问到选型，可以从以下维度对比。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">MySQL</div>
+          <p>
+            <strong>定位</strong>：轻量、易用、生态成熟，互联网行业事实标准。
+            <strong>存储引擎</strong>：InnoDB（默认，支持事务、行锁、外键）、MyISAM（不支持事务）。
+            <strong>事务隔离级别</strong>：默认 <strong>可重复读（RR）</strong>，通过 MVCC + 间隙锁防止幻读。
+            <strong>适用场景</strong>：高并发 OLTP、Web 应用、电商、金融交易。
+            <strong>方言特点</strong>：LIMIT 分页、AUTO_INCREMENT 自增、ENGINE 指定存储引擎。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">PostgreSQL</div>
+          <p>
+            <strong>定位</strong>：功能最强大的开源关系型数据库，号称「开源版 Oracle」。
+            <strong>事务隔离级别</strong>：默认 <strong>读已提交（RC）</strong>，支持真正的可串行化（Serializable Snapshot Isolation）。
+            <strong>扩展能力</strong>：支持 JSON/JSONB、数组、全文检索、地理空间（PostGIS）、自定义类型与函数。
+            <strong>适用场景</strong>：复杂查询、数据分析、GIS、需要严格事务一致性的系统。
+            <strong>方言特点</strong>：SERIAL 自增、RETURNING 子句、CTE、窗口函数支持更完善。
+          </p>
+        </div>
+
+        <h3>1.2 ACID 特性</h3>
+        <p>事务是数据库可靠性的基石，由四个特性保证：</p>
+        <ul>
+          <li><strong>原子性（Atomicity）</strong>：事务中的操作要么全部成功，要么全部回滚，不存在中间状态。由 <strong>undo log</strong> 实现。</li>
+          <li><strong>一致性（Consistency）</strong>：事务执行前后，数据从一个一致状态变到另一个一致状态，约束（主键、外键、唯一索引）不被破坏。</li>
+          <li><strong>隔离性（Isolation）</strong>：并发事务之间互不干扰，由锁和 MVCC 实现，对应隔离级别。</li>
+          <li><strong>持久性（Durability）</strong>：事务一旦提交，数据永久保存，即使宕机也不丢失。由 <strong>redo log</strong> 实现。</li>
+        </ul>
+
+        <h3>1.3 事务隔离级别</h3>
+        <p>SQL 标准定义了四种隔离级别，级别越高并发性能越低，但数据一致性越好：</p>
+
+        <pre><code>隔离级别从低到高：
+
+读未提交 (Read Uncommitted)  ── 最低，会读到别人未提交的数据（脏读）
+读已提交 (Read Committed)    ── 只能读到已提交数据，解决脏读，会有不可重复读
+可重复读 (Repeatable Read)   ── 同一事务内多次读同一行结果一致，解决不可重复读
+串行化 (Serializable)        ── 最高，事务完全串行执行，解决幻读，但性能最差</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">MySQL 默认 RR，PostgreSQL 默认 RC</div>
+          <p>
+            MySQL InnoDB 默认使用 <strong>可重复读（RR）</strong>，并通过 MVCC + 间隙锁（Next-Key Lock）在 RR 级别下就防止了幻读。
+            PostgreSQL 默认是 <strong>读已提交（RC）</strong>，但它的可串行化级别实现了真正的 SSI（可串行化快照隔离），
+            不会阻塞并发但能检测并回滚冲突事务。面试时说出这个差异点很加分。
+          </p>
+        </div>
+
+        <h2>2. Python 操作 MySQL / PostgreSQL</h2>
+
+        <h3>2.1 原生驱动：pymysql / psycopg2</h3>
+        <p>原生驱动最接近 SQL 本身，适合性能敏感或需要精细控制的场景。</p>
+
+        <pre><code># ===== MySQL：pymysql =====
+import pymysql
+from pymysql.cursors import DictCursor
+
+# 1. 建立连接
+conn = pymysql.connect(
+    host="127.0.0.1",
+    port=3306,
+    user="root",
+    password="your_password",
+    database="bond_db",
+    charset="utf8mb4",
+    cursorclass=DictCursor,  # 返回字典而非元组
+)
+
+try:
+    with conn.cursor() as cursor:
+        # 2. 插入（Create）
+        sql = "INSERT INTO bonds (code, name, coupon_rate) VALUES (%s, %s, %s)"
+        cursor.execute(sql, ("019547", "24国债01", 2.32))
+        conn.commit()  # 必须手动提交
+        print("插入成功，ID:", cursor.lastrowid)
+
+        # 3. 查询（Read）
+        cursor.execute("SELECT * FROM bonds WHERE coupon_rate > %s", (2.0,))
+        rows = cursor.fetchall()  # 取所有行
+        for row in rows:
+            print(row)  # {'id': 1, 'code': '019547', ...}
+
+        # 4. 更新（Update）
+        cursor.execute("UPDATE bonds SET coupon_rate = %s WHERE code = %s",
+                       (2.35, "019547"))
+        conn.commit()
+
+        # 5. 删除（Delete）
+        cursor.execute("DELETE FROM bonds WHERE code = %s", ("019547",))
+        conn.commit()
+
+except Exception as e:
+    conn.rollback()  # 出错回滚
+    print("事务失败回滚:", e)
+finally:
+    conn.close()  # 关闭连接</code></pre>
+
+        <pre><code># ===== PostgreSQL：psycopg2 =====
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
+conn = psycopg2.connect(
+    host="127.0.0.1",
+    port=5432,
+    user="postgres",
+    password="your_password",
+    dbname="bond_db",
+    cursor_factory=RealDictCursor,  # 返回字典
+)
+
+try:
+    with conn.cursor() as cur:
+        # PostgreSQL 占位符是 %s，和 MySQL 一致
+        cur.execute("SELECT * FROM bonds WHERE coupon_rate > %s", (2.0,))
+        rows = cur.fetchall()
+        for row in rows:
+            print(row["code"], row["name"])
+
+        # 批量插入用 executemany
+        data = [("019548", "24国债02", 2.38), ("019549", "24国债03", 2.41)]
+        cur.executemany(
+            "INSERT INTO bonds (code, name, coupon_rate) VALUES (%s, %s, %s)",
+            data,
+        )
+        conn.commit()
+except Exception as e:
+    conn.rollback()
+    print("回滚:", e)
+finally:
+    conn.close()</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">用 %s 占位符，别用字符串拼接</div>
+          <p>
+            <code>cursor.execute("... WHERE id = %s", (id,))</code> 这种参数化查询会由驱动做转义，
+            能有效防止 SQL 注入。千万不要用 <code>f"SELECT * FROM t WHERE id = {id}"</code> 拼接。
+          </p>
+        </div>
+
+        <h3>2.2 SQLAlchemy ORM 入门</h3>
+        <p>ORM 让你用 Python 类操作数据库表，减少样板 SQL，适合业务逻辑复杂的中大型项目。</p>
+
+        <pre><code>from sqlalchemy import create_engine, Column, Integer, String, Float
+from sqlalchemy.orm import declarative_base, sessionmaker
+
+# 1. 创建引擎（连接池的起点）
+# 格式：数据库+驱动://用户:密码@主机:端口/库名
+engine = create_engine(
+    "mysql+pymysql://root:password@127.0.0.1:3306/bond_db?charset=utf8mb4",
+    echo=False,        # True 会打印所有 SQL，调试用
+    pool_size=10,      # 连接池大小
+    max_overflow=20,   # 超出 pool_size 后最多再创建的连接数
+    pool_recycle=3600, # 连接回收时间（秒），防止 MySQL 8 小时断开
+)
+
+Base = declarative_base()
+
+# 2. 定义 Model（对应一张表）
+class Bond(Base):
+    __tablename__ = "bonds"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    code = Column(String(20), unique=True, nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    coupon_rate = Column(Float, default=0.0)
+
+    def __repr__(self):
+        return f"&lt;Bond(code={self.code}, name={self.name})&gt;"
+
+# 3. 建表（开发环境用，生产用 Alembic 迁移）
+Base.metadata.create_all(engine)
+
+# 4. 创建会话工厂
+Session = sessionmaker(bind=engine)
+
+# 5. 操作数据
+with Session() as session:
+    # 新增
+    bond = Bond(code="019547", name="24国债01", coupon_rate=2.32)
+    session.add(bond)
+    session.commit()
+
+    # 查询
+    bond = session.query(Bond).filter(Bond.code == "019547").first()
+    print(bond)
+
+    # 更新
+    bond.coupon_rate = 2.35
+    session.commit()
+
+    # 删除
+    session.delete(bond)
+    session.commit()</code></pre>
+
+        <h3>2.3 数据库连接池</h3>
+
+        <div class="callout warn">
+          <div class="callout-title">每次请求新建连接 = 性能杀手</div>
+          <p>
+            数据库连接的建立需要 TCP 三次握手 + 认证 + 权限校验，开销很大（几十毫秒）。
+            如果每个请求都新建连接，高并发下数据库连接数会被迅速打满（max_connections），
+            导致服务雪崩。<strong>生产环境必须使用连接池</strong>，复用已有连接。
+          </p>
+        </div>
+
+        <pre><code># ===== 方案一：DBUtils（配合 pymysql）=====
+import pymysql
+from dbutils.pooled_db import PooledDB
+
+pool = PooledDB(
+    creator=pymysql,       # 使用的数据库驱动
+    maxconnections=10,     # 连接池最大连接数
+    mincached=2,           # 初始化时至少创建的空闲连接
+    maxcached=5,           # 最多缓存的空闲连接
+    blocking=True,         # 连接池满时是否阻塞等待
+    host="127.0.0.1", port=3306,
+    user="root", password="password",
+    database="bond_db", charset="utf8mb4",
+)
+
+def get_connection():
+    return pool.connection()  # 从池里取，用完 close() 归还池
+
+# 使用
+conn = get_connection()
+with conn.cursor() as cur:
+    cur.execute("SELECT 1")
+    print(cur.fetchone())
+conn.close()  # 不是真关闭，是归还到连接池</code></pre>
+
+        <pre><code># ===== 方案二：SQLAlchemy 自带连接池（推荐）=====
+from sqlalchemy import create_engine
+
+engine = create_engine(
+    "mysql+pymysql://root:password@127.0.0.1/bond_db",
+    pool_size=10,          # 常驻连接数
+    max_overflow=20,       # 突发额外连接
+    pool_timeout=30,       # 获取连接超时（秒）
+    pool_recycle=3600,     # 连接存活时间，避免 MySQL 断开
+    pool_pre_ping=True,    # 取连接前先 ping，防止取到死连接
+)
+# 后续通过 sessionmaker 获取 session 即可，连接池自动管理</code></pre>
+
+        <h3>2.4 事务管理</h3>
+        <p>事务保证一组操作的原子性。Python 中用 try/except + commit/rollback 管理：</p>
+
+        <pre><code>def transfer(session, from_id, to_id, amount):
+    """转账：扣减 A 余额、增加 B 余额，必须在同一事务"""
+    try:
+        a = session.query(Account).get(from_id)
+        b = session.query(Account).get(to_id)
+        if a.balance < amount:
+            raise ValueError("余额不足")
+        a.balance -= amount
+        b.balance += amount
+        session.commit()   # 提交事务
+        return True
+    except Exception as e:
+        session.rollback()  # 回滚事务，撤销所有改动
+        print("转账失败:", e)
+        return False</code></pre>
+
+        <h2>3. SQL 编写与性能优化（面试核心）</h2>
+
+        <h3>3.1 EXPLAIN 执行计划分析</h3>
+        <p>拿到一条慢 SQL，第一步就是 <code>EXPLAIN</code>，看它怎么执行、走了什么索引、扫了多少行。</p>
+
+        <pre><code>EXPLAIN SELECT id, name FROM bonds WHERE coupon_rate > 2.0 ORDER BY create_time DESC;
+
+-- 输出关键列：
+-- id:  查询序号
+-- select_type:  SIMPLE(简单查询) / PRIMARY / SUBQUERY / DERIVED
+-- table: 操作的表
+-- type:  访问类型（性能从好到差）
+-- possible_keys: 可能用到的索引
+-- key:   实际用到的索引（NULL = 没走索引）
+-- rows:  预估扫描行数，越小越好
+-- Extra: 额外信息</code></pre>
+
+        <p><strong>type 列是重中之重</strong>，性能从好到差排列：</p>
+
+        <pre><code>const    主键或唯一索引等值查询，结果只有一行，最快
+eq_ref   连接查询中，用主键/唯一索引关联，每行只匹配一行
+ref      非唯一索引等值查询
+range    索引范围扫描（BETWEEN, >, <, IN）
+index    全索引扫描（扫整个索引树，比扫表好但仍慢）
+ALL      全表扫描，最差，必须优化！</code></pre>
+
+        <p><strong>Extra 列常见值：</strong></p>
+        <ul>
+          <li><code>Using index</code>：覆盖索引，查询列都在索引里，不回表，<strong>好</strong>。</li>
+          <li><code>Using where</code>：回表后再用 where 过滤。</li>
+          <li><code>Using temporary</code>：用了临时表，<strong>差</strong>，常见于 GROUP BY 无索引。</li>
+          <li><code>Using filesort</code>：外部排序，<strong>差</strong>，需要优化 ORDER BY。</li>
+          <li><code>Using index condition</code>：索引下推（ICP），在索引层面就过滤，<strong>好</strong>。</li>
+        </ul>
+
+        <h3>3.2 索引原理</h3>
+
+        <h4>B+ 树结构</h4>
+        <p>MySQL InnoDB 的索引底层是 <strong>B+ 树</strong>。和 B 树的区别：B+ 树的非叶子节点只存键值，数据都存在叶子节点，叶子节点之间用双向链表连接，方便范围查询。</p>
+
+        <pre><code>            ┌──────────────┐
+            │     [30]     │  ← 根节点（只存键值，不存数据）
+            └──────┬───────┘
+       ┌───────────┴───────────┐
+       ▼                       ▼
+┌──────────────┐        ┌──────────────┐
+│  [10][20]    │        │  [40][50]    │  ← 中间节点
+└──┬────┬──────┘        └──┬────┬──────┘
+   │    │                  │    │
+   ▼    ▼                  ▼    ▼
+┌────┐┌────┐            ┌────┐┌────┐
+│10: 行│20: 行│ ... ←→ │40: 行│50: 行│  ← 叶子节点（存数据，双向链表）
+└────┘└────┘            └────┘└────┘
+  ↕_________________________↕
+     叶子节点双向链表，支持范围查询和顺序遍历</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">聚簇索引 vs 非聚簇索引</div>
+          <p>
+            <strong>聚簇索引（Clustered Index）</strong>：叶子节点存储完整行数据。InnoDB 主键索引就是聚簇索引，
+            一张表只能有一个。数据按主键顺序物理存储。<br>
+            <strong>非聚簇索引（Secondary Index）</strong>：叶子节点存储主键值，查询时需要先拿到主键再回表查聚簇索引，
+            这叫「回表」。如果查询列都在索引里，不用回表，就是<strong>覆盖索引</strong>。
+          </p>
+        </div>
+
+        <h3>3.3 索引失效的常见场景</h3>
+
+        <div class="callout warn">
+          <div class="callout-title">这些写法会让索引失效！</div>
+          <ul>
+            <li><strong>对索引列使用函数</strong>：<code>WHERE DATE(create_time) = '2024-01-01'</code> → 改用范围 <code>WHERE create_time &gt;= '2024-01-01' AND create_time &lt; '2024-01-02'</code></li>
+            <li><strong>隐式类型转换</strong>：列是字符串但传数字 <code>WHERE code = 123</code> → 加引号 <code>WHERE code = '123'</code></li>
+            <li><strong>LIKE 前缀模糊</strong>：<code>WHERE name LIKE '%国债'</code> 不走索引 → <code>'国债%'</code> 才走</li>
+            <li><strong>OR 连接非索引列</strong>：<code>WHERE a = 1 OR b = 2</code>，如果 b 没索引，全表扫</li>
+            <li><strong>联合索引不满足最左前缀</strong>：索引 (a,b,c)，<code>WHERE b = 2</code> 不走索引</li>
+            <li><strong>!= 或 NOT IN</strong>：优化器可能放弃索引走全表扫</li>
+            <li><strong>IS NULL / IS NOT NULL</strong>：视情况，索引列 NULL 值多时可能失效</li>
+          </ul>
+        </div>
+
+        <h3>3.4 联合索引与最左前缀原则</h3>
+        <p>联合索引 <code>(a, b, c)</code> 本质是一棵按 a、b、c 顺序排序的 B+ 树。查询条件必须从最左列开始才能用上索引：</p>
+
+        <pre><code>联合索引 (a, b, c)：
+
+WHERE a = 1              ✅ 用 a
+WHERE a = 1 AND b = 2    ✅ 用 a, b
+WHERE a = 1 AND b = 2 AND c = 3  ✅ 用 a, b, c
+WHERE b = 2              ❌ 不走索引（不满足最左前缀）
+WHERE a = 1 AND c = 3    ⚠️ 只用 a，c 部分无法用到（跳过了 b）
+WHERE a &gt; 1 AND b = 2    ⚠️ a 用范围后，b 无法用到索引</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">联合索引列的顺序怎么排？</div>
+          <p>
+            原则：<strong>区分度高的列放前面，等值查询的列放前面，范围查询的列放后面</strong>。
+            例如 <code>(status, create_time)</code> 比 <code>(create_time, status)</code> 好，
+            因为 status 是等值条件，create_time 常用范围查询。
+          </p>
+        </div>
+
+        <h3>3.5 慢查询日志</h3>
+        <pre><code>-- 开启慢查询日志
+SET GLOBAL slow_query_log = ON;
+SET GLOBAL long_query_time = 1;   -- 超过 1 秒记录
+SET GLOBAL log_queries_not_using_indexes = ON;  -- 没走索引的也记录
+
+-- 查看慢查询日志文件路径
+SHOW VARIABLES LIKE 'slow_query_log_file';
+
+-- 用 mysqldumpslow 统计 Top 慢查询
+-- mysqldumpslow -s t -t 10 /var/log/mysql/slow.log
+-- -s t 按时间排序，-t 10 取前 10 条</code></pre>
+
+        <h3>3.6 SQL 优化实战</h3>
+
+        <p><strong>① 子查询改 JOIN</strong>：子查询（特别是 IN 子查询）有时效率低，改 JOIN 让优化器更好处理。</p>
+        <pre><code>-- 慢：子查询
+SELECT * FROM orders WHERE user_id IN (SELECT id FROM users WHERE city = '北京');
+
+-- 快：JOIN
+SELECT o.* FROM orders o
+JOIN users u ON o.user_id = u.id
+WHERE u.city = '北京';</code></pre>
+
+        <p><strong>② 避免 SELECT *</strong>：只查需要的列，减少网络传输和内存，还可能触发覆盖索引。</p>
+        <pre><code>-- 不推荐
+SELECT * FROM bonds;
+
+-- 推荐
+SELECT code, name, coupon_rate FROM bonds;</code></pre>
+
+        <p><strong>③ LIMIT 深分页优化</strong>：<code>LIMIT 1000000, 10</code> 会扫描前 100 万行再丢弃，极慢。用游标分页（基于上一页最后一条 ID）优化：</p>
+        <pre><code>-- 慢：深分页
+SELECT * FROM bonds ORDER BY id LIMIT 1000000, 10;
+
+-- 快：游标分页（前端传上一页最后一条 id）
+SELECT * FROM bonds WHERE id > 1000000 ORDER BY id LIMIT 10;</code></pre>
+
+        <h2>4. Redis 缓存</h2>
+
+        <h3>4.1 Redis 数据结构</h3>
+
+        <div class="term-card">
+          <div class="term-name">String（字符串）</div>
+          <p>
+            最基础类型，最大 512MB。可存字符串、数字、二进制。<strong>典型场景</strong>：缓存对象（JSON）、计数器（INCR）、分布式锁（SETNX）、验证码。
+            命令：<code>SET / GET / INCR / EXPIRE / SETNX</code>。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Hash（哈希）</div>
+          <p>
+            键值对集合，适合存对象，不需要序列化整个 JSON。<strong>典型场景</strong>：用户信息、商品详情、购物车。
+            命令：<code>HSET / HGET / HGETALL / HINCRBY</code>。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">List（列表）</div>
+          <p>
+            双向链表，可做队列或栈。<strong>典型场景</strong>：消息队列（LPUSH + BRPOP）、最新文章列表、任务队列。
+            命令：<code>LPUSH / RPUSH / LPOP / RPOP / LRANGE / BRPOP</code>。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Set（集合）</div>
+          <p>
+            无序不重复集合。<strong>典型场景</strong>：去重、共同好友（交集）、抽奖（随机取元素）、标签系统。
+            命令：<code>SADD / SMEMBERS / SINTER / SRANDMEMBER</code>。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">ZSet（有序集合）</div>
+          <p>
+            带分值（score）的有序集合，底层跳表 + 哈希。<strong>典型场景</strong>：排行榜（热门债券、积分榜）、延迟队列（score 存时间戳）、范围查找。
+            命令：<code>ZADD / ZRANGE / ZREVRANGE / ZRANGEBYSCORE</code>。
+          </p>
+        </div>
+
+        <h3>4.2 Python 操作 Redis</h3>
+        <pre><code>import redis
+
+# 1. 建立连接（连接池）
+pool = redis.ConnectionPool(
+    host="127.0.0.1", port=6379, db=0,
+    password="your_password", decode_responses=True,  # 自动解码 bytes 为 str
+    max_connections=50,
+)
+r = redis.Redis(connection_pool=pool)
+
+# 2. String
+r.set("bond:019547", '{"name":"24国债01","rate":2.32}', ex=3600)  # 1小时过期
+data = r.get("bond:019547")
+
+# 3. Hash
+r.hset("user:1001", mapping={"name": "张三", "age": "30"})
+name = r.hget("user:1001", "name")
+
+# 4. List（消息队列）
+r.lpush("task:queue", "task_001")
+task = r.brpop("task:queue", timeout=5)  # 阻塞弹出，超时 5 秒
+
+# 5. ZSet（排行榜）
+r.zadd("bond:hot", {"019547": 100, "019548": 88})
+top = r.zrevrange("bond:hot", 0, 9, withscores=True)  # Top 10
+
+# 6. Set
+r.sadd("user:1001:tags", "高净值", "稳健型")
+tags = r.smembers("user:1001:tags")</code></pre>
+
+        <h3>4.3 缓存三大经典问题</h3>
+
+        <h4>缓存穿透</h4>
+        <p><strong>问题</strong>：查询一个数据库和缓存中都不存在的数据，每次请求都打到数据库。恶意攻击时数据库压力巨大。</p>
+        <div class="callout">
+          <div class="callout-title">解决方案</div>
+          <ul>
+            <li><strong>布隆过滤器（Bloom Filter）</strong>：把所有可能存在的 key 存到布隆过滤器，请求先过过滤器，不存在直接返回。可能有误判（说存在但实际不存在），但不会漏判。</li>
+            <li><strong>缓存空值</strong>：查询不到的数据也缓存一个空值（如空字符串或特殊标记），设置短过期时间（如 60 秒），防止反复穿透。</li>
+          </ul>
+        </div>
+
+        <h4>缓存击穿</h4>
+        <p><strong>问题</strong>：某个热点 key 在过期的瞬间，大量并发请求同时打到数据库。</p>
+        <div class="callout">
+          <div class="callout-title">解决方案</div>
+          <ul>
+            <li><strong>互斥锁（Mutex Key）</strong>：缓存失效时，只让一个线程去查数据库并重建缓存，其他线程等待重试。用 Redis 的 <code>SETNX</code> 实现分布式锁。</li>
+            <li><strong>热点 key 永不过期</strong>：不设置过期时间，通过后台任务异步更新缓存。</li>
+          </ul>
+        </div>
+
+        <h4>缓存雪崩</h4>
+        <p><strong>问题</strong>：大量 key 在同一时间集中过期，或 Redis 宕机，所有请求打到数据库，导致数据库崩溃。</p>
+        <div class="callout">
+          <div class="callout-title">解决方案</div>
+          <ul>
+            <li><strong>过期时间加随机值</strong>：<code>expire = 3600 + random.randint(0, 600)</code>，避免集中过期。</li>
+            <li><strong>多级缓存</strong>：本地缓存（Caffeine）+ Redis，Redis 挂了本地缓存还能扛。</li>
+            <li><strong>Redis 高可用</strong>：哨兵（Sentinel）或集群（Cluster），防止单点故障。</li>
+            <li><strong>熔断限流</strong>：数据库前加 Sentinel/Hystrix 限流，保护数据库。</li>
+          </ul>
+        </div>
+
+        <h3>4.4 缓存一致性</h3>
+        <p>缓存和数据库之间如何保持数据一致？最常用的是 <strong>Cache-Aside（旁路缓存）</strong> 模式：</p>
+
+        <pre><code>读流程：
+  1. 先查缓存，命中则返回
+  2. 缓存未命中，查数据库
+  3. 把结果写入缓存，返回
+
+写流程（更新数据库 + 删除缓存）：
+  1. 先更新数据库
+  2. 再删除缓存（不是更新缓存，是删除！）</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">先删缓存还是先更新数据库？</div>
+          <p>
+            正确做法：<strong>先更新数据库，再删除缓存</strong>。<br>
+            如果先删缓存再更新数据库，在并发读场景下，读线程可能在删缓存后、更新数据库前，
+            把旧数据读出来又写回缓存，导致缓存是旧数据。<br>
+            但「先更新数据库再删缓存」也有极小概率不一致（删除缓存失败），
+            解决方案是<strong>延迟双删</strong>：更新数据库 → 删缓存 → 延迟 500ms → 再删一次缓存。
+            或者用订阅 MySQL binlog（如 Canal）异步删除缓存。
+          </p>
+        </div>
+
+        <h3>4.5 Redis 持久化</h3>
+
+        <div class="term-card">
+          <div class="term-name">RDB（快照）</div>
+          <p>
+            每隔一段时间把内存数据生成快照保存到磁盘（dump.rdb）。<strong>优点</strong>：文件紧凑、恢复快、适合备份。
+            <strong>缺点</strong>：可能丢失最后一次快照后的数据。
+            <strong>触发</strong>：<code>save</code>（阻塞）/ <code>bgsave</code>（fork 子进程，不阻塞）。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">AOF（追加日志）</div>
+          <p>
+            把每个写命令追加到 appendonly.aof 文件，重启时重放命令恢复数据。<strong>优点</strong>：数据安全性高，最多丢 1 秒数据。
+            <strong>缺点</strong>：文件大、恢复慢。
+            <strong>刷盘策略</strong>：<code>appendfsync always</code>（每条都刷，最安全最慢）/ <code>everysec</code>（每秒刷，默认，推荐）/ <code>no</code>（操作系统决定）。
+          </p>
+        </div>
+
+        <div class="callout tip">
+          <div class="callout-title">生产建议</div>
+          <p>
+            Redis 4.0+ 支持<strong>混合持久化</strong>：AOF 重写时用 RDB 格式写前半段数据，再用 AOF 格式追加后续命令，
+            兼顾恢复速度和数据安全。生产环境建议开启 <code>aof-use-rdb-preamble yes</code>。
+          </p>
+        </div>
+
+        <h3>4.6 发布订阅模式</h3>
+        <pre><code># 订阅端
+import redis
+r = redis.Redis(decode_responses=True)
+pubsub = r.pubsub()
+pubsub.subscribe("bond:channel")
+for message in pubsub.listen():
+    if message["type"] == "message":
+        print("收到消息:", message["data"])
+
+# 发布端（另一个进程）
+r.publish("bond:channel", "债券行情更新: 019547 涨到 101.5")</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">发布订阅的局限</div>
+          <p>
+            Redis Pub/Sub 是<strong>即发即弃</strong>的，订阅者不在线就丢消息，也不能持久化。
+            如果需要可靠消息队列，用 List 的 <code>BRPOP</code> 或 Stream 类型，或者直接用 Kafka / RabbitMQ。
+          </p>
+        </div>
+
+        <h2>5. 实战：债券数据缓存服务</h2>
+        <p>下面是一个完整的债券数据查询服务，结合 MySQL + Redis，采用 Cache-Aside 模式，包含缓存穿透防护和过期时间设置。</p>
+
+        <pre><code>import json
+import random
+import time
+import redis
+import pymysql
+from dbutils.pooled_db import PooledDB
+
+# ===== 配置 =====
+MYSQL_POOL = PooledDB(
+    creator=pymysql, maxconnections=10, mincached=2,
+    host="127.0.0.1", port=3306, user="root",
+    password="password", database="bond_db", charset="utf8mb4",
+)
+
+REDIS_POOL = redis.ConnectionPool(
+    host="127.0.0.1", port=6379, db=0,
+    decode_responses=True, max_connections=50,
+)
+redis_client = redis.Redis(connection_pool=REDIS_POOL)
+
+CACHE_KEY = "bond:info:{}"
+CACHE_EXPIRE = 3600 + random.randint(0, 600)  # 基础1小时 + 随机0~10分钟，防雪崩
+NULL_EXPIRE = 60  # 空值缓存 60 秒，防穿透
+
+
+def get_bond_from_db(bond_code):
+    """从 MySQL 查询债券信息"""
+    conn = MYSQL_POOL.connection()
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cur:
+            cur.execute(
+                "SELECT code, name, coupon_rate, maturity_date FROM bonds WHERE code = %s",
+                (bond_code,),
+            )
+            return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def get_bond_info(bond_code):
+    """
+    Cache-Aside 模式查询债券信息
+    包含：缓存穿透防护（空值缓存）、过期时间随机化（防雪崩）
+    """
+    key = CACHE_KEY.format(bond_code)
+
+    # 1. 先查缓存
+    cached = redis_client.get(key)
+    if cached is not None:
+        if cached == "":
+            return None  # 空值缓存，直接返回 None
+        return json.loads(cached)
+
+    # 2. 缓存未命中，查数据库
+    bond = get_bond_from_db(bond_code)
+
+    if bond is None:
+        # 缓存空值，防止穿透
+        redis_client.setex(key, NULL_EXPIRE, "")
+        return None
+
+    # 3. 写入缓存，过期时间加随机值防雪崩
+    redis_client.setex(key, CACHE_EXPIRE, json.dumps(bond, default=str))
+    return bond
+
+
+def update_bond_info(bond_code, **fields):
+    """
+    更新债券信息：先更新数据库，再删除缓存（Cache-Aside 写策略）
+    """
+    conn = MYSQL_POOL.connection()
+    try:
+        with conn.cursor() as cur:
+            set_clause = ", ".join([f"{k} = %s" for k in fields])
+            values = list(fields.values()) + [bond_code]
+            cur.execute(f"UPDATE bonds SET {set_clause} WHERE code = %s", values)
+            conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    # 删除缓存（不是更新！）
+    redis_client.delete(CACHE_KEY.format(bond_code))
+
+    # 延迟双删：500ms 后再删一次，防止并发读回写旧数据
+    time.sleep(0.5)
+    redis_client.delete(CACHE_KEY.format(bond_code))
+
+
+if __name__ == "__main__":
+    # 查询
+    info = get_bond_info("019547")
+    print("查询结果:", info)
+
+    # 更新
+    update_bond_info("019547", coupon_rate=2.35)
+    print("更新成功")</code></pre>
+
+        <h2>6. 面试高频题</h2>
+
+        <div class="callout">
+          <div class="callout-title">Q1：索引底层为什么用 B+ 树不用 B 树 / 红黑树？</div>
+          <p>
+            <strong>参考答案</strong>：<br>
+            ① <strong>vs B 树</strong>：B+ 树非叶子节点不存数据，只存键值，单个节点能存更多键，树更矮（通常 3~4 层就能存千万级数据），
+            磁盘 IO 次数更少。B+ 树叶子节点用双向链表连接，范围查询和排序效率高，B 树需要中序遍历。<br>
+            ② <strong>vs 红黑树</strong>：红黑树是二叉树，树高太高（千万数据要 20 多层），磁盘 IO 次数多。红黑树适合内存数据结构（如 HashMap），
+            不适合磁盘存储的数据库索引。<br>
+            ③ <strong>vs Hash 索引</strong>：Hash 索引只支持等值查询，不支持范围查询和排序，且有哈希冲突问题。B+ 树支持范围、排序、模糊查询。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q2：什么是覆盖索引？</div>
+          <p>
+            <strong>参考答案</strong>：查询所需要的列全部包含在索引中，不需要回表查询聚簇索引，直接从索引就能返回结果。
+            EXPLAIN 的 Extra 列显示 <code>Using index</code> 就是覆盖索引。
+            例如索引 <code>(code, name)</code>，查询 <code>SELECT code, name FROM bonds WHERE code = '019547'</code> 就是覆盖索引。
+            优化技巧：把经常查询的列加到联合索引里。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q3：缓存穿透 / 击穿 / 雪崩的区别和解决方案？</div>
+          <p>
+            <strong>参考答案</strong>：<br>
+            <strong>穿透</strong>：查不存在的数据，请求直达数据库。<em>方案</em>：布隆过滤器、缓存空值。<br>
+            <strong>击穿</strong>：热点 key 过期瞬间，大量并发打数据库。<em>方案</em>：互斥锁（SETNX）、热点 key 永不过期。<br>
+            <strong>雪崩</strong>：大量 key 同时过期或 Redis 宕机。<em>方案</em>：过期时间加随机值、多级缓存、Redis 高可用、熔断限流。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q4：Redis 为什么这么快？</div>
+          <p>
+            <strong>参考答案</strong>：<br>
+            ① 纯内存操作，数据存内存，读写纳秒级。<br>
+            ② 单线程模型（命令执行单线程），避免了上下文切换和锁竞争，Redis 6.0 后网络 IO 多线程但命令执行仍单线程。<br>
+            ③ IO 多路复用（epoll），单线程处理大量并发连接。<br>
+            ④ 高效数据结构（SDS、跳表、压缩列表、整数集合等），针对不同场景优化。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q5：数据库连接池的作用？</div>
+          <p>
+            <strong>参考答案</strong>：<br>
+            ① 复用连接，避免频繁创建/销毁连接的开销（TCP 握手 + 认证）。<br>
+            ② 限制连接数，防止数据库连接被打满。<br>
+            ③ 统一管理连接生命周期（检测死连接、自动重连）。<br>
+            常见实现：DBUtils、SQLAlchemy 内置连接池、HikariCP（Java）。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Q6：MySQL 的事务隔离级别？</div>
+          <p>
+            <strong>参考答案</strong>：<br>
+            ① <strong>读未提交</strong>：会脏读。<br>
+            ② <strong>读已提交（RC）</strong>：解决脏读，有不可重复读。PostgreSQL 默认。<br>
+            ③ <strong>可重复读（RR）</strong>：解决不可重复读，MySQL InnoDB 默认，通过 MVCC + 间隙锁防幻读。<br>
+            ④ <strong>串行化</strong>：最高，事务串行执行，性能最差。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>关系型数据库靠 ACID 保证可靠性，MySQL 默认 RR 隔离级别，PostgreSQL 默认 RC。</li>
+          <li>Python 操作数据库：pymysql / psycopg2 适合精细控制，SQLAlchemy ORM 适合中大型项目。</li>
+          <li>生产环境必须用连接池（DBUtils 或 SQLAlchemy pool），避免每次请求新建连接。</li>
+          <li>EXPLAIN 是 SQL 优化第一工具，重点看 type 列（ALL 必须优化）和 key 列。</li>
+          <li>索引底层是 B+ 树，非叶子节点只存键值、叶子节点双向链表，适合范围查询。</li>
+          <li>索引失效常见原因：函数、隐式转换、LIKE 前缀 %、OR、不满足最左前缀。</li>
+          <li>Redis 五大数据结构各有场景：String 缓存/锁、Hash 对象、List 队列、Set 去重、ZSet 排行。</li>
+          <li>缓存三大问题：穿透（布隆过滤器/空值缓存）、击穿（互斥锁/永不过期）、雪崩（随机过期/多级缓存）。</li>
+        </ul>
+
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="B+ 树非叶子节点只存键值不存数据，单个节点能容纳更多键，树更矮，磁盘 IO 更少；叶子节点双向链表支持高效范围查询。B 树非叶子节点也存数据，节点能存的键更少，树更高。">
+            <div class="quiz-question">1. （单选）MySQL InnoDB 索引使用 B+ 树而非 B 树的主要原因是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q37_1" value="A" /> A. B+ 树实现更简单</label></li>
+              <li><label><input type="radio" name="q37_1" value="B" /> B. B+ 树非叶子节点不存数据，树更矮、IO 更少，且叶子节点链表支持范围查询</label></li>
+              <li><label><input type="radio" name="q37_1" value="C" /> C. B+ 树支持哈希查找</label></li>
+              <li><label><input type="radio" name="q37_1" value="D" /> D. B 树不能用于磁盘存储</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="缓存击穿是指某个热点 key 在过期瞬间，大量并发请求同时打到数据库。解决方案是互斥锁（只让一个线程重建缓存）或热点 key 永不过期。布隆过滤器解决的是缓存穿透。">
+            <div class="quiz-question">2. （单选）针对「热点 key 过期瞬间大量请求打到数据库」的问题，最佳解决方案是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q37_2" value="A" /> A. 使用互斥锁，只允许一个线程重建缓存</label></li>
+              <li><label><input type="radio" name="q37_2" value="B" /> B. 使用布隆过滤器过滤请求</label></li>
+              <li><label><input type="radio" name="q37_2" value="C" /> C. 把过期时间设为固定值</label></li>
+              <li><label><input type="radio" name="q37_2" value="D" /> D. 关闭缓存直接查数据库</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="连接池"
+               data-explain="数据库连接池复用已有连接，避免每次请求都新建连接（TCP 握手 + 认证开销大），还能限制连接数防止数据库被打满。生产环境必须使用。">
+            <div class="quiz-question">3. （填空）为了避免每次请求都新建数据库连接带来的性能开销，并控制数据库连接总数，生产环境应该使用什么技术？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="MySQL InnoDB 默认隔离级别是可重复读（RR），通过 MVCC + 间隙锁（Next-Key Lock）防止幻读。PostgreSQL 默认是读已提交（RC）。">
+            <div class="quiz-question">4. （单选）MySQL InnoDB 引擎默认的事务隔离级别是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q37_4" value="A" /> A. 读未提交（Read Uncommitted）</label></li>
+              <li><label><input type="radio" name="q37_4" value="B" /> B. 读已提交（Read Committed）</label></li>
+              <li><label><input type="radio" name="q37_4" value="C" /> C. 可重复读（Repeatable Read）</label></li>
+              <li><label><input type="radio" name="q37_4" value="D" /> D. 串行化（Serializable）</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>Python 后端开发专题 · 第 37 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=4"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

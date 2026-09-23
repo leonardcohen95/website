@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第40章 分布式与数据处理 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="40-python-distributed">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 40 章</span>
+          <span class="meta-tag">Python 后端开发</span>
+          <span class="meta-tag">约 45 分钟</span>
+        </div>
+        <h1>分布式与数据处理</h1>
+        <p>
+          真实的后端系统不是单机脚本，而是由多台机器、多个组件协作的分布式系统：
+          海量数据用 Pandas/Polars 高效处理，服务间通过消息队列解耦削峰，
+          耗时操作交给 Celery 异步执行，还要应对分布式锁、分布式 ID、CAP 等经典问题。
+          本章覆盖 Python 后端在分布式场景下的核心技能，配合债券数据异步处理系统实战，
+          帮你建立分布式系统的整体认知。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>掌握 Pandas 核心操作与金融数据处理技巧，了解 Polars 的性能优势</li>
+          <li>理解消息队列的作用，掌握 Kafka 架构与 Python 操作，了解 RabbitMQ 与选型</li>
+          <li>能用 Celery + Redis 实现异步任务和定时任务，了解 Flower 监控</li>
+          <li>理解 CAP/BASE 理论、分布式锁和分布式 ID（雪花算法）原理</li>
+          <li>能设计 API → Kafka → Celery Worker → DB 的异步处理架构</li>
+          <li>能回答消息队列、Kafka、分布式锁、Celery 等面试高频题</li>
+        </ul>
+
+        <h2>1. 数据处理 Pandas / Polars</h2>
+        <p>
+          数据处理是后端开发的高频场景：报表生成、数据清洗、特征计算、金融行情分析。
+          Pandas 是 Python 数据处理的事实标准，Polars 是新生代黑马，性能更强。
+        </p>
+
+        <h3>1.1 Pandas 核心概念</h3>
+        <p>
+          <code>Series</code> 是一维带标签数组，<code>DataFrame</code> 是二维表格，
+          行索引 <code>index</code> 和列索引 <code>columns</code> 是 Pandas 的灵魂。
+        </p>
+        <pre><code>import pandas as pd
+
+# 创建 DataFrame
+data = {
+    "code":   ["019640", "019641", "019642", "019643"],
+    "name":   ["国债A",  "国债B",  "国债C",  "国债D"],
+    "price":  [98.5, 100.2, 99.8, 101.5],
+    "coupon": [0.035, 0.04, 0.03, 0.045],
+    "rating": ["AAA", "AA+", "AAA", "AA"],
+}
+df = pd.DataFrame(data)
+print(df.index)        # RangeIndex
+print(df.columns)      # ['code', 'name', 'price', 'coupon', 'rating']
+
+# 读写常见格式
+df.to_csv("bonds.csv", index=False, encoding="utf-8-sig")
+df.to_excel("bonds.xlsx", index=False)
+df.to_parquet("bonds.parquet")          # 列式存储，体积小、读取快
+
+df = pd.read_csv("bonds.csv")
+df = pd.read_excel("bonds.xlsx")
+df = pd.read_parquet("bonds.parquet")</code></pre>
+
+        <h3>1.2 常用操作：筛选、分组聚合、合并</h3>
+        <pre><code># 筛选：布尔索引
+high_price = df[df["price"] > 100]            # 价格 > 100
+aaa = df[df["rating"] == "AAA"]               # AAA 评级
+
+# 列计算：向量化（别用 for 循环）
+df["ytm_approx"] = (df["coupon"] * 100 + (100 - df["price"])) / df["price"]
+
+# 分组聚合 groupby
+rating_stats = df.groupby("rating").agg(
+    avg_price=("price", "mean"),
+    count=("code", "count"),
+    max_coupon=("coupon", "max"),
+)
+
+# 合并：merge（类似 SQL JOIN）
+extra = pd.DataFrame({"code": ["019640", "019641"], "issuer": ["财政部", "财政部"]})
+merged = df.merge(extra, on="code", how="left")   # 左连接
+
+# 排序
+df.sort_values("price", ascending=False, inplace=True)
+
+# 缺失值处理
+df.fillna(0, inplace=True)                        # 填充
+df.dropna(subset=["price"], inplace=True)         # 删除 price 为空的行</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">金融数据处理实战（债券行情、收益率曲线）</div>
+          <p>
+            金融场景的常见需求：1) 时间序列对齐，不同债券交易日不同，要按日期对齐；
+            2) 滚动窗口计算（如 20 日移动平均收益率）；3) 收益率曲线拟合（用
+            <code>scipy.optimize</code> 对关键期限点做 Nelson-Siegel 拟合）。
+          </p>
+          <pre><code># 1. 时间序列：把日期设为索引
+df["trade_date"] = pd.to_datetime(df["trade_date"])
+df.set_index("trade_date", inplace=True)
+df.sort_index(inplace=True)
+
+# 2. 滚动窗口：20 日移动平均收益率
+df["ma20"] = df["yield"].rolling(window=20).mean()
+
+# 3. 按债券 code 分组后再做组内滚动
+df["code_ma20"] = df.groupby("code")["yield"].transform(
+    lambda s: s.rolling(20).mean()
+)
+
+# 4. 收益率曲线：按期限聚合平均收益率
+curve = df.groupby("tenor")["yield"].mean().sort_index()
+print(curve)
+# tenor
+# 1Y    2.10
+# 3Y    2.35
+# 5Y    2.55
+# 10Y   2.80
+# Name: yield, dtype: float64</code></pre>
+        </div>
+
+        <h3>1.3 Polars 简介</h3>
+        <p>
+          Polars 用 Rust 实现，支持惰性求值（Lazy API）和多线程并行，
+          处理千万级以上数据比 Pandas 快数倍到数十倍，内存占用也更低。API 与 Pandas 类似但有差异。
+        </p>
+        <pre><code>import polars as pl
+
+# 读取
+df = pl.read_csv("bonds.csv")
+
+# 表达式（核心）：选择 + 过滤 + 计算一次完成
+result = (
+    df.lazy()                                  # 惰性执行
+      .filter(pl.col("price") > 100)
+      .with_columns((pl.col("coupon") * 100).alias("coupon_pct"))
+      .group_by("rating")
+      .agg([
+          pl.col("price").mean().alias("avg_price"),
+          pl.col("code").count().alias("cnt"),
+      ])
+      .sort("avg_price", descending=True)
+      .collect()                               # 触发执行
+)
+print(result)</code></pre>
+
+        <div class="term-card">
+          <div class="term-name">Pandas vs Polars</div>
+          <p>
+            <strong>Pandas</strong>：生态成熟、资料多、所有库都支持，数据量百万级以内首选。
+            缺点是单线程、内存占用高、大表慢。<br />
+            <strong>Polars</strong>：Rust 实现、多线程、惰性求值优化、内存友好，
+            千万级以上数据速度提升明显。缺点是生态较新、部分第三方库不直接支持。<br />
+            <strong>选型</strong>：数据量小、依赖生态（如 sklearn 接 DataFrame）用 Pandas；
+            数据量大、ETL 密集、追求性能用 Polars。两者可共存，小数据用 Pandas，重计算转 Polars。
+          </p>
+        </div>
+
+        <h3>1.4 大数据量处理技巧</h3>
+        <ul>
+          <li><strong>分块读取</strong>：<code>pd.read_csv("big.csv", chunksize=100000)</code>
+            逐块处理，避免一次性加载爆内存。</li>
+          <li><strong>类型优化</strong>：<code>df["rating"] = df["rating"].astype("category")</code>，
+            低基数字符串转 category 可省 80%+ 内存；数值用 <code>int32/float32</code> 代替默认 64 位。</li>
+          <li><strong>向量化操作</strong>：永远别用 <code>for</code> 逐行遍历，用列运算、
+            <code>apply</code>（列）、<code>np.vectorize</code>，性能差几个数量级。</li>
+          <li><strong>选 Parquet</strong>：列式存储 + 压缩，比 CSV 读取快 10 倍、体积小 1/3。</li>
+          <li><strong>用 Polars/DuckDB</strong>：真到千万级以上，直接换工具比优化 Pandas 更有效。</li>
+        </ul>
+
+        <h2>2. 消息队列 Kafka / RabbitMQ</h2>
+        <p>
+          消息队列（MQ）是分布式系统的「润滑油」，解决服务间耦合、流量削峰、异步处理三大问题。
+          金融场景里，行情推送、订单流转、报表生成都离不开 MQ。
+        </p>
+
+        <h3>2.1 为什么需要消息队列</h3>
+        <ul>
+          <li><strong>解耦</strong>：生产者只管发消息，不用关心谁来消费、有几个消费者，
+            服务之间不直接依赖。</li>
+          <li><strong>削峰</strong>：秒杀、大促时流量洪峰先灌进 MQ，下游按自己的速度消费，
+            避免被打挂。</li>
+          <li><strong>异步</strong>：耗时操作（发邮件、生成报表、批量计算）丢进 MQ，
+            接口立即返回，用户体验好。</li>
+        </ul>
+
+        <h3>2.2 Kafka 架构</h3>
+
+        <div class="callout">
+          <div class="callout-title">Kafka 架构一图流</div>
+<pre><code>                    Producer（生产者，发消息）
+                         │
+                         ▼
+        ┌────────────────────────────────────────┐
+        │              Kafka 集群                 │
+        │                                        │
+        │  Topic: bond-trades                    │
+        │   ┌──────────┐ ┌──────────┐ ┌────────┐ │
+        │   │Partition0│ │Partition1│ │Partitio2│ │   分区内有序
+        │   │ (leader) │ │ (leader) │ │(leader)│ │   分区间并行
+        │   └────┬─────┘ └────┬─────┘ └───┬────┘ │
+        └────────┼────────────┼────────────┼──────┘
+                 │            │            │
+                 ▼            ▼            ▼
+        ┌────────────────────────────────────────┐
+        │           Consumer Group（消费者组）     │
+        │  Consumer0  Consumer1  Consumer2        │   组内一个消费
+        └────────────────────────────────────────┘       者只消费一个分区
+
+        辅助：ZooKeeper / KRaft 管理集群元数据（新版 KRaft 不再依赖 ZK）</code></pre>
+        </div>
+
+        <ul>
+          <li><strong>Topic</strong>：消息的逻辑分类，如 <code>bond-trades</code>。</li>
+          <li><strong>Partition</strong>：Topic 分成多个分区，分区内消息有序，
+            分区间并行，是 Kafka 高吞吐的关键。</li>
+          <li><strong>Producer</strong>：生产者，往 Topic 发消息，可指定 key 决定路由到哪个分区。</li>
+          <li><strong>Consumer Group</strong>：消费者组，组内每个消费者消费不同分区，
+            实现负载均衡；不同组消费同一份消息，实现广播。</li>
+          <li><strong>Offset</strong>：消息在分区内的偏移量，消费者靠它记录消费进度。</li>
+        </ul>
+
+        <h3>2.3 Python 操作 Kafka（confluent-kafka）</h3>
+        <pre><code>pip install confluent-kafka
+
+# ===== 生产者 =====
+from confluent_kafka import Producer
+
+p = Producer({"bootstrap.servers": "kafka:9092"})
+
+def delivery_report(err, msg):
+    if err:
+        print(f"发送失败: {err}")
+    else:
+        print(f"已发送到 {msg.topic()}[{msg.partition()}] offset={msg.offset()}")
+
+# 发送债券成交消息
+for bond_code in ["019640", "019641", "019642"]:
+    p.produce(
+        topic="bond-trades",
+        key=bond_code,                       # 同一 key 路由到同一分区，保证顺序
+        value=f'{{"code": "{bond_code}", "price": 98.5}}'.encode(),
+        on_delivery=delivery_report,
+    )
+p.flush()   # 等待所有消息发送完成
+
+
+# ===== 消费者 =====
+from confluent_kafka import Consumer
+
+c = Consumer({
+    "bootstrap.servers": "kafka:9092",
+    "group.id": "bond-consumer-group",
+    "auto.offset.reset": "earliest",       # 没有已提交 offset 时从最早开始
+})
+c.subscribe(["bond-trades"])
+
+try:
+    while True:
+        msg = c.poll(1.0)                  # 轮询，超时 1 秒
+        if msg is None:
+            continue
+        if msg.error():
+            print(f"消费错误: {msg.error()}")
+            continue
+        print(f"收到: key={msg.key().decode()} value={msg.value().decode()}")
+        c.commit()                          # 手动提交 offset（更安全）
+finally:
+    c.close()</code></pre>
+
+        <h3>2.4 RabbitMQ 简介</h3>
+        <p>
+          RabbitMQ 基于 AMQP 协议，核心概念是 <strong>Exchange（交换机）</strong>、
+          <strong>Queue（队列）</strong>、<strong>Binding（绑定）</strong>。
+          生产者发消息到 Exchange，Exchange 按路由规则把消息分发到绑定的 Queue，消费者从 Queue 取。
+        </p>
+        <pre><code>pip install pika
+
+import pika
+
+connection = pika.BlockingConnection(pika.ConnectionParameters("localhost"))
+channel = connection.channel()
+
+# 声明交换机和队列，并绑定
+channel.exchange_declare(exchange="bond_events", exchange_type="topic")
+channel.queue_declare(queue="trade_queue")
+channel.queue_bind(exchange="bond_events", queue="trade_queue",
+                   routing_key="bond.trade.*")   # topic 通配路由
+
+# 发布
+channel.basic_publish(
+    exchange="bond_events",
+    routing_key="bond.trade.019640",
+    body=b'{"price": 98.5}',
+)
+connection.close()</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">Kafka vs RabbitMQ 选型</div>
+          <table>
+            <thead>
+              <tr><th>维度</th><th>Kafka</th><th>RabbitMQ</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>吞吐量</td><td>极高（百万级/s）</td><td>万级/s</td></tr>
+              <tr><td>延迟</td><td>ms 级</td><td>μs 级</td></tr>
+              <tr><td>消息保留</td><td>按时间/大小保留，可回溯</td><td>消费即删</td></tr>
+              <tr><td>顺序性</td><td>分区内有序</td><td>单队列有序</td></tr>
+              <tr><td>协议</td><td>自定义 TCP</td><td>AMQP</td></tr>
+              <tr><td>典型场景</td><td>大数据日志、流处理、行情</td><td>业务解耦、任务分发、RPC</td></tr>
+            </tbody>
+          </table>
+          <p>
+            <strong>选型口诀</strong>：要吞吐、要回溯、要流处理 → Kafka；
+            要灵活路由、要低延迟、要确认机制 → RabbitMQ。金融行情推送、日志采集用 Kafka；
+            订单流转、邮件通知用 RabbitMQ。
+          </p>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-title">消息丢失、重复消费、顺序消费</div>
+          <ul>
+            <li><strong>消息丢失</strong>：Producer 要等 ack（Kafka <code>acks=all</code>）、
+              Broker 多副本同步、Consumer 处理完再手动提交 offset。</li>
+            <li><strong>重复消费</strong>：Consumer 处理成功但提交 offset 前崩溃，会重投。
+              解决：消费端做<strong>幂等</strong>（用业务唯一键去重，如债券成交编号）。</li>
+            <li><strong>顺序消费</strong>：Kafka 同一分区内有序，所以保证同一业务 key 的消息
+              发到同一分区（用 key 路由），且一个分区只让一个消费者消费。</li>
+          </ul>
+        </div>
+
+        <h2>3. Celery 异步任务</h2>
+        <p>
+          Celery 是 Python 生态最流行的分布式任务队列，把耗时操作从请求线程剥离，
+          丢给后台 Worker 异步执行，还支持定时任务。
+        </p>
+
+        <h3>3.1 Celery 架构</h3>
+        <div class="callout">
+          <div class="callout-title">Celery 组件</div>
+<pre><code>  Flask API ──发任务──► Broker（Redis/RabbitMQ）──取任务──► Worker（执行）
+                           │                              │
+                           │                              └──► 结果存 Backend（Redis/DB）
+                           │
+                     Celery Beat（定时调度器，按周期往 Broker 丢任务）
+                     Flower（Web 监控面板，看任务状态、Worker 负载）</code></pre>
+        </div>
+        <ul>
+          <li><strong>Worker</strong>：真正执行任务的进程，可开多个实现并发。</li>
+          <li><strong>Broker</strong>：任务队列，常用 Redis 或 RabbitMQ。</li>
+          <li><strong>Backend</strong>：存储任务结果，常用 Redis。</li>
+          <li><strong>Beat</strong>：定时任务调度器，按 crontab/interval 触发任务。</li>
+        </ul>
+
+        <h3>3.2 完整示例：Flask + Celery + Redis</h3>
+        <pre><code>pip install celery redis flask
+
+# tasks.py —— Celery 应用与任务定义
+from celery import Celery
+
+app = Celery(
+    "bond_tasks",
+    broker="redis://localhost:6379/0",
+    backend="redis://localhost:6379/1",
+)
+app.conf.update(
+    task_serializer="json",
+    result_serializer="json",
+    timezone="Asia/Shanghai",
+)
+
+@app.task(bind=True, max_retries=3, default_retry_delay=10)
+def calc_bond_ytm(self, bond_code, price):
+    """异步计算债券到期收益率"""
+    try:
+        # 模拟耗时计算
+        import time
+        time.sleep(2)
+        result = {"code": bond_code, "price": price, "ytm": 0.035}
+        return result
+    except Exception as exc:
+        raise self.retry(exc=exc)        # 失败自动重试 3 次
+
+
+# web.py —— Flask 接口
+from flask import Flask, jsonify
+from tasks import calc_bond_ytm
+
+app = Flask(__name__)
+
+@app.post("/api/bonds/<code>/ytm")
+def calc_ytm(code):
+    price = 98.5
+    # 提交异步任务，立即返回任务 id
+    task = calc_bond_ytm.delay(code, price)
+    return jsonify({"task_id": task.id}), 202
+
+@app.get("/api/tasks/<task_id>")
+def get_task(task_id):
+    result = calc_bond_ytm.AsyncResult(task_id)
+    if result.ready():
+        return jsonify({"status": "done", "result": result.result})
+    return jsonify({"status": "pending"})
+
+
+# 启动命令
+# 1. 启动 Redis
+# 2. 启动 Worker：celery -A tasks worker --loglevel=info
+# 3. 启动 Beat（定时任务）：celery -A tasks beat
+# 4. 启动 Flask：flask run</code></pre>
+
+        <h3>3.3 定时任务 Celery Beat</h3>
+        <pre><code># 配置定时任务：每天凌晨 2 点生成前一日债券报表
+app.conf.beat_schedule = {
+    "daily-bond-report": {
+        "task": "tasks.generate_daily_report",
+        "schedule": "0 2 * * *",         # crontab 格式
+        # "schedule": 60.0,               # 或每 60 秒一次
+    },
+}
+
+@app.task
+def generate_daily_report():
+    # 查询昨日成交、生成报表、存数据库或发邮件
+    print("生成日报表完成")</code></pre>
+
+        <h3>3.4 任务状态监控 Flower</h3>
+        <pre><code>pip install flower
+celery -A tasks flower --port=5555
+# 浏览器打开 http://localhost:5555 查看：
+#   - Worker 列表、在线状态、负载
+#   - 任务执行历史、成功率、耗时
+#   - 实时任务流、失败任务追溯</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">Celery 适合什么场景</div>
+          <p>
+            Celery 适合<strong>异步、可延迟、对实时性要求不高</strong>的任务：
+            发送邮件/短信、生成报表/PDF、批量数据计算、图片/视频处理、
+            同步第三方数据、定时巡检。不适合需要立即返回结果的同步请求（直接调用即可）。
+            金融场景：收盘后批量计算收益率曲线、每日生成持仓估值、定时同步行情数据。
+          </p>
+        </div>
+
+        <h2>4. 分布式系统基础</h2>
+        <p>
+          系统从单机走向分布式，会遇到一致性、可用性、锁、ID 等经典问题。
+          这些是后端面试的必考内容，必须理解原理。
+        </p>
+
+        <h3>4.1 CAP 定理与 BASE 理论</h3>
+        <div class="term-card">
+          <div class="term-name">CAP 三选二</div>
+          <p>
+            <strong>C（Consistency，一致性）</strong>：所有节点同一时刻看到相同数据。<br />
+            <strong>A（Availability，可用性）</strong>：每个请求都能在有限时间内得到响应（不一定是最新数据）。<br />
+            <strong>P（Partition tolerance，分区容错性）</strong>：网络分区（节点间通信中断）时系统仍能运行。<br />
+            分布式系统网络分区不可避免（P 必须满足），所以只能在 CP 和 AP 之间选：
+            <strong>CP</strong>（如 ZooKeeper、etcd）保一致性牺牲可用性；
+            <strong>AP</strong>（如 Eureka、Cassandra）保可用性牺牲一致性。
+          </p>
+        </div>
+
+        <p>
+          <strong>BASE</strong> 是对 CAP 的折中：<strong>Basically Available</strong>（基本可用）、
+          <strong>Soft state</strong>（软状态）、<strong>Eventually consistent</strong>（最终一致）。
+          互联网系统大多采用最终一致性，不追求强一致，通过补偿、对账达成最终一致。
+        </p>
+
+        <h3>4.2 分布式锁</h3>
+        <p>
+          多台机器同时操作同一资源（如抢购同一只债券、修改同一账户）时，需要分布式锁互斥。
+          常用实现：Redis（SET NX）或 ZooKeeper（临时顺序节点）。
+        </p>
+        <pre><code># Redis 分布式锁（最简版）
+import redis
+import uuid
+
+r = redis.Redis()
+
+def acquire_lock(lock_key, timeout=10):
+    token = str(uuid.uuid4())         # 唯一标识，防误删别人的锁
+    # SET NX EX：不存在才设，同时设过期时间（防死锁）
+    ok = r.set(lock_key, token, nx=True, ex=timeout)
+    return token if ok else None
+
+def release_lock(lock_key, token):
+    # 用 Lua 脚本保证「判断 + 删除」原子性
+    lua = """
+    if redis.call('get', KEYS[1]) == ARGV[1] then
+        return redis.call('del', KEYS[1])
+    else
+        return 0
+    end
+    """
+    r.eval(lua, 1, lock_key, token)
+
+# 使用
+token = acquire_lock("bond:019640:trade")
+if token:
+    try:
+        # 执行互斥操作：下单、扣减库存
+        pass
+    finally:
+        release_lock("bond:019640:trade", token)</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">面试：分布式锁怎么实现</div>
+          <p>
+            参考要点：1) Redis <code>SET key value NX EX seconds</code> 原子加锁，
+            value 用唯一 token；2) 释放时用 Lua 脚本判断 token 再删，保证原子，防误删；
+            3) 设置过期时间防死锁；4) 高可靠用 RedLock（多节点）或 Redisson 框架；
+            5) 对比 Redis vs ZooKeeper：Redis 性能好但需处理过期续期，ZooKeeper 强一致但性能稍差。
+            生产中直接用 Redisson 不要自己造轮子。
+          </p>
+        </div>
+
+        <h3>4.3 分布式 ID 生成（雪花算法 Snowflake）</h3>
+        <p>
+          分布式系统不能用数据库自增 ID（多库多表后冲突）。
+          <strong>雪花算法</strong>用 64 位 long 生成趋势递增、全局唯一的 ID。
+        </p>
+        <pre><code># 64 位结构：
+# 1 位符号位（0）| 41 位时间戳（毫秒，可用 69 年）
+# | 10 位机器 ID（最多 1024 节点）| 12 位序列号（每毫秒 4096 个）
+
+import time
+
+class Snowflake:
+    def __init__(self, worker_id=1):
+        self.worker_id = worker_id
+        self.sequence = 0
+        self.last_ts = -1
+
+    def next_id(self):
+        ts = int(time.time() * 1000)
+        if ts == self.last_ts:
+            self.sequence = (self.sequence + 1) & 0xFFF   # 12 位
+            if self.sequence == 0:                       # 该毫秒用完，等下一毫秒
+                while ts <= self.last_ts:
+                    ts = int(time.time() * 1000)
+        else:
+            self.sequence = 0
+        self.last_ts = ts
+        return (ts << 22) | (self.worker_id << 12) | self.sequence
+
+sf = Snowflake(worker_id=1)
+print(sf.next_id())   # 如 1764234567890123456</code></pre>
+
+        <h2>5. 实战：债券数据异步处理系统</h2>
+        <p>
+          把本章知识点串起来：API 接收债券计算请求 → 丢进 Kafka → Celery Worker 消费并计算 → 结果写库。
+          这是金融系统中典型的异步处理架构。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">系统架构</div>
+<pre><code>  ┌──────────┐   提交任务    ┌──────────┐    消费    ┌─────────────┐
+  │ Flask API│ ───────────►  │  Kafka   │ ─────────► │ Celery Worker│
+  └──────────┘               │ bond-    │            │  （计算YTM） │
+                             │  tasks   │            └──────┬──────┘
+                             └──────────┘                   │
+                                                          写结果
+                                                          ▼
+                                                   ┌─────────────┐
+                                                   │   MySQL     │
+                                                   └─────────────┘</code></pre>
+        </div>
+
+        <h3>5.1 生产者：API 发消息到 Kafka</h3>
+        <pre><code># producer.py / Flask 接口
+from flask import Flask, request, jsonify
+from confluent_kafka import Producer
+import json
+
+app = Flask(__name__)
+p = Producer({"bootstrap.servers": "kafka:9092"})
+
+@app.post("/api/bonds/calc")
+def submit_calc():
+    body = request.get_json()
+    msg = {
+        "task_id": body["task_id"],
+        "code": body["code"],
+        "price": body["price"],
+        "coupon": body.get("coupon", 0.035),
+    }
+    p.produce("bond-calc-tasks", key=msg["code"],
+              value=json.dumps(msg).encode())
+    p.flush()
+    return jsonify({"status": "accepted", "task_id": msg["task_id"]}), 202</code></pre>
+
+        <h3>5.2 消费者：Kafka → Celery 任务</h3>
+        <pre><code># consumer.py —— 消费 Kafka，转交给 Celery 计算
+from confluent_kafka import Consumer
+from tasks import calc_bond_ytm_task
+import json
+
+c = Consumer({
+    "bootstrap.servers": "kafka:9092",
+    "group.id": "bond-calc-group",
+    "auto.offset.reset": "earliest",
+})
+c.subscribe(["bond-calc-tasks"])
+
+while True:
+    msg = c.poll(1.0)
+    if msg is None or msg.error():
+        continue
+    data = json.loads(msg.value().decode())
+    # 交给 Celery Worker 异步计算
+    calc_bond_ytm_task.delay(data["task_id"], data["code"],
+                             data["price"], data["coupon"])
+    c.commit()</code></pre>
+
+        <h3>5.3 任务定义：计算并写库</h3>
+        <pre><code># tasks.py —— Celery 任务
+from celery import Celery
+import pymysql
+
+app = Celery("bond", broker="redis://redis:6379/0",
+             backend="redis://redis:6379/1")
+
+@app.task(bind=True, max_retries=3)
+def calc_bond_ytm_task(self, task_id, code, price, coupon):
+    try:
+        ytm = (coupon * 100 + (100 - price)) / price   # 简化 YTM
+        # 写库
+        conn = pymysql.connect(host="mysql", user="bond",
+                               password="bond@2024", database="bond")
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO bond_results(task_id, code, ytm) "
+                        "VALUES (%s, %s, %s)", (task_id, code, ytm))
+        conn.commit()
+        return {"task_id": task_id, "ytm": ytm}
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=10)</code></pre>
+
+        <h2>6. 面试高频题</h2>
+
+        <div class="callout">
+          <div class="callout-title">消息队列的作用和选型？</div>
+          <p>
+            参考要点：作用是解耦（服务不直接依赖）、削峰（抗流量洪峰）、异步（耗时操作后台执行）。
+            选型：高吞吐、大数据量、需要消息回溯选 Kafka；低延迟、灵活路由、业务任务分发选 RabbitMQ；
+            简单轻量、和 Redis 共用选 Redis Stream/List。结合团队熟悉度和运维成本。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Kafka 为什么快？</div>
+          <p>
+            参考要点：1) 顺序写磁盘（追加写，比随机写快几个数量级）；2) 零拷贝（sendfile 系统调用，
+            数据不经用户态直接从磁盘到网卡）；3) 分区并行（多 partition 多消费者并行消费）；
+            4) 批量发送压缩（Producer 攒批 + 压缩，减少网络 IO）；5) Page Cache 利用操作系统缓存。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">如何保证消息不丢失？</div>
+          <p>
+            参考要点：三段保障。Producer 端：开启 ack 确认（Kafka <code>acks=all</code>）、
+            失败重试；Broker 端：多副本同步（replication.factor >= 3，min.insync.replicas >= 2）；
+            Consumer 端：处理完业务再手动提交 offset，不要自动提交。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">分布式锁怎么实现？</div>
+          <p>
+            参考要点：Redis 用 <code>SET key token NX EX seconds</code> 原子加锁，
+            value 用唯一 token，释放用 Lua 脚本判断 token 再删保证原子防误删，设过期时间防死锁，
+            看门狗续期。生产用 Redisson。对比 ZooKeeper 临时顺序节点方案（强一致、自动释放）。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Celery 是什么，怎么用？</div>
+          <p>
+            参考要点：Celery 是 Python 分布式任务队列，由 Worker、Broker（Redis/RabbitMQ）、
+            Backend 组成。定义 <code>@app.task</code> 函数，调用 <code>.delay()</code> 提交异步任务，
+            Worker 进程消费执行。支持定时任务（Beat）、重试、结果存储、Flower 监控。
+            用于邮件、报表、批量计算等耗时异步操作。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Pandas 处理大数据怎么优化？</div>
+          <p>
+            参考要点：1) <code>chunksize</code> 分块读取；2) 列类型优化（低基数字符串转 category，
+            数值降位 int32/float32）；3) 向量化操作避免 for 循环；4) 用 Parquet 列式存储；
+            5) 只读取需要的列（<code>usecols</code>）；6) 数据量再大换 Polars/DuckDB/Spark。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Pandas 核心是 DataFrame/Series/索引，金融数据处理常用时间序列索引、groupby 聚合、rolling 滚动窗口。</li>
+          <li>Polars 用 Rust 实现、多线程惰性求值，千万级以上数据比 Pandas 快数倍，可与 Pandas 共存互补。</li>
+          <li>大数据处理技巧：分块读取、类型优化（category/int32）、向量化、Parquet 列式存储。</li>
+          <li>消息队列三大作用：解耦、削峰、异步；Kafka 高吞吐可回溯，RabbitMQ 低延迟灵活路由。</li>
+          <li>Kafka 高吞吐靠顺序写磁盘、零拷贝、分区并行、批量压缩；同 key 同分区保证顺序。</li>
+          <li>消息不丢失靠三段：Producer ack、Broker 多副本、Consumer 处理完再提交 offset；重复消费靠幂等。</li>
+          <li>Celery = Worker + Broker + Backend，适合异步耗时任务（邮件、报表、批量计算），Beat 定时、Flower 监控。</li>
+          <li>分布式系统核心：CAP 三选二、BASE 最终一致；分布式锁用 Redis SET NX + Lua 释放；雪花算法生成全局唯一 ID。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="A"
+               data-explain="消息队列的三大作用是解耦、削峰、异步。它能让生产者和消费者解耦、抗住流量洪峰、把耗时操作异步化，但它本身不能直接解决分布式数据一致性问题。">
+            <div class="quiz-question">1. （单选）下列哪项不是消息队列的主要作用？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q40-1" value="A" /> A. 解决分布式数据一致性问题</label></li>
+              <li><label><input type="radio" name="q40-1" value="B" /> B. 系统解耦，生产者不直接依赖消费者</label></li>
+              <li><label><input type="radio" name="q40-1" value="C" /> C. 流量削峰，抗住瞬时洪峰</label></li>
+              <li><label><input type="radio" name="q40-1" value="D" /> D. 异步处理耗时操作，接口快速返回</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="Kafka 的核心概念是 Topic（消息分类）、Partition（分区，分区内有序、分区间并行，是高吞吐的关键）、Producer（生产者）、Consumer Group（消费者组）。分片是 ES 的概念。">
+            <div class="quiz-question">2. （单选）关于 Kafka 架构，下列说法正确的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q40-2" value="A" /> A. Kafka 用分片（shard）来实现并行，和 Elasticsearch 一样</label></li>
+              <li><label><input type="radio" name="q40-2" value="B" /> B. 同一个 Topic 下所有消息全局严格有序</label></li>
+              <li><label><input type="radio" name="q40-2" value="C" /> C. Topic 分为多个 Partition，分区内有序、分区间并行，是高吞吐的关键</label></li>
+              <li><label><input type="radio" name="q40-2" value="D" /> D. 一个 Consumer Group 内的消费者会消费同一份消息，实现广播</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="Redis 分布式锁的正确实现：SET key token NX EX 原子加锁（不存在才设，同时设过期防死锁），value 用唯一 token，释放时用 Lua 脚本判断 token 再删除以保证原子性、防止误删别人的锁。Del 后判断不是原子的。">
+            <div class="quiz-question">3. （单选）关于 Redis 分布式锁的实现，下列做法最稳妥的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q40-3" value="A" /> A. 用 SETNX 加锁，不加过期时间，业务结束后 DEL 释放</label></li>
+              <li><label><input type="radio" name="q40-3" value="B" /> B. 用 SET key token NX EX 原子加锁，释放时用 Lua 脚本判断 token 再删</label></li>
+              <li><label><input type="radio" name="q40-3" value="C" /> C. 加锁时不设 token，直接 DEL 对应 key 即可释放</label></li>
+              <li><label><input type="radio" name="q40-3" value="D" /> D. 先 SETNX 再加 EXPIRE，分两步完成加锁和过期设置</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="Broker|broker"
+               data-explain="Celery 架构由 Worker（执行任务的进程）、Broker（任务队列，常用 Redis 或 RabbitMQ，负责接收和分发任务）、Backend（存储任务结果）组成，还有 Beat（定时调度）和 Flower（监控）。">
+            <div class="quiz-question">4. （填空）Celery 中负责接收任务并分发给 Worker 的任务队列组件叫什么？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>Python 后端开发专题 · 第 40 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=4"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

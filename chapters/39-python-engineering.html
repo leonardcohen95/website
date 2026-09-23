@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第39章 工程化与 DevOps | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="39-python-engineering">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 39 章</span>
+          <span class="meta-tag">Python 后端开发</span>
+          <span class="meta-tag">约 40 分钟</span>
+        </div>
+        <h1>工程化与 DevOps</h1>
+        <p>
+          前面几章我们已经掌握了 Python 基础、Web 开发、数据库和并发编程，能写出功能完整的后端服务。
+          但在真实团队里，代码能不能落地、能不能长期维护，取决于<strong>工程化能力</strong>——
+          协作规范、自动化测试、可观测日志、容器化部署、CI/CD 流水线、代码质量工具链。
+          这些正是初中级 Python 后端面试和岗位 JD 里反复出现的关键词。
+          本章把这些工程化能力一次性讲透，并配套完整的代码示例和面试高频题。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>掌握 Git Flow / GitHub Flow 分支模型，能规范地进行代码协作与冲突解决</li>
+          <li>熟练使用 unittest 与 pytest 编写单元测试，掌握 Mock、fixture、参数化与覆盖率统计</li>
+          <li>能配置结构化日志，理解日志级别与生产环境日志规范</li>
+          <li>能编写多阶段 Dockerfile 并用 docker-compose 编排应用与中间件</li>
+          <li>理解 CI/CD 理念，能写出完整的 GitHub Actions 流水线</li>
+          <li>掌握 black、isort、flake8、mypy 等代码质量工具与 pre-commit 集成</li>
+        </ul>
+
+        <h2>1. Git 协作规范</h2>
+        <p>
+          Git 是团队协作的基石。一个混乱的 Git 历史会让代码审查、回滚、定位线上问题都变得痛苦。
+          掌握分支模型、常用命令、冲突解决和 commit message 规范，是工程化的第一步。
+        </p>
+
+        <h3>1.1 两种主流分支模型</h3>
+
+        <div class="callout">
+          <div class="callout-title">Git Flow 分支模型</div>
+<pre><code>                           master（生产，只接 merge）
+                              │
+          ┌───────────────────┴───────────────────┐
+          │            release-1.0.0              │   预发布分支
+          │                                        │
+       develop ───────────────────────────────►    集成分支
+          │  feat/user  feat/order  fix/login       功能/修复分支
+          ├───┐  ┌───┐  ┌───┐
+          ▼   ▼  ▼   ▼  ▼   ▼
+       (个人 feature 分支，开发完 merge 回 develop)</code></pre>
+          <p>
+            <strong>Git Flow</strong>：分支多、流程严格，适合有明确版本发布周期的项目（如桌面软件、内部系统）。
+            核心分支：<code>master</code>（生产）、<code>develop</code>（集成）、
+            <code>feature/*</code>（功能）、<code>release/*</code>（预发布）、<code>hotfix/*</code>（线上修复）。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">GitHub Flow 分支模型</div>
+<pre><code>  main ───●───●───●───●───●───► （长期分支，随时可发布）
+            \     \     \
+             ●─●   ●─●   ●─●   （feature 分支，合并即部署）
+            PR    PR    PR</code></pre>
+          <p>
+            <strong>GitHub Flow</strong>：只有一个长期分支 <code>main</code>，所有改动都从 <code>main</code>
+            切出 feature 分支，开发完提 Pull Request，review 通过后合入 <code>main</code> 并立即部署。
+            简单、适合持续部署的互联网/Web 项目，是目前大多数团队的选择。
+          </p>
+        </div>
+
+        <h3>1.2 常用命令速查</h3>
+        <pre><code># 克隆仓库
+git clone https://github.com/your-org/your-repo.git
+cd your-repo
+
+# 创建并切换分支（GitHub Flow：从 main 切 feature）
+git checkout main
+git pull origin main
+git checkout -b feat/bond-yield-calc
+
+# 日常开发循环
+git add .                                  # 暂存改动（或 git add 具体文件）
+git commit -m "feat(bond): 新增到期收益率计算函数"
+git push origin feat/bond-yield-calc       # 推到远端
+
+# 同步主线（rebase 保持线性历史，见下文对比）
+git checkout main
+git pull origin main
+git checkout feat/bond-yield-calc
+git rebase main                            # 把 feature 分支变基到最新 main
+# 有冲突就解决后：
+git add .
+git rebase --continue
+
+# 合并完成后删除分支
+git branch -d feat/bond-yield-calc
+git push origin --delete feat/bond-yield-calc
+
+# 查看历史与状态
+git log --oneline --graph --decorate -20
+git status
+git diff HEAD</code></pre>
+
+        <h3>1.3 冲突解决</h3>
+        <p>
+          多人改同一文件同一行会产生冲突。Git 会在冲突区域用 <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>、
+          <code>=======</code>、<code>>>>>>>></code> 标记。解决步骤：
+        </p>
+        <pre><code># 1. rebase 或 merge 时出现冲突
+git status
+#   both modified: app/bond/calc.py
+
+# 2. 打开文件，看到类似：
+# <<<<<<< HEAD
+# def ytm(price):       # 主线版本
+# =======
+# def yield_to_maturity(price):   # 你的分支版本
+# >>>>>>> feat/bond-yield-calc
+
+# 3. 手动合并成最终版本（保留需要的，删掉标记），然后：
+git add app/bond/calc.py
+git rebase --continue     # 或 git commit（merge 场景）
+
+# 4. 放弃本次 rebase
+git rebase --abort</code></pre>
+
+        <h3>1.4 Commit Message 规范（Conventional Commits）</h3>
+        <p>
+          规范的 commit message 能让 <code>git log</code> 变成可读的变更历史，还能自动生成 changelog。
+          采用 <strong>Conventional Commits</strong> 格式：<code>&lt;type&gt;(&lt;scope&gt;): &lt;subject&gt;</code>。
+        </p>
+        <pre><code># type 常用值：
+# feat     新功能
+# fix      修复 bug
+# docs     文档
+# style    代码格式（不影响功能）
+# refactor 重构（非新功能非修复）
+# perf     性能优化
+# test     测试相关
+# chore    构建/工具/依赖
+
+# 示例：
+feat(bond): 新增到期收益率 ytm() 计算函数
+fix(api): 修复债券列表接口分页参数校验
+docs(readme): 补充本地启动步骤
+refactor(calc): 提取现金流折现公共函数
+chore(deps): 升级 pandas 到 2.2.0</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">rebase 和 merge 的区别</div>
+          <p>
+            <strong>merge</strong>：把两个分支的提交合并，生成一个 merge commit，历史保留分叉，
+            形如「Y」字。优点是保留真实历史、可回溯；缺点是历史线分叉多、不够线性。
+          </p>
+          <p>
+            <strong>rebase</strong>：把当前分支的提交「摘下来」重新接到目标分支最新提交之后，
+            历史变成一条直线。优点是线性、干净、便于 review；缺点是改写了提交历史，
+            <strong>已经 push 到公共分支的提交不要 rebase</strong>，否则会和别人冲突。
+          </p>
+          <p>
+            <strong>选型建议</strong>：个人 feature 分支合并到主干前用 <code>rebase</code> 整理历史；
+            合并到 <code>main</code> 用 <code>merge --no-ff</code> 或 PR 的「squash merge」，
+            既保留主干干净，又能记录功能合并点。团队统一规则比用哪个更重要。
+          </p>
+        </div>
+
+        <h2>2. 单元测试</h2>
+        <p>
+          单元测试是保证代码质量、支撑重构的基石。Python 生态有两套主流：标准库 <code>unittest</code>
+          和第三方 <code>pytest</code>。生产项目几乎都用 pytest，因为它更简洁、插件生态丰富。
+        </p>
+
+        <h3>2.1 unittest 标准库</h3>
+        <p>
+          <code>unittest</code> 是 Python 自带的，基于类和断言方法，风格类似 Java 的 JUnit。
+        </p>
+        <pre><code># bond/calc.py —— 被测代码
+def ytm(price, face_value=100, coupon_rate=0.05, years=3):
+    """简化的到期收益率计算（迭代逼近）"""
+    if price <= 0:
+        raise ValueError("价格必须大于 0")
+    coupon = face_value * coupon_rate
+    low, high = 0.0, 1.0
+    for _ in range(100):           # 二分法迭代 100 次
+        mid = (low + high) / 2
+        pv = sum(coupon / (1 + mid) ** t for t in range(1, years + 1))
+        pv += face_value / (1 + mid) ** years
+        if abs(pv - price) < 1e-6:
+            return round(mid, 6)
+        if pv > price:
+            low = mid
+        else:
+            high = mid
+    return round((low + high) / 2, 6)
+
+
+# tests/test_calc.py —— unittest 写法
+import unittest
+from bond.calc import ytm
+
+
+class TestYTM(unittest.TestCase):
+    def test_par_bond(self):
+        """平价债券，收益率等于票息率"""
+        self.assertAlmostEqual(ytm(100, coupon_rate=0.05), 0.05, places=4)
+
+    def test_discount_bond(self):
+        """折价债券，收益率高于票息率"""
+        r = ytm(95, coupon_rate=0.05, years=3)
+        self.assertGreater(r, 0.05)
+
+    def test_invalid_price(self):
+        with self.assertRaises(ValueError):
+            ytm(0)
+
+    def test_zero_coupon(self):
+        # 零息债券，3 年后还 100，现价 85
+        r = ytm(85, face_value=100, coupon_rate=0, years=3)
+        self.assertAlmostEqual(r, (100 / 85) ** (1 / 3) - 1, places=4)
+
+
+if __name__ == "__main__":
+    unittest.main()        # 运行：python -m unittest tests.test_calc -v</code></pre>
+
+        <p>常用 assert 系列：<code>assertEqual</code>、<code>assertAlmostEqual</code>（浮点）、
+          <code>assertTrue/assertFalse</code>、<code>assertRaises</code>（异常）、
+          <code>assertIn</code>、<code>assertIsNone</code>。</p>
+
+        <h3>2.2 pytest 进阶</h3>
+        <p>
+          pytest 用普通函数 + <code>assert</code> 原生断言，无需继承类，更 Pythonic。
+          三大杀器：<strong>fixture</strong>（依赖注入）、<strong>参数化</strong>、<strong>conftest</strong>。
+        </p>
+        <pre><code># tests/test_calc_pytest.py
+import pytest
+from bond.calc import ytm
+
+
+@pytest.mark.parametrize("price, coupon_rate, years, expected", [
+    (100, 0.05, 3, 0.05),       # 平价
+    (95,  0.05, 3, None),       # 折价（只断言方向）
+    (105, 0.05, 3, None),       # 溢价
+])
+def test_ytm(price, coupon_rate, years, expected):
+    r = ytm(price, coupon_rate=coupon_rate, years=years)
+    if expected is not None:
+        assert abs(r - expected) < 1e-4
+    elif price < 100:
+        assert r > coupon_rate
+    else:
+        assert r < coupon_rate
+
+
+def test_invalid_price():
+    with pytest.raises(ValueError):
+        ytm(0)</code></pre>
+
+        <h3>2.3 fixture 与 conftest</h3>
+        <p>
+          fixture 是 pytest 的依赖注入机制，用于准备测试数据/对象，可复用、可组合。
+          <code>conftest.py</code> 是共享 fixture 的地方，放在测试目录下自动被 pytest 发现。
+        </p>
+        <pre><code># tests/conftest.py
+import pytest
+from flask import Flask
+
+
+@pytest.fixture
+def sample_bond():
+    """提供一个测试用债券字典"""
+    return {"code": "019640", "price": 98.5, "coupon_rate": 0.035, "years": 5}
+
+
+@pytest.fixture
+def app():
+    """Flask 测试客户端 fixture"""
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+
+    @app.route("/health")
+    def health():
+        return {"status": "ok"}
+
+    return app
+
+
+@pytest.fixture
+def client(app):
+    return app.test_client()
+
+
+# tests/test_api.py
+def test_health_endpoint(client):
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    assert resp.get_json() == {"status": "ok"}
+
+
+def test_bond_calc_uses_fixture(sample_bond):
+    r = ytm(sample_bond["price"], coupon_rate=sample_bond["coupon_rate"],
+            years=sample_bond["years"])
+    assert r > 0</code></pre>
+
+        <h3>2.4 Mock 与 patch</h3>
+        <p>
+          单元测试只测被测单元本身，外部依赖（数据库、HTTP、时间）要用 Mock 替换，
+          避免测试慢、不稳定、依赖环境。<code>unittest.mock</code> 是标准库，pytest 也可用。
+        </p>
+        <pre><code># bond/service.py —— 被测：调用外部行情接口
+import requests
+
+def fetch_bond_price(code):
+    resp = requests.get(f"https://api.example.com/bonds/{code}")
+    resp.raise_for_status()
+    return resp.json()["price"]
+
+def calc_present_value(code):
+    price = fetch_bond_price(code)      # 依赖外部 HTTP
+    return price * 0.95                 # 简化逻辑
+
+
+# tests/test_service.py
+from unittest.mock import patch, MagicMock
+from bond.service import calc_present_value
+
+
+def test_calc_present_value_with_mock():
+    # 用 patch 替换外部依赖 requests.get
+    with patch("bond.service.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"price": 100}
+        mock_resp.raise_for_status.return_value = None
+        mock_get.return_value = mock_resp
+
+        result = calc_present_value("019640")
+        assert result == 95.0
+        # 验证 mock 被正确调用
+        mock_get.assert_called_once_with("https://api.example.com/bonds/019640")
+
+
+# 也可以用装饰器形式
+@patch("bond.service.requests.get")
+def test_with_decorator(mock_get):
+    mock_get.return_value.json.return_value = {"price": 80}
+    mock_get.return_value.raise_for_status.return_value = None
+    assert calc_present_value("019640") == 76.0</code></pre>
+
+        <p>常用 Mock 场景：<code>patch</code> 替换模块级函数、<code>MagicMock</code> 模拟对象、
+          <code>side_effect</code> 模拟多次不同返回/抛异常、<code>assert_called_once_with</code> 验证调用。</p>
+
+        <h3>2.5 覆盖率统计</h3>
+        <p>
+          <code>pytest-cov</code> 插件统计测试覆盖率，生成报告。
+        </p>
+        <pre><code>pip install pytest pytest-cov
+
+# 运行并生成覆盖率报告（终端 + HTML）
+pytest --cov=bond --cov-report=term-missing --cov-report=html tests/
+
+# 输出示例：
+# Name                Stmts   Miss  Cover   Missing
+# -------------------------------------------------
+# bond/calc.py           18      1    94%   22
+# bond/service.py        12      0   100%
+# -------------------------------------------------
+# TOTAL                  30      1    97%
+
+# 设置覆盖率门槛，低于 90% 直接失败（CI 里用）
+pytest --cov=bond --cov-fail-under=90 tests/</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">测试覆盖率不是越高越好</div>
+          <p>
+            覆盖率高不等于质量高——100% 覆盖可能只是「跑过了代码」却没验证正确逻辑。
+            <strong>核心业务逻辑必须覆盖</strong>（如定价、风控、账务计算），
+            而 getter/setter、简单 DTO、框架样板代码不必强求。
+            比起追求数字，更重要的是<strong>断言的质量</strong>：有没有验证边界条件、异常分支、等价类。
+            生产建议核心模块覆盖率不低于 80%，关键算法接近 100%。
+          </p>
+        </div>
+
+        <h2>3. 日志规范</h2>
+        <p>
+          日志是线上问题排查的唯一线索。规范的日志能让你在故障发生时快速定位根因，
+          混乱的日志（print 满天飞、无时间戳、无级别）会让排查变成大海捞针。
+        </p>
+
+        <h3>3.1 logging 模块配置</h3>
+        <p>
+          Python 标准库 <code>logging</code> 由 Logger、Handler、Formatter、Filter 四部分组成。
+          Logger 产生日志，Handler 决定输出到哪（控制台/文件），Formatter 决定格式。
+        </p>
+        <pre><code>import logging
+from logging.handlers import RotatingFileHandler
+
+# 基础配置
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+logger = logging.getLogger("bond_app")
+
+
+def configure_production_logging():
+    """生产环境：按大小滚动的文件日志 + 控制台"""
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+
+    fmt = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s:%(lineno)d - %(message)s"
+    )
+
+    # 控制台 handler
+    sh = logging.StreamHandler()
+    sh.setFormatter(fmt)
+    root.addHandler(sh)
+
+    # 滚动文件 handler：单文件 10MB，保留 5 个
+    fh = RotatingFileHandler(
+        "logs/app.log", maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
+    )
+    fh.setFormatter(fmt)
+    root.addHandler(fh)
+
+
+# 使用
+logger.info("开始计算债券 %s 的收益率", "019640")
+logger.warning("债券 %s 价格异常: %s", "019640", price)
+logger.error("计算失败", exc_info=True)   # exc_info=True 会打印异常堆栈</code></pre>
+
+        <h3>3.2 日志级别</h3>
+        <div class="term-card">
+          <div class="term-name">DEBUG / INFO / WARNING / ERROR / CRITICAL</div>
+          <p>
+            <strong>DEBUG</strong>：开发调试细节（变量值、循环次数），生产一般关闭。<br />
+            <strong>INFO</strong>：关键流程节点（请求进来、任务开始/结束），生产默认级别。<br />
+            <strong>WARNING</strong>：可恢复的异常（重试、降级、配置用了默认值），需要关注但不紧急。<br />
+            <strong>ERROR</strong>：单个请求/任务失败但系统还能跑（接口报错、数据异常），需告警。<br />
+            <strong>CRITICAL</strong>：系统级故障（数据库连不上、磁盘满），需立即处理。
+          </p>
+        </div>
+
+        <h3>3.3 结构化日志（JSON 日志）</h3>
+        <p>
+          纯文本日志难以被日志系统（ELK/Loki）解析检索。结构化日志把每条日志输出成 JSON，
+          方便按字段过滤聚合。常用库：<code>python-json-logger</code>。
+        </p>
+        <pre><code>import logging
+from pythonjsonlogger import jsonlogger
+
+handler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter(
+    "%(asctime)s %(levelname)s %(name)s %(message)s %(bond_code)s %(trace_id)s"
+)
+handler.setFormatter(formatter)
+logging.basicConfig(level=logging.INFO, handlers=[handler])
+
+logger = logging.getLogger("bond")
+# 用 extra 携带上下文字段（trace_id、bond_code）
+logger.info("收益率计算完成", extra={"bond_code": "019640", "trace_id": "abc123"})
+# 输出：{"asctime": "...", "levelname": "INFO", "bond_code": "019640", "trace_id": "abc123", ...}</code></pre>
+
+        <h3>3.4 loguru 库</h3>
+        <p>
+          <code>loguru</code> 是第三方库，API 极简，自动处理轮转、压缩、异常堆栈、彩色输出，
+          适合不想折腾 logging 配置的项目。
+        </p>
+        <pre><code>from loguru import logger
+
+# 一行配置：按天轮转 + 压缩 + 保留 30 天
+logger.add("logs/app_{time:YYYY-MM-DD}.log", rotation="00:00",
+           retention="30 days", compression="zip", level="INFO")
+
+logger.info("债券 {} 价格 {}", "019640", 98.5)
+try:
+    1 / 0
+except Exception:
+    logger.exception("计算出错")   # 自动打印完整堆栈</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">生产环境日志铁律</div>
+          <ul>
+            <li><strong>不要用 print</strong>：print 无级别、无时间戳、无法关闭，生产必须用 logging。</li>
+            <li><strong>不要打敏感信息</strong>：密码、token、身份证、银行卡号、完整手机号严禁入日志，
+              必要时脱敏（如 <code>138****1234</code>）。</li>
+            <li><strong>不要打超大对象</strong>：别直接 <code>logger.info(data)</code> 一个几 MB 的 DataFrame，
+              会撑爆日志、拖慢请求。</li>
+            <li><strong>异常要打堆栈</strong>：<code>logger.error(msg, exc_info=True)</code> 或
+              <code>logger.exception(msg)</code>，否则只有一行错误信息无法定位。</li>
+            <li><strong>日志要带上下文</strong>：trace_id、用户 id、业务单号，方便串联一次请求的所有日志。</li>
+          </ul>
+        </div>
+
+        <h2>4. Docker 部署</h2>
+        <p>
+          Docker 把应用和依赖打包成镜像，实现「一次构建，到处运行」，解决了「我电脑上能跑」的问题。
+          Python 应用容器化的核心是写好 Dockerfile 和 docker-compose。
+        </p>
+
+        <h3>4.1 Dockerfile 编写（多阶段构建）</h3>
+        <p>
+          多阶段构建用一个阶段装依赖、编译，另一个阶段只拷贝产物，大幅减小镜像体积。
+        </p>
+        <pre><code># ===== 阶段 1：构建依赖 =====
+FROM python:3.11-slim AS builder
+WORKDIR /build
+
+# 先拷依赖文件，利用 Docker 缓存层（依赖不变就不用重装）
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# ===== 阶段 2：运行时镜像 =====
+FROM python:3.11-slim
+WORKDIR /app
+
+# 只从 builder 阶段拷贝已安装的依赖
+COPY --from=builder /root/.local /root/.local
+ENV PATH=/root/.local/bin:$PATH
+
+# 拷贝应用代码
+COPY . .
+
+# 非 root 用户运行（安全）
+RUN useradd -m appuser && chown -R appuser /app
+USER appuser
+
+EXPOSE 5000
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:app"]</code></pre>
+
+        <h3>4.2 requirements 分层优化</h3>
+        <p>
+          把依赖分成 <code>requirements.txt</code>（运行时）和 <code>requirements-dev.txt</code>（开发），
+          镜像只装运行时依赖。
+        </p>
+        <pre><code># requirements.txt
+Flask==3.0.0
+gunicorn==21.2.0
+redis==5.0.1
+pymysql==1.1.0
+
+# requirements-dev.txt
+-r requirements.txt
+pytest==7.4.0
+pytest-cov==4.1.0
+black==23.12.0
+flake8==7.0.0
+mypy==1.8.0</code></pre>
+
+        <h3>4.3 docker-compose 编排</h3>
+        <p>
+          应用通常依赖 MySQL、Redis 等中间件，docker-compose 一键起整套环境。
+        </p>
+        <pre><code># docker-compose.yml
+version: "3.8"
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - DB_HOST=mysql
+      - DB_USER=bond
+      - DB_PASSWORD=bond@2024
+      - REDIS_HOST=redis
+    depends_on:
+      - mysql
+      - redis
+    restart: always
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root@2024
+      MYSQL_DATABASE: bond
+      MYSQL_USER: bond
+      MYSQL_PASSWORD: bond@2024
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass redis@2024
+    ports:
+      - "6379:6379"
+
+volumes:
+  mysql_data:</code></pre>
+
+        <pre><code># 启动整套环境
+docker-compose up -d --build
+# 查看日志
+docker-compose logs -f web
+# 停止并清理
+docker-compose down</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">.dockerignore 减少构建上下文</div>
+          <p>
+            <code>docker build</code> 会把当前目录（构建上下文）整个传给 Docker daemon。
+            不写 <code>.dockerignore</code> 会把 <code>.git</code>、<code>node_modules</code>、
+            <code>__pycache__</code>、日志、虚拟环境全传进去，镜像构建慢、体积大、还可能泄露密钥。
+          </p>
+          <pre><code># .dockerignore
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+.venv
+venv
+env
+node_modules
+*.log
+logs/
+.env
+.idea
+.vscode
+tests/
+docs/
+*.md</code></pre>
+          <p>记住：<code>.dockerignore</code> 之于 Dockerfile，相当于 <code>.gitignore</code> 之于 Git。</p>
+        </div>
+
+        <h2>5. CI/CD 流水线</h2>
+        <p>
+          CI/CD 是工程化的核心体现，让代码从提交到部署全自动、可重复、可追溯。
+        </p>
+
+        <h3>5.1 概念区分</h3>
+        <div class="term-card">
+          <div class="term-name">CI / CD / CD</div>
+          <p>
+            <strong>CI（Continuous Integration，持续集成）</strong>：代码频繁合并到主干，
+            每次合并自动跑构建、测试、代码检查，尽早发现问题。<br />
+            <strong>CD（Continuous Delivery，持续交付）</strong>：CI 之后自动打包、
+            准备好可随时发布的版本，但部署到生产需要人工审批。<br />
+            <strong>CD（Continuous Deployment，持续部署）</strong>：更进一步，
+            通过所有自动化检查后自动部署到生产，无需人工干预（需完善的测试和灰度能力）。
+          </p>
+        </div>
+
+        <h3>5.2 GitHub Actions 实战</h3>
+        <p>
+          下面是一条完整的流水线：代码检查 → 单元测试 → 构建镜像 → 推送仓库 → 部署。
+          放在 <code>.github/workflows/ci-cd.yml</code>。
+        </p>
+        <pre><code>name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ===== 1. 代码检查 + 测试 =====
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: 代码检查（flake8 + black 检查格式）
+        run: |
+          flake8 app/ --max-line-length=100
+          black --check app/
+
+      - name: 单元测试 + 覆盖率
+        run: pytest --cov=app --cov-fail-under=80 tests/
+
+  # ===== 2. 构建并推送镜像（仅 main 分支）=====
+  build:
+    needs: test                       # 依赖 test 成功
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 登录 Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: 构建并推送镜像
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            yourorg/bond-app:latest
+            yourorg/bond-app:${{ github.sha }}
+
+  # ===== 3. 部署到服务器 =====
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH 部署
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd /opt/bond-app
+            docker-compose pull web
+            docker-compose up -d web
+            docker image prune -f</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">CI/CD 是工程化能力的核心体现</div>
+          <p>
+            面试官问「你们 CI/CD 怎么搞的」，本质是考察你对<strong>自动化、质量门禁、可重复发布</strong>的理解。
+            答题要点：1) 触发时机（push/PR）；2) 质量门禁（lint + 单测 + 覆盖率卡点）；
+            3) 产物（镜像带 git sha tag 便于追溯）；4) 部署策略（滚动/灰度/蓝绿）；
+            5) 回滚机制（镜像 tag 回退 + 健康检查失败自动回滚）。
+            能把这五点讲清楚，说明你有真实工程经验。
+          </p>
+        </div>
+
+        <h2>6. 代码质量工具链</h2>
+        <p>
+          好的代码风格靠人记不住，要靠工具强制。Python 社区的标准组合是「格式化 + 检查 + 类型」三件套。
+        </p>
+
+        <h3>6.1 格式化：black + isort</h3>
+        <pre><code># black：统一代码格式（引号、空格、换行），零配置
+black app/
+
+# isort：统一 import 顺序（标准库 → 第三方 → 本地）
+isort app/
+
+# 检查是否符合（CI 用 --check）
+black --check app/
+isort --check app/</code></pre>
+
+        <h3>6.2 检查：flake8 + pylint</h3>
+        <pre><code># flake8：轻量静态检查（未使用变量、行过长、语法问题）
+flake8 app/ --max-line-length=100
+
+# pylint：更严格的静态分析（代码复杂度、命名规范、潜在 bug）
+pylint app/</code></pre>
+
+        <h3>6.3 类型检查：mypy</h3>
+        <pre><code># 给函数加类型注解，mypy 做静态类型检查
+def ytm(price: float, face_value: float = 100) -> float:
+    ...
+
+# 运行
+mypy app/</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">pre-commit hooks 自动执行</div>
+          <p>
+            把上面工具配置成 <code>pre-commit</code> 钩子，每次 <code>git commit</code> 自动跑，
+            不通过就拒绝提交，从源头保证代码质量。
+          </p>
+          <pre><code># .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/psf/black
+    rev: 23.12.0
+    hooks:
+      - id: black
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        args: ["--max-line-length=100"]
+
+# 安装并启用
+pip install pre-commit
+pre-commit install            # 安装 git 钩子
+pre-commit run --all-files    # 首次全量跑一遍</code></pre>
+        </div>
+
+        <h2>7. 面试高频题</h2>
+
+        <div class="callout">
+          <div class="callout-title">你们的 CI/CD 流程是怎样的？</div>
+          <p>
+            参考要点：开发在 feature 分支提交 → 提 PR → CI 自动跑（flake8 检查、black 格式校验、
+            pytest 单测 + 覆盖率 80% 卡点）→ 通过后 review 合并到 main → 自动构建 Docker 镜像
+            （tag 用 git sha）→ 推送到镜像仓库 → 触发部署到测试环境 → 验收通过后手动点发布到生产
+            （滚动更新，健康检查失败自动回滚）。强调「质量门禁」和「可追溯、可回滚」。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">单元测试怎么写？Mock 怎么用？</div>
+          <p>
+            参考要点：用 pytest，每个测试函数测一个场景，断言用原生 assert。
+            Mock 用于隔离外部依赖（HTTP 接口、数据库、时间、文件），用 <code>unittest.mock.patch</code>
+            替换被测模块里的依赖对象，指定 return_value，再验证返回和调用参数。
+            边界值、异常分支、等价类都要覆盖。核心逻辑覆盖率目标 90%+。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">Dockerfile 怎么优化镜像大小？</div>
+          <p>
+            参考要点：1) 多阶段构建，运行时只拷依赖和代码；2) 用 slim/alpine 基础镜像；
+            3) <code>--no-cache-dir</code> 避免 pip 缓存；4) 合并 RUN 指令减少层数；
+            5) <code>.dockerignore</code> 排除无关文件；6) 依赖文件单独 COPY 利用层缓存；
+            7) 非 root 用户运行；8) 只装运行时依赖不装 dev 依赖。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">rebase 和 merge 的区别？</div>
+          <p>
+            参考要点：merge 保留分叉历史、生成 merge commit，不改动已有提交，安全但历史线乱；
+            rebase 把提交重新接到目标分支后、历史线性干净，但改写了提交 hash，
+            <strong>已 push 到公共分支的不要 rebase</strong>。个人 feature 分支整理历史用 rebase，
+            合入主干用 merge 或 squash merge。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">日志规范有哪些？</div>
+          <p>
+            参考要点：用 logging 不用 print；分级合理（INFO 流程、WARNING 可恢复异常、ERROR 失败、CRITICAL 系统级）；
+            输出结构化 JSON 日志便于检索；带 trace_id 和业务字段便于串联；
+            异常要打堆栈（exc_info=True）；严禁打敏感信息（密码、token、身份证）需脱敏；
+            生产滚动轮转避免日志撑爆磁盘。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Git 协作：GitHub Flow 适合持续部署项目，feature 分支开发完提 PR 合并；commit message 遵循 Conventional Commits 规范。</li>
+          <li>rebase 让历史线性干净但改写提交，已 push 公共分支不要 rebase；merge 保留真实历史，团队统一规则最重要。</li>
+          <li>单元测试用 pytest，配合 fixture 依赖注入、parametrize 参数化、conftest 共享配置；Mock 隔离外部依赖。</li>
+          <li>测试覆盖率核心模块不低于 80%，关键算法接近 100%，但断言质量比覆盖率数字更重要。</li>
+          <li>日志用 logging 不用 print，分级合理，输出结构化 JSON，带 trace_id，异常打堆栈，敏感信息脱敏。</li>
+          <li>Docker 用多阶段构建 + slim 镜像 + .dockerignore 减小体积，docker-compose 编排应用与中间件。</li>
+          <li>CI/CD 流水线 = 代码检查 → 单测覆盖率卡点 → 构建镜像（git sha tag）→ 部署，强调质量门禁和可回滚。</li>
+          <li>代码质量工具链：black+isort 格式化、flake8+pylint 检查、mypy 类型检查，配 pre-commit 自动执行。</li>
+        </ul>
+
+        <!-- 测验 -->
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="rebase 会把当前分支的提交重新接到目标分支之后，生成线性历史，但改写了提交 hash，因此已经 push 到公共分支的提交不要 rebase。merge 不改动已有提交、保留分叉历史。">
+            <div class="quiz-question">1. （单选）关于 Git 的 rebase 和 merge，下列说法正确的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q39-1" value="A" /> A. rebase 会保留分叉历史，适合合并公共分支</label></li>
+              <li><label><input type="radio" name="q39-1" value="B" /> B. rebase 生成线性历史，但已 push 到公共分支的提交不要 rebase</label></li>
+              <li><label><input type="radio" name="q39-1" value="C" /> C. merge 和 rebase 完全等价，可以随意互换</label></li>
+              <li><label><input type="radio" name="q39-1" value="D" /> D. merge 会改写提交 hash，rebase 不会</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D"
+               data-explain="优化镜像大小的手段：多阶段构建只拷产物、用 slim/alpine 基础镜像、--no-cache-dir 避免 pip 缓存、合并 RUN 减少层数、.dockerignore 排除无关文件。不装依赖会导致应用无法运行。">
+            <div class="quiz-question">2. （单选）下列哪项不是 Dockerfile 优化镜像大小的正确做法？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q39-2" value="A" /> A. 使用多阶段构建，运行时镜像只拷贝依赖和代码</label></li>
+              <li><label><input type="radio" name="q39-2" value="B" /> B. 使用 python:3.11-slim 这类精简基础镜像</label></li>
+              <li><label><input type="radio" name="q39-2" value="C" /> C. 配置 .dockerignore 排除 .git、__pycache__ 等无关文件</label></li>
+              <li><label><input type="radio" name="q39-2" value="D" /> D. 运行时镜像不安装任何依赖以减小体积</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="Mock 的作用是在单元测试中替换被测单元的外部依赖（如 HTTP 请求、数据库、时间），让测试不依赖外部环境、快速且稳定。pytest 不是用来加速 HTTP 真实请求的。">
+            <div class="quiz-question">3. （单选）在单元测试中使用 Mock（unittest.mock.patch）的主要目的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q39-3" value="A" /> A. 让测试运行速度比真实调用更快即可，无需关心逻辑正确性</label></li>
+              <li><label><input type="radio" name="q39-3" value="B" /> B. 替代所有 assert 断言，自动判断测试是否通过</label></li>
+              <li><label><input type="radio" name="q39-3" value="C" /> C. 隔离被测单元的外部依赖（HTTP、数据库等），使测试稳定且不依赖外部环境</label></li>
+              <li><label><input type="radio" name="q39-3" value="D" /> D. 把 Python 代码编译成机器码提升运行效率</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="质量门禁|质量卡点|覆盖率卡点|质量检查"
+               data-explain="CI/CD 中通过 lint、单元测试、覆盖率阈值（如 --cov-fail-under=80）等自动检查阻止不合规代码合入，统称质量门禁（质量卡点），是自动化保障代码质量的关键手段。">
+            <div class="quiz-question">4. （填空）CI/CD 流水线中，通过 lint、单元测试、覆盖率阈值等自动检查阻止不合规代码合入的机制，通常称为什么？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- 翻页 -->
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>Python 后端开发专题 · 第 39 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=4"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

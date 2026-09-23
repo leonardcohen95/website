@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第35章 Python 基础深度 | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="35-python-basics">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 35 章</span>
+          <span class="meta-tag">Python 后端开发</span>
+          <span class="meta-tag">约 45 分钟</span>
+        </div>
+        <h1>Python 基础深度</h1>
+        <p>
+          本章是 Python 后端开发专题的开篇，目标是把「基础」讲到能应对面试的深度。
+          数据结构底层、装饰器、生成器、上下文管理器、类型系统、内存与对象模型——
+          每一个点都是券商 FICC 投资研究系统后端面试的高频考察项。
+          学完你能说清 <code>is</code> 与 <code>==</code> 的区别、解释装饰器执行顺序、
+          画出可迭代对象到生成器的关系图，并能独立排查 Python 内存泄漏。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>掌握 list / tuple / set / dict 的底层实现与时间复杂度</li>
+          <li>能手写不带参数、带参数、类三种装饰器，并说明执行顺序</li>
+          <li>理解生成器的 yield / send / yield from，能说明其协程基础</li>
+          <li>能用两种方式实现上下文管理器（类与 contextlib）</li>
+          <li>掌握 typing 类型注解与 mypy 静态检查的基本用法</li>
+          <li>说清引用计数、分代回收、循环引用、小整数池、is vs ==</li>
+          <li>能回答 6 道 Python 基础面试高频题并给出参考答案要点</li>
+        </ul>
+
+        <h2>1. 数据结构深入</h2>
+
+        <h3>1.1 四大容器底层与时间复杂度</h3>
+        <p>
+          Python 的四大内置容器各有底层数据结构支撑，理解它们才能写出高效代码。
+          <strong>list</strong> 底层是动态数组（over-allocate 预分配），<strong>tuple</strong> 是不可变数组，
+          <strong>set</strong> 是哈希表（开放寻址），<strong>dict</strong> 3.7+ 也是哈希表但保持插入顺序。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">时间复杂度速查表（面试必背）</div>
+          <pre><code>操作              list    tuple   set      dict
+索引 s[i]          O(1)    O(1)    -        O(1)
+尾部 append        O(1)均摊  -       -        -
+头部 insert(0)     O(n)    -       -        -
+查找 in            O(n)    O(n)    O(1)     O(1)
+删除 del s[i]      O(n)    -       O(1)     O(1)
+长度 len           O(1)    O(1)    O(1)     O(1)
+排序 sort          O(nlogn) -      -        -</code></pre>
+        </div>
+
+        <h3>1.2 dict 3.7+ 有序原理</h3>
+        <p>
+          Python 3.6 起 dict 内部用<strong>哈希表 + 稀疏索引数组 + 紧凑数组</strong>三段式结构。
+          哈希冲突通过开放寻址解决，插入顺序保存在紧凑数组 <code>entries</code> 中，
+          因此迭代时按插入顺序输出。这在 3.7 被正式写进语言规范。
+        </p>
+        <pre><code># 3.7+ dict 保持插入顺序
+d = {}
+d["b"] = 2
+d["a"] = 1
+d["c"] = 3
+print(list(d.keys()))  # ['b', 'a', 'c'] —— 按插入顺序</code></pre>
+
+        <h3>1.3 切片与推导式</h3>
+        <p>
+          切片 <code>s[start:stop:step]</code> 本质是调用 <code>__getitem__(slice(start, stop, step))</code>，
+          返回新对象，不修改原对象（list 切片是浅拷贝）。
+          推导式是 Python 风格的核心，比 for 循环更快（C 层实现循环）。
+        </p>
+        <pre><code># 列表推导式：生成 1~10 的平方
+squares = [x ** 2 for x in range(1, 11)]
+
+# 带条件的推导式：偶数平方
+even_sq = [x ** 2 for x in range(10) if x % 2 == 0]
+
+# 字典推导式：键值翻转
+m = {"a": 1, "b": 2}
+rev = {v: k for k, v in m.items()}  # {1: 'a', 2: 'b'}
+
+# 集合推导式：去重
+nums = {x % 3 for x in range(10)}   # {0, 1, 2}
+
+# 生成器推导式（注意是圆括号）：惰性，省内存
+gen = (x ** 2 for x in range(10**6))</code></pre>
+
+        <h3>1.4 浅拷贝 vs 深拷贝（面试高频）</h3>
+        <p>
+          <code>copy.copy</code>（浅拷贝）只拷贝最外层容器，内部嵌套对象仍共享引用；
+          <code>copy.deepcopy</code>（深拷贝）递归拷贝所有层级，完全独立。
+          对于不可变对象，两者都返回原对象引用（无拷贝必要）。
+        </p>
+        <pre><code>import copy
+
+a = [1, [2, 3], {"k": "v"}]
+
+b = copy.copy(a)        # 浅拷贝
+b[1].append(4)
+print(a[1])             # [2, 3, 4] —— 内部嵌套被共享，a 也变了
+
+c = copy.deepcopy(a)    # 深拷贝
+c[2]["new"] = 1
+print(a[2])             # {'k': 'v'} —— 完全独立，a 不变</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">面试问法：list 的三种拷贝方式</div>
+          <p>
+            ① <code>b = a[:]</code> 切片拷贝；② <code>b = list(a)</code> 构造拷贝；
+            ③ <code>b = copy.copy(a)</code>。三种都是浅拷贝，嵌套可变对象仍共享。
+            要完全独立必须用 <code>copy.deepcopy</code>。
+          </p>
+        </div>
+
+        <h3>1.5 可迭代对象 / 迭代器 / 生成器</h3>
+        <p>三者关系是面试常考点，用一张图理清：</p>
+        <pre><code> 可迭代对象 (Iterable)
+  ├── 实现 __iter__()，返回一个迭代器
+  │     list / dict / str / range / file ...
+  │
+  ▼
+ 迭代器 (Iterator)
+  ├── 实现 __iter__() 和 __next__()
+  │     有状态，记住当前位置，只能遍历一次
+  │
+  ├── 生成器 (Generator)  —— 迭代器的子集
+  │     ├── 含 yield 的函数，或生成器推导式
+  │     └── 惰性求值，按需产生值，极省内存</code></pre>
+
+        <pre><code># 自定义迭代器：实现 __iter__ 和 __next__
+class CountDown:
+    def __init__(self, start):
+        self.n = start
+    def __iter__(self):
+        return self           # 迭代器返回自身
+    def __next__(self):
+        if self.n <= 0:
+            raise StopIteration
+        self.n -= 1
+        return self.n + 1
+
+for i in CountDown(3):       # 3, 2, 1
+    print(i)</code></pre>
+
+        <h2>2. 装饰器（Decorator）</h2>
+
+        <div class="term-card">
+          <div class="term-name">装饰器</div>
+          <p>
+            接收一个函数并返回一个新函数的高阶函数，在不修改原函数代码的前提下增强其行为（日志、计时、权限校验等）。
+            语法糖 <code>@dec</code> 等价于 <code>f = dec(f)</code>，底层依赖闭包。
+          </p>
+        </div>
+
+        <h3>2.1 闭包原理</h3>
+        <p>
+          装饰器的基石是<strong>闭包</strong>：内部函数引用了外部函数的变量（自由变量），
+          即使外部函数执行完毕，内部函数仍能访问这些变量。<code>__closure__</code> 属性保存了自由变量。
+        </p>
+        <pre><code>def outer(x):
+    def inner(y):
+        return x + y        # x 是自由变量，被闭包捕获
+    return inner
+
+add5 = outer(5)
+print(add5(3))             # 8
+print(add5.__closure__)    # (&lt;cell at ...: int object at 5&gt;,)</code></pre>
+
+        <h3>2.2 不带参数的装饰器</h3>
+        <p>装饰器本质是「接收函数、返回函数」的高阶函数。</p>
+        <pre><code>import functools
+
+def log(func):
+    @functools.wraps(func)            # 保留原函数元信息
+    def wrapper(*args, **kwargs):
+        print(f"调用 {func.__name__}")
+        result = func(*args, **kwargs)
+        print(f"{func.__name__} 执行完毕")
+        return result
+    return wrapper
+
+@log
+def add(a, b):
+    """两数相加"""
+    return a + b
+
+print(add(2, 3))         # 调用 add / add 执行完毕 / 5
+print(add.__name__)      # add —— 没有 wraps 会变成 wrapper</code></pre>
+
+        <h3>2.3 带参数的装饰器</h3>
+        <p>要给装饰器传参，需要多包一层：最外层接收参数，中间层接收函数，最内层执行逻辑。</p>
+        <pre><code>def repeat(times):                       # 最外层：接收装饰器参数
+    def decorator(func):                # 中间层：接收被装饰函数
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):   # 最内层：执行逻辑
+            for _ in range(times):
+                result = func(*args, **kwargs)
+            return result
+        return wrapper
+    return decorator
+
+@repeat(times=3)
+def greet(name):
+    print(f"Hello, {name}")
+
+greet("World")          # 打印三次 Hello, World</code></pre>
+
+        <h3>2.4 类装饰器</h3>
+        <p>类装饰器通过实现 <code>__call__</code> 方法，让实例可被调用，适合维护状态（如计数、缓存）。</p>
+        <pre><code>class CountCalls:
+    def __init__(self, func):
+        functools.update_wrapper(self, func)
+        self.func = func
+        self.count = 0
+
+    def __call__(self, *args, **kwargs):
+        self.count += 1
+        return self.func(*args, **kwargs)
+
+@CountCalls
+def fib(n):
+    return n if n &lt; 2 else fib(n - 1) + fib(n - 2)
+
+fib(10)
+print(fib.count)         # 1 —— 调用次数统计</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">多个装饰器：从下往上包装，从上往下执行</div>
+          <p>
+            <code>@A @B def f()</code> 等价于 <code>f = A(B(f))</code>。
+            <strong>包装顺序</strong>（定义时）：先执行 B 包裹 f，再用 A 包裹 B(f)，即从下往上。
+            <strong>执行顺序</strong>（调用时）：先执行 A 的 wrapper，再执行 B 的 wrapper，再执行 f，即从上往下。
+          </p>
+        </div>
+
+        <h3>2.5 实战装饰器</h3>
+        <pre><code>import time
+
+# 计时装饰器
+def timer(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.perf_counter()
+        result = func(*args, **kwargs)
+        print(f"{func.__name__} 耗时 {time.perf_counter() - start:.4f}s")
+        return result
+    return wrapper
+
+# 权限校验装饰器（Web 场景）
+def require_permission(perm):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(user, *args, **kwargs):
+            if perm not in user.get("permissions", []):
+                raise PermissionError(f"缺少权限: {perm}")
+            return func(user, *args, **kwargs)
+        return wrapper
+    return decorator
+
+@timer
+@require_permission("bond:read")
+def query_bond(user, bond_code):
+    return f"债券 {bond_code} 的行情数据"
+
+query_bond({"permissions": ["bond:read"]}, "019547")</code></pre>
+
+        <h2>3. 生成器（Generator）</h2>
+
+        <div class="term-card">
+          <div class="term-name">生成器</div>
+          <p>
+            一种特殊的迭代器，由含 <code>yield</code> 的函数或生成器推导式创建。惰性求值，
+            按需产生值而不一次性加载全部数据，极大节省内存。支持 <code>send()</code> 传值、
+            <code>yield from</code> 委托，是 Python 协程的基础。
+          </p>
+        </div>
+
+        <h3>3.1 yield 原理</h3>
+        <p>
+          函数体中出现 <code>yield</code>，该函数就变成生成器函数。调用它返回生成器对象，
+          函数体并不执行。每次 <code>next()</code> 推进到下一个 yield 并暂停，
+          保存栈帧，下次从暂停处继续。这就是惰性求值的基础。
+        </p>
+        <pre><code>def gen():
+    print("第一步")
+    yield 1
+    print("第二步")
+    yield 2
+
+g = gen()              # 不打印任何东西，函数未执行
+print(next(g))         # 第一步 / 1
+print(next(g))         # 第二步 / 2
+# next(g)             # StopIteration</code></pre>
+
+        <h3>3.2 send / throw / close</h3>
+        <p>
+          生成器不仅能产出值，还能通过 <code>send()</code> 接收外部传入的值（赋值给 yield 表达式左边），
+          通过 <code>throw()</code> 注入异常，<code>close()</code> 关闭。这三个方法让生成器具备协程雏形。
+        </p>
+        <pre><code>def accumulator():
+    total = 0
+    while True:
+        val = yield total        # yield 表达式的值 = send 传入的参数
+        if val is None:
+            break
+        total += val
+
+g = accumulator()
+next(g)               # 预激，返回 0（必须先 next 或 send(None)）
+print(g.send(10))     # 10
+print(g.send(20))     # 30
+g.close()</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">为什么生成器能实现协程？</div>
+          <p>
+            协程的核心是「主动让出 CPU、保存状态、可恢复」。生成器的 yield 恰好做到：
+            执行到 yield 主动挂起，栈帧保存在生成器对象里，下次 next/send 从断点恢复。
+            Python 的 <code>asyncio</code> 协程早期就是基于生成器 + yield from 实现的。
+          </p>
+        </div>
+
+        <h3>3.3 yield from 委托生成器</h3>
+        <p>
+          <code>yield from subgen</code> 把生成器的职责委托给子生成器，
+          自动传递 send/throw/close，并把子生成器的 return 值作为 yield from 表达式的结果。
+          这是协程链式调用的关键。
+        </p>
+        <pre><code>def sub():
+    yield 1
+    yield 2
+    return "done"          # 生成器的 return 值通过 yield from 传出
+
+def main():
+    result = yield from sub()
+    print("子生成器返回:", result)
+
+for v in main():
+    print(v)               # 1, 2, 然后打印 "子生成器返回: done"</code></pre>
+
+        <h3>3.4 惰性求值的内存优势</h3>
+        <p>列表推导式一次性把所有元素放进内存，生成器推导式逐个产生，处理大数据时差距巨大。</p>
+        <pre><code># 100 万个元素
+import sys
+
+lst = [x ** 2 for x in range(1_000_000)]
+gen = (x ** 2 for x in range(1_000_000))
+
+print(sys.getsizeof(lst))   # ~8.6 MB
+print(sys.getsizeof(gen))   # ~120 字节，几乎不占内存</code></pre>
+
+        <h2>4. 上下文管理器（Context Manager）</h2>
+
+        <div class="term-card">
+          <div class="term-name">上下文管理器</div>
+          <p>
+            实现 <code>__enter__</code> 和 <code>__exit__</code> 的对象，配合 <code>with</code> 语句使用，
+            保证无论是否抛异常都能正确执行进入和退出逻辑。常用于文件操作、数据库连接、锁、计时等
+            需要「申请-释放」配对的资源管理场景。
+          </p>
+        </div>
+
+        <h3>4.1 原理：__enter__ / __exit__</h3>
+        <p>
+          上下文管理器保证无论 <code>with</code> 块是否抛异常，都能正确执行「进入」和「退出」逻辑。
+          类实现 <code>__enter__</code>（进入时执行，返回值赋给 as 变量）和
+          <code>__exit__(exc_type, exc_val, exc_tb)</code>（退出时执行，返回 True 可吞掉异常）。
+        </p>
+        <pre><code>class Timer:
+    def __enter__(self):
+        import time
+        self.start = time.perf_counter()
+        return self                          # as 变量
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        elapsed = time.perf_counter() - self.start
+        print(f"耗时 {elapsed:.4f}s")
+        return False                         # False 不吞异常，True 吞掉
+
+with Timer() as t:
+    # 模拟耗时操作
+    sum(range(1_000_000))</code></pre>
+
+        <h3>4.2 contextlib 装饰器写法</h3>
+        <p>用 <code>@contextmanager</code> 把一个生成器变成上下文管理器，更简洁。</p>
+        <pre><code>from contextlib import contextmanager
+
+@contextmanager
+def open_file(path, mode="r"):
+    f = open(path, mode, encoding="utf-8")   # __enter__ 部分
+    try:
+        yield f                               # yield 前=进入，yield 后=退出
+    finally:
+        f.close()                             # __exit__ 部分
+
+with open_file("data.txt", "w") as f:
+    f.write("hello")</code></pre>
+
+        <h3>4.3 实战：数据库连接上下文管理器</h3>
+        <p>FICC 投研系统每天要连数据库，用上下文管理器保证连接必关闭。</p>
+        <pre><code>import sqlite3
+
+class DBConnection:
+    def __init__(self, db_path):
+        self.db_path = db_path
+        self.conn = None
+
+    def __enter__(self):
+        self.conn = sqlite3.connect(self.db_path)
+        return self.conn                 # as 变量拿到连接对象
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is None:
+            self.conn.commit()           # 无异常则提交
+        else:
+            self.conn.rollback()         # 有异常则回滚
+        self.conn.close()
+        return False
+
+with DBConnection("ficc.db") as conn:
+    cur = conn.cursor()
+    cur.execute("INSERT INTO bonds(code, name) VALUES(?, ?)",
+                ("019547", "国债"))
+    # 退出时自动 commit / rollback / close</code></pre>
+
+        <h2>5. 类型系统</h2>
+
+        <h3>5.1 类型注解与 typing 模块</h3>
+        <p>Python 3.5+ 支持类型注解，3.9+ 内置类型可直接用 <code>list[int]</code>，3.10+ 支持 <code>X | Y</code>。</p>
+        <pre><code>from typing import List, Dict, Optional, Union, Tuple
+
+def query_bonds(
+    codes: List[str],
+    filters: Optional[Dict[str, Union[str, float]]] = None,
+) -&gt; Tuple[int, List[Dict]]:
+    """查询债券，返回 (总数, 债券列表)"""
+    if filters is None:
+        filters = {}
+    # ... 查询逻辑
+    return 0, []
+
+# 3.9+ 更简洁写法
+def get_price(code: str) -&gt; float | None:
+    ...</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">类型注解不影响运行时</div>
+          <p>
+            类型注解只是<strong>元信息</strong>，存在 <code>__annotations__</code> 里，Python 解释器在运行时不做强制检查。
+            它是给人看、给 IDE 提示、给静态检查工具（mypy、pyright）用的。要在运行时校验需用 pydantic 等库。
+          </p>
+        </div>
+
+        <h3>5.2 鸭子类型 vs 类型注解</h3>
+        <p>
+          Python 是动态类型，遵循「鸭子类型」：只要走路像鸭子、叫像鸭子，就是鸭子。
+          即不关心对象类型，只关心它有没有需要的方法。类型注解是在此之上的补充，不改变鸭子类型本质。
+        </p>
+        <pre><code>class Duck:
+    def quack(self):
+        print("嘎嘎")
+
+class Person:
+    def quack(self):
+        print("我也会嘎嘎")
+
+def make_sound(animal):
+    animal.quack()         # 不关心类型，只要有 quack 方法即可
+
+make_sound(Duck())          # 嘎嘎
+make_sound(Person())        # 我也会嘎嘎</code></pre>
+
+        <h3>5.3 mypy 静态检查</h3>
+        <pre><code># 安装: pip install mypy
+# 检查: mypy app.py
+
+def add(a: int, b: int) -&gt; int:
+    return a + b
+
+add("1", "2")     # mypy 报错: Argument 1 has incompatible type "str"; expected "int"</code></pre>
+
+        <h2>6. 内存与对象模型</h2>
+
+        <h3>6.1 引用计数与垃圾回收</h3>
+        <p>
+          CPython 主要靠<strong>引用计数</strong>回收内存：对象每被引用一次计数 +1，解除引用 -1，归零立即回收。
+          但引用计数无法解决<strong>循环引用</strong>，因此还有<strong>分代回收</strong>（0/1/2 三代，对象存活越久检查越少），
+          定期扫描找出循环引用的垃圾。
+        </p>
+        <pre><code>import sys
+
+a = [1, 2, 3]
+print(sys.getrefcount(a))   # 2 (a + getrefcount 内部临时引用)
+b = a
+print(sys.getrefcount(a))   # 3
+del b
+print(sys.getrefcount(a))   # 2</code></pre>
+
+        <h3>6.2 小整数池与字符串驻留</h3>
+        <p>
+          CPython 对 <strong>-5 ~ 256</strong> 的整数做了缓存（小整数池），这些整数在整个程序中只有一个对象。
+          字符串驻留（intern）让相同的字面量字符串共享对象，节省内存。
+          这就是为什么 <code>256 is 256</code> 为 True，而 <code>257 is 257</code> 可能为 False（取决于实现）。
+        </p>
+        <pre><code>print(256 is 256)          # True（小整数池内）
+print(257 is 257)          # 通常 False（交互式下），模块级同一行可能 True
+
+a = "hello"
+b = "hello"
+print(a is b)              # True（字符串驻留）</code></pre>
+
+        <h3>6.3 is vs ==（面试高频）</h3>
+        <p>
+          <code>==</code> 比较的是<strong>值是否相等</strong>（调用 <code>__eq__</code>）；
+          <code>is</code> 比较的是<strong>是否同一个对象</strong>（即内存地址 <code>id()</code> 是否相同）。
+          判断 None 必须用 <code>is None</code>（None 全局只有一个对象）。
+        </p>
+        <pre><code>a = [1, 2, 3]
+b = [1, 2, 3]
+print(a == b)              # True  值相等
+print(a is b)              # False 不是同一个对象
+
+c = a
+print(c is a)              # True  同一对象</code></pre>
+
+        <h3>6.4 可变对象 vs 不可变对象</h3>
+        <p>
+          不可变对象（int/str/tuple/frozenset）创建后值不能改，「修改」实际是创建新对象；
+          可变对象（list/dict/set）可原地修改。这导致默认参数陷阱——可变默认参数在函数定义时只创建一次。
+        </p>
+        <pre><code># 经典坑：可变默认参数
+def append_to(item, target=[]):
+    target.append(item)
+    return target
+
+print(append_to(1))   # [1]
+print(append_to(2))   # [1, 2] —— 第二次调用复用了同一个 list！
+
+# 正确写法
+def append_to(item, target=None):
+    if target is None:
+        target = []
+    target.append(item)
+    return target</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">面试题：Python 内存泄漏怎么排查</div>
+          <p>
+            ① <code>tracemalloc</code>（标准库）：统计各模块内存分配，对比快照定位增长源。
+            ② <code>objgraph</code>：画出对象引用关系图，找出谁还在引用该释放的对象（多为全局容器、缓存、循环引用）。
+            ③ 常见泄漏原因：全局 list/dict 不断 append、事件回调未解注册、lru_cache 无上限、循环引用含 __del__。
+          </p>
+        </div>
+
+        <h2>7. 面试高频题汇总</h2>
+
+        <h3>Q1：装饰器的原理和执行顺序？</h3>
+        <div class="callout tip">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            ①原理：装饰器是接收函数并返回函数的高阶函数，底层依赖闭包和函数一等公民特性，语法糖 <code>@dec</code> 等价于 <code>f = dec(f)</code>。
+            ②执行顺序：定义时从下往上包装（<code>A(B(f))</code>），调用时从上往下执行（先 A 的 wrapper，再 B 的 wrapper，再 f）。
+            ③必须提 <code>functools.wraps</code> 保留原函数的 <code>__name__</code>、<code>__doc__</code> 等元信息。
+          </p>
+        </div>
+
+        <h3>Q2：生成器和迭代器的区别？</h3>
+        <div class="callout tip">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            ①迭代器是实现了 <code>__iter__</code> 和 <code>__next__</code> 的对象，有状态、只能遍历一次。
+            ②生成器是迭代器的一种，用 <code>yield</code> 或生成器推导式创建，自动实现迭代器协议，惰性求值、省内存。
+            ③生成器额外支持 <code>send()</code> 传值、<code>throw()</code> 抛异常、<code>yield from</code> 委托，是协程的基础。
+          </p>
+        </div>
+
+        <h3>Q3：上下文管理器原理？</h3>
+        <div class="callout tip">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            ①实现 <code>__enter__</code>（进入 with 时调用，返回 as 的值）和 <code>__exit__</code>（退出时调用，无论是否异常）。
+            ②<code>__exit__</code> 返回 True 可吞掉异常，返回 False 向上抛出。
+            ③也可用 <code>@contextmanager</code> + 生成器实现，yield 前为进入逻辑，yield 后为退出逻辑（通常用 try/finally 包裹）。
+          </p>
+        </div>
+
+        <h3>Q4：is 和 == 的区别？</h3>
+        <div class="callout tip">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            <code>==</code> 比较值（调用 <code>__eq__</code>），<code>is</code> 比较身份（<code>id()</code> 是否相同，即是否同一对象）。
+            判断 None 必须用 <code>is None</code>。小整数池、字符串驻留会让部分常量 <code>is</code> 为 True，但不能依赖。
+          </p>
+        </div>
+
+        <h3>Q5：Python 垃圾回收机制？</h3>
+        <div class="callout tip">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            ①引用计数为主：引用归零立即回收，实时性好但无法处理循环引用。
+            ②分代回收为辅：0/1/2 三代，新对象在 0 代，熬过扫描升级，存活越久扫描频率越低，提升效率。
+            ③标记-清除用于解决循环引用：从根对象出发标记可达对象，清除不可达的循环引用组。
+          </p>
+        </div>
+
+        <h3>Q6：*args 和 **kwargs 的作用？</h3>
+        <div class="callout tip">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            ①<code>*args</code> 收集多余的位置参数为 tuple；<code>**kwargs</code> 收集多余的关键字参数为 dict。
+            ②让函数支持可变参数，常用于装饰器透传参数 <code>def wrapper(*args, **kwargs)</code>。
+            ③调用时也可解包：<code>func(*lst, **dct)</code>。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>list 是动态数组、set/dict 是哈希表，查找 set/dict 为 O(1)，list 为 O(n)。</li>
+          <li>dict 3.7+ 通过哈希表 + 紧凑数组实现插入有序，已写入语言规范。</li>
+          <li>浅拷贝只复制最外层、内部嵌套共享；深拷贝递归复制所有层级，用 copy.deepcopy。</li>
+          <li>装饰器 = 高阶函数 + 闭包；多装饰器从下往上包装、从上往下执行，务必加 functools.wraps。</li>
+          <li>生成器用 yield 实现惰性求值，send/throw/close + yield from 使其具备协程能力，极大节省内存。</li>
+          <li>上下文管理器用 __enter__/__exit__ 或 @contextmanager 实现，保证资源正确释放（文件、DB 连接、锁）。</li>
+          <li>类型注解是元信息，运行时不检查，配合 mypy 做静态检查；不改变鸭子类型本质。</li>
+          <li>内存管理 = 引用计数（主）+ 分代回收（辅）+ 标记清除；is 比身份、== 比比值，小整数池为 -5~256。</li>
+        </ul>
+
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="多装饰器定义时从下往上包装（先 @log 包裹 func，再 @timer 包裹结果），调用时从上往下执行（先 timer 的 wrapper，再 log 的 wrapper，最后 func）。">
+            <div class="quiz-question">1. （单选）有代码 @timer @log def f(): pass，下列说法正确的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 定义时从上往下包装，调用时从下往上执行</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 定义时从下往上包装，调用时从上往下执行</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 定义和调用都从下往上</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 定义和调用都从上往下</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="is 比较的是对象身份（id 是否相同），a 和 b 是两个不同的列表对象，所以 a is b 为 False；== 比较值，值相等为 True。">
+            <div class="quiz-question">2. （单选）a = [1,2]; b = [1,2]，下列表达式结果为 True 的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. a is b</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. id(a) == id(b)</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. a == b</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. a is not None and a == b 均为 False</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D"
+               data-explain="生成器的 return 值不能通过 next() 直接拿到，而是作为 yield from 表达式的结果传出（在委托生成器中用变量接收）。">
+            <div class="quiz-question">3. （单选）关于 Python 生成器，下列说法错误的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. 生成器是一种特殊的迭代器，惰性求值</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. send() 可以向生成器传值，该值成为 yield 表达式的结果</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. yield from 可以把职责委托给子生成器</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. 生成器的 return 值可以通过 next() 直接获取</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="__exit__|exit"
+               data-explain="上下文管理器的退出方法是 __exit__(exc_type, exc_val, exc_tb)，返回 True 可吞掉异常，返回 False 继续抛出。">
+            <div class="quiz-question">4. （填空）类实现上下文管理器需要定义 __enter__ 和哪个魔法方法？</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>Python 后端开发专题 · 第 35 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=4"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

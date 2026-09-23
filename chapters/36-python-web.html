@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第36章 Web 开发与 RESTful API | 运维工程师进阶教程</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="36-python-web">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>课程目录</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta">
+          <span class="meta-tag">第 36 章</span>
+          <span class="meta-tag">Python 后端开发</span>
+          <span class="meta-tag">约 45 分钟</span>
+        </div>
+        <h1>Web 开发与 RESTful API</h1>
+        <p>
+          本章带你从框架选型到完整 API 落地。先对比 Flask / Django / FastAPI 三大框架，
+          再分别实战 Flask 蓝图与 Django ORM + DRF，随后系统讲解 RESTful 设计规范、
+          认证授权（Session / JWT / OAuth 2.0）与接口文档，最后用一个 FICC 债券查询 API
+          综合实战收口。学完你能独立设计并实现一个符合生产规范的 RESTful 后端服务。
+        </p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>能根据项目规模在 Flask、Django、FastAPI 之间做出选型</li>
+          <li>掌握 Flask 路由、Blueprint、request/Response、钩子与配置管理</li>
+          <li>理解 Django MVT 架构、ORM 查询、CBV/FBV 与 DRF 核心组件</li>
+          <li>掌握 RESTful 六大原则、HTTP 方法语义、状态码与 URL 命名规范</li>
+          <li>能实现 JWT 签发、验证、刷新全流程，理解其与 Session 的区别</li>
+          <li>能用 Flask-RESTX 或 drf-spectacular 自动生成 Swagger 接口文档</li>
+          <li>能独立设计并实现一个 FICC 场景的完整 CRUD API</li>
+        </ul>
+
+        <h2>1. Web 框架选型</h2>
+
+        <div class="term-card">
+          <div class="term-name">Flask —— 轻量灵活</div>
+          <p>
+            <strong>定位</strong>：微框架，核心只提供路由和请求响应，其余靠扩展。<br />
+            <strong>优势</strong>：灵活、学习曲线平缓、适合微服务和小型项目。<br />
+            <strong>劣势</strong>：需要自己选型数据库、认证、表单，工程化靠团队自律。<br />
+            <strong>适用</strong>：API 网关、微服务、快速原型。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Django —— 全家桶</div>
+          <p>
+            <strong>定位</strong>： batteries-included，内置 ORM、Admin、认证、表单、中间件。<br />
+            <strong>优势</strong>：ORM 强大、Admin 开箱即用、适合中大型后台系统。<br />
+            <strong>劣势</strong>：偏重、灵活度低、异步支持相对弱（3.0+ 有 ASGI）。<br />
+            <strong>适用</strong>：内容管理、企业内部系统、数据密集型后台。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">FastAPI —— 现代异步</div>
+          <p>
+            <strong>定位</strong>：基于 Starlette + Pydantic，原生 async/await。<br />
+            <strong>优势</strong>：性能高、自动生成 OpenAPI 文档、类型注解驱动、参数校验强。<br />
+            <strong>劣势</strong>：生态不如 Django 成熟、生产部署需 Uvicorn/Gunicorn。<br />
+            <strong>适用</strong>：高并发 API、AI 推理服务、微服务。
+          </p>
+        </div>
+
+        <div class="callout">
+          <div class="callout-title">FICC 投研系统选型建议</div>
+          <p>
+            券商 FICC 投研系统通常数据量大、接口多、与行情/风控系统耦合深。
+            推荐：<strong>核心交易/查询服务用 FastAPI</strong>（高并发、自动文档），
+            <strong>后台管理用 Django</strong>（Admin + ORM 提效），
+            <strong>轻量网关/聚合层用 Flask</strong>（灵活组合多个下游服务）。
+          </p>
+        </div>
+
+        <h2>2. Flask 实战</h2>
+
+        <h3>2.1 安装与最小应用</h3>
+        <pre><code># 安装
+pip install flask
+
+# app.py —— 最小应用
+from flask import Flask
+
+app = Flask(__name__)            # 创建应用实例，__name__ 用于定位静态文件等
+
+@app.route("/")                  # 路由装饰器，把 URL 绑定到视图函数
+def index():
+    return "Hello, FICC!"
+
+if __name__ == "__main__":
+    app.run(debug=True)          # debug=True 自动重载 + 调试器</code></pre>
+
+        <h3>2.2 路由与变量规则</h3>
+        <p>Flask 支持变量转换器：<code>int</code>、<code>float</code>、<code>string</code>、<code>path</code>、<code>uuid</code>。</p>
+        <pre><code>@app.route("/bonds/&lt;string:code&gt;")        # string 转换器
+def bond_detail(code):
+    return f"债券 {code} 的详情"
+
+@app.route("/bonds/&lt;int:bond_id&gt;")       # int 转换器
+def bond_by_id(bond_id):
+    return f"债券 ID: {bond_id}"
+
+@app.route("/files/&lt;path:filepath&gt;")     # path 转换器（可含斜杠）
+def get_file(filepath):
+    return f"文件路径: {filepath}"</code></pre>
+
+        <h3>2.3 request 与 Response</h3>
+        <p>
+          <code>request</code> 是全局代理对象，包含请求所有信息；
+          <code>Response</code> 可定制状态码、响应头、Content-Type。
+        </p>
+        <pre><code>from flask import request, jsonify, Response
+
+@app.route("/api/bonds", methods=["GET", "POST"])
+def bonds():
+    if request.method == "GET":
+        # 获取查询参数: /api/bonds?type=gov&page=1
+        bond_type = request.args.get("type", "all")
+        page = request.args.get("page", 1, type=int)
+        return jsonify({"type": bond_type, "page": page})
+
+    elif request.method == "POST":
+        data = request.get_json()        # 解析 JSON body
+        code = data.get("code")
+        # 返回自定义状态码和响应头
+        resp = jsonify({"code": code, "status": "created"})
+        resp.status_code = 201
+        resp.headers["X-Request-Id"] = "abc-123"
+        return resp</code></pre>
+
+        <h3>2.4 蓝图 Blueprint 模块化</h3>
+        <p>蓝图把应用拆成模块，每个模块有独立路由、静态文件、模板，适合大型项目按业务拆分。</p>
+        <pre><code># bonds_blueprint.py
+from flask import Blueprint, jsonify
+
+bonds_bp = Blueprint("bonds", __name__, url_prefix="/api/bonds")
+
+@bonds_bp.route("/", methods=["GET"])
+def list_bonds():
+    return jsonify([{"code": "019547", "name": "国债"}])
+
+@bonds_bp.route("/&lt;string:code&gt;", methods=["GET"])
+def get_bond(code):
+    return jsonify({"code": code, "name": "国债"})
+
+# app.py —— 注册蓝图
+from bonds_blueprint import bonds_bp
+app.register_blueprint(bonds_bp)        # 访问 /api/bonds/ 即可</code></pre>
+
+        <h3>2.5 请求钩子与中间件</h3>
+        <pre><code>@app.before_request
+def before():
+    # 每个请求前执行：可做鉴权、日志、限流
+    print(f"请求: {request.method} {request.path}")
+
+@app.after_request
+def after(response):
+    # 每个请求后执行：可统一加响应头、日志
+    response.headers["X-App"] = "FICC-API"
+    return response
+
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"error": "资源不存在"}), 404</code></pre>
+
+        <h3>2.6 配置管理</h3>
+        <pre><code># config.py
+class Config:
+    SECRET_KEY = "change-me"
+    SQLALCHEMY_DATABASE_URI = "sqlite:///ficc.db"
+
+class DevConfig(Config):
+    DEBUG = True
+
+class ProdConfig(Config):
+    DEBUG = False
+
+# app.py
+app.config.from_object("config.DevConfig")
+print(app.config["SECRET_KEY"])</code></pre>
+
+        <h2>3. Django 实战</h2>
+
+        <h3>3.1 MVT 架构</h3>
+        <p>
+          Django 采用 MVT：<strong>Model</strong>（数据模型，ORM 映射数据库表）、
+          <strong>View</strong>（业务逻辑，接收请求返回响应）、
+          <strong>Template</strong>（模板，渲染 HTML）。
+          与传统 MVC 对应：M≈Model，V≈Controller，T≈View。
+        </p>
+
+        <h3>3.2 ORM 基础</h3>
+        <pre><code># models.py
+from django.db import models
+
+class Bond(models.Model):
+    code = models.CharField(max_length=20, unique=True)
+    name = models.CharField(max_length=100)
+    coupon_rate = models.FloatField()          # 票面利率
+    maturity_date = models.DateField()
+    issuer = models.CharField(max_length=100)
+
+    def __str__(self):
+        return f"{self.code} {self.name}"
+
+# 查询操作
+Bond.objects.all()                              # 查全部
+Bond.objects.filter(issuer="财政部")            # 过滤
+Bond.objects.exclude(coupon_rate__lt=3)         # 排除
+Bond.objects.get(code="019547")                 # 查单个（不存在抛 DoesNotExist）
+Bond.objects.order_by("-coupon_rate")           # 排序，- 表示降序
+
+# annotate 聚合
+from django.db.models import Avg
+Bond.objects.values("issuer").annotate(avg_rate=Avg("coupon_rate"))</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">select_related vs prefetch_related</div>
+          <p>
+            <strong>select_related</strong>：用 SQL JOIN 一次性查出外键/一对一关联对象，<strong>只支持 Forward 关系</strong>，减少查询次数但单条 SQL 更重。
+            <strong>prefetch_related</strong>：先查主表，再用 <code>WHERE id IN (...)</code> 单独查关联表，在内存中拼装，<strong>支持多对多和反向关系</strong>。
+            一对多用 prefetch，多对一/一对一对一用 select_related 更高效。
+          </p>
+        </div>
+
+        <h3>3.3 CBV 与 FBV</h3>
+        <p>
+          FBV（Function-Based View）用函数写视图，灵活直观；
+          CBV（Class-Based View）用类继承 Django 内置 View（如 ListView、DetailView），复用性强但学习曲线高。
+        </p>
+        <pre><code># FBV
+from django.http import JsonResponse
+def bond_list(request):
+    bonds = Bond.objects.all()
+    return JsonResponse({"data": list(bonds.values())})
+
+# CBV
+from django.views.generic import ListView
+class BondListView(ListView):
+    model = Bond
+    template_name = "bonds/list.html"
+    context_object_name = "bonds"</code></pre>
+
+        <h3>3.4 Django REST Framework（DRF）</h3>
+        <div class="callout">
+          <div class="callout-title">DRF 是 Django 做 RESTful 的首选</div>
+          <p>
+            DRF 提供 Serializer（序列化/反序列化 + 校验）、ViewSet（把 CRUD 集中到一个类）、
+            Router（自动生成 URL）、分页、过滤、认证权限等，是 Django 生态做 RESTful API 的事实标准。
+          </p>
+        </div>
+        <pre><code># serializers.py
+from rest_framework import serializers
+from .models import Bond
+
+class BondSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Bond
+        fields = "__all__"          # 全部字段
+
+# views.py
+from rest_framework import viewsets
+from .models import Bond
+from .serializers import BondSerializer
+
+class BondViewSet(viewsets.ModelViewSet):
+    queryset = Bond.objects.all()
+    serializer_class = BondSerializer
+    # 自动提供 list / retrieve / create / update / partial_update / destroy
+
+# urls.py
+from rest_framework.routers import DefaultRouter
+from .views import BondViewSet
+
+router = DefaultRouter()
+router.register(r"bonds", BondViewSet)     # 自动生成 /bonds/ /bonds/{id}/ 等
+
+urlpatterns = router.urls</code></pre>
+
+        <h2>4. RESTful API 设计</h2>
+
+        <h3>4.1 REST 六大原则</h3>
+        <ul>
+          <li><strong>客户端-服务器分离</strong>：前后端解耦，各自独立演进。</li>
+          <li><strong>无状态</strong>：服务端不保存客户端会话状态，每次请求自带全部信息。</li>
+          <li><strong>缓存</strong>：响应明确标注可缓存性，减少重复请求。</li>
+          <li><strong>统一接口</strong>：资源用 URI 标识，操作通过 HTTP 方法语义化。</li>
+          <li><strong>分层系统</strong>：客户端无需感知中间层（代理、网关、负载均衡）。</li>
+          <li><strong>按需代码（可选）</strong>：服务端可下发可执行代码扩展客户端功能。</li>
+        </ul>
+
+        <h3>4.2 HTTP 方法与资源操作</h3>
+        <pre><code>方法       语义              幂等  安全   典型用途
+GET       查询资源           是    是     列表 / 详情
+POST      创建资源           否    否     新建债券
+PUT       全量更新资源       是    否     覆盖整条记录
+PATCH     部分更新资源       否    否     只改部分字段
+DELETE    删除资源           是    否     删除债券</code></pre>
+
+        <h3>4.3 状态码规范</h3>
+        <pre><code>200 OK          查询/更新成功
+201 Created     资源创建成功（POST）
+204 No Content  删除成功，无响应体
+400 Bad Request 请求参数错误
+401 Unauthorized 未登录/Token 无效
+403 Forbidden   已登录但无权限
+404 Not Found   资源不存在
+409 Conflict    资源冲突（如重复创建）
+500 Internal Server Error 服务端内部错误</code></pre>
+
+        <h3>4.4 URL 命名规范</h3>
+        <p>
+          资源用<strong>名词复数</strong>，不用动词；用 HTTP 方法表达操作；
+          版本号放在 URL 中：<code>/api/v1/bonds</code>。
+        </p>
+        <pre><code># 好的设计
+GET    /api/v1/bonds              # 债券列表
+GET    /api/v1/bonds/019547       # 债券详情
+POST   /api/v1/bonds              # 创建债券
+PUT    /api/v1/bonds/019547       # 全量更新
+PATCH  /api/v1/bonds/019547       # 部分更新
+DELETE /api/v1/bonds/019547       # 删除
+GET    /api/v1/bonds?issuer=财政部&page=1&size=20   # 过滤+分页
+
+# 反模式（避免）
+GET  /api/getBonds               # 动词入 URL
+POST /api/deleteBond/019547      # 用 POST 表删除
+GET  /api/v1/bond/019547         # 单数名词
+GET  /api/bondsAll               # 驼峰、无版本</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">RESTful 设计反模式</div>
+          <p>
+            ①把动词放进 URL（/getBond、/createUser）。②用 GET 做修改/删除操作（不安全）。
+            ③返回 200 但 body 里写 "code": 500（状态码语义失效）。④过度嵌套 /users/1/orders/2/items/3（最多两层）。
+            ⑤不做版本化，改动直接破坏老客户端。
+          </p>
+        </div>
+
+        <h3>4.5 实战：债券产品 CRUD API 设计</h3>
+        <pre><code># 债券资源 RESTful 设计
+
+# 1. 获取债券列表（支持过滤、分页、排序）
+GET /api/v1/bonds?issuer=财政部&coupon_rate_min=3&page=1&size=20&sort=-maturity_date
+→ 200 {"data": [...], "page": 1, "size": 20, "total": 128}
+
+# 2. 获取单只债券详情
+GET /api/v1/bonds/019547
+→ 200 {"code": "019547", "name": "21国债11", "coupon_rate": 2.95, ...}
+
+# 3. 创建债券
+POST /api/v1/bonds
+Body: {"code": "230001", "name": "23国债01", "coupon_rate": 2.6, ...}
+→ 201 {"code": "230001", ...}
+
+# 4. 全量更新债券
+PUT /api/v1/bonds/230001
+Body: 完整字段
+→ 200 {"code": "230001", ...}
+
+# 5. 部分更新（如只改票面利率）
+PATCH /api/v1/bonds/230001
+Body: {"coupon_rate": 2.7}
+→ 200 {"code": "230001", "coupon_rate": 2.7, ...}
+
+# 6. 删除债券
+DELETE /api/v1/bonds/230001
+→ 204 No Content</code></pre>
+
+        <h2>5. 认证与授权</h2>
+
+        <h3>5.1 Session / Cookie 认证</h3>
+        <p>
+          传统方式：用户登录后服务端生成 session 存在服务器，返回 session_id 写入 Cookie，
+          后续请求浏览器自动带 Cookie。缺点：服务端有状态、跨域麻烦、水平扩展需 session 共享（Redis）。
+        </p>
+
+        <h3>5.2 JWT 认证</h3>
+        <p>
+          JWT（JSON Web Token）是<strong>无状态</strong>认证：服务端签发 token，客户端存储并每次在
+          <code>Authorization: Bearer &lt;token&gt;</code> 头携带。服务端只验签不存会话，易水平扩展。
+        </p>
+        <div class="callout warn">
+          <div class="callout-title">JWT 不加密，敏感信息不要放 payload</div>
+          <p>
+            JWT 由 <code>header.payload.signature</code> 三段组成，payload 只是 base64 编码，
+            任何人都能解码看到内容。<strong>绝不要把密码、身份证号等敏感信息放 payload</strong>。
+            signature 只防篡改，不加密。要加密需用 JWE。
+          </p>
+        </div>
+
+        <pre><code>import jwt
+import datetime
+
+SECRET = "ficc-secret-key"        # 生产用环境变量，强随机
+
+# 签发 token
+def create_token(user_id: int, username: str) -&gt; str:
+    payload = {
+        "user_id": user_id,
+        "username": username,
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=2),  # 过期时间
+        "iat": datetime.datetime.utcnow(),                                   # 签发时间
+    }
+    return jwt.encode(payload, SECRET, algorithm="HS256")
+
+# 验证 token
+def verify_token(token: str) -&gt; dict:
+    try:
+        payload = jwt.decode(token, SECRET, algorithms=["HS256"])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise Exception("token 已过期")
+    except jwt.InvalidTokenError:
+        raise Exception("token 无效")
+
+# 使用
+token = create_token(1, "trader01")
+print(token)
+data = verify_token(token)
+print(data["username"])     # trader01
+
+# 刷新 token 机制：签发一个长有效期 refresh_token，用于换新 access_token
+# access_token 有效期短（2h），refresh_token 长（7d），降低泄漏风险</code></pre>
+
+        <h3>5.3 OAuth 2.0 简述</h3>
+        <p>
+          OAuth 2.0 是<strong>授权</strong>框架（不是认证），让第三方应用在用户授权下访问其资源，
+          而无需暴露用户密码。核心角色：Resource Owner（用户）、Client（第三方应用）、
+          Authorization Server（授权服务器）、Resource Server（资源服务器）。
+          常用授权码模式（Authorization Code）用于 Web 应用，简化模式用于前端。
+        </p>
+
+        <h2>6. 接口文档</h2>
+
+        <div class="callout">
+          <div class="callout-title">接口文档是团队协作的关键</div>
+          <p>
+            前后端并行开发、联调、测试都依赖接口文档。手写文档易过期，推荐用工具自动生成
+            Swagger/OpenAPI 文档，保证代码与文档一致。Flask 用 Flask-RESTX，Django 用 drf-spectacular，
+            FastAPI 自带。
+          </p>
+        </div>
+
+        <pre><code># Flask-RESTX 自动生成 Swagger
+from flask import Flask
+from flask_restx import Api, Resource, fields
+
+app = Flask(__name__)
+api = Api(app, version="1.0", title="FICC 债券 API", doc="/docs")
+
+bond_model = api.model("Bond", {
+    "code": fields.String(required=True, description="债券代码"),
+    "name": fields.String(required=True, description="债券名称"),
+    "coupon_rate": fields.Float(description="票面利率"),
+})
+
+@api.route("/bonds")
+class BondList(Resource):
+    @api.doc("list_bonds")
+    def get(self):
+        """获取债券列表"""
+        return {"data": []}
+
+    @api.doc("create_bond")
+    @api.expect(bond_model)
+    def post(self):
+        """创建债券"""
+        return api.payload, 201
+
+# 启动后访问 /docs 即可看到 Swagger UI</code></pre>
+
+        <h2>7. 实战项目：FICC 债券查询 API</h2>
+
+        <p>整合前面知识点，用 Flask + 蓝图 + JWT + Flask-RESTX 构建一个债券查询 API。</p>
+
+        <pre><code># app.py —— 应用入口
+from flask import Flask
+from flask_restx import Api
+from bonds_api import bonds_ns
+from auth_api import auth_ns
+
+def create_app():
+    app = Flask(__name__)
+    app.config["SECRET_KEY"] = "ficc-secret"
+
+    api = Api(app, version="1.0", title="FICC 债券查询 API", doc="/docs")
+    api.add_namespace(bonds_ns, path="/api/v1/bonds")
+    api.add_namespace(auth_ns, path="/api/v1/auth")
+    return app
+
+if __name__ == "__main__":
+    create_app().run(debug=True)</code></pre>
+
+        <pre><code># auth_api.py —— 登录签发 JWT
+from flask_restx import Namespace, Resource, fields
+import jwt, datetime
+
+auth_ns = Namespace("auth", description="认证接口")
+
+login_model = auth_ns.model("Login", {
+    "username": fields.String(required=True),
+    "password": fields.String(required=True),
+})
+
+@auth_ns.route("/login")
+class Login(Resource):
+    @auth_ns.expect(login_model)
+    def post(self):
+        """用户登录，返回 JWT"""
+        data = auth_ns.payload
+        # 简化：实际应查数据库校验密码
+        if data["username"] == "trader" and data["password"] == "123456":
+            token = jwt.encode(
+                {"user_id": 1, "username": data["username"],
+                 "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=2)},
+                "ficc-secret", algorithm="HS256",
+            )
+            return {"token": token}, 200
+        return {"error": "用户名或密码错误"}, 401</code></pre>
+
+        <pre><code># bonds_api.py —— 债券 CRUD（带 JWT 鉴权）
+from flask import request
+from flask_restx import Namespace, Resource, fields
+from functools import wraps
+import jwt
+
+bonds_ns = Namespace("bonds", description="债券接口")
+
+bond_model = bonds_ns.model("Bond", {
+    "code": fields.String(required=True),
+    "name": fields.String(required=True),
+    "coupon_rate": fields.Float(),
+})
+
+# 内存模拟数据库
+BONDS = {"019547": {"code": "019547", "name": "21国债11", "coupon_rate": 2.95}}
+
+# JWT 鉴权装饰器
+def token_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return {"error": "缺少 Token"}, 401
+        token = auth.split(" ", 1)[1]
+        try:
+            jwt.decode(token, "ficc-secret", algorithms=["HS256"])
+        except jwt.InvalidTokenError:
+            return {"error": "Token 无效"}, 401
+        return f(*args, **kwargs)
+    return wrapper
+
+@bonds_ns.route("/")
+class BondList(Resource):
+    @bonds_ns.doc(security="Bearer")
+    @token_required
+    def get(self):
+        """获取债券列表"""
+        return {"data": list(BONDS.values())}
+
+    @bonds_ns.expect(bond_model)
+    @token_required
+    def post(self):
+        """创建债券"""
+        bond = bonds_ns.payload
+        BONDS[bond["code"]] = bond
+        return bond, 201
+
+@bonds_ns.route("/&lt;string:code&gt;")
+class BondDetail(Resource):
+    @token_required
+    def get(self, code):
+        """获取债券详情"""
+        return BONDS.get(code, ({"error": "债券不存在"}, 404))
+
+    @token_required
+    def delete(self, code):
+        """删除债券"""
+        BONDS.pop(code, None)
+        return "", 204</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">这个项目如何对应实际工作场景</div>
+          <p>
+            券商 FICC 投研系统中，交易员/研究员需要查询债券基本信息、行情、持仓等。
+            该实战项目对应<strong>债券主数据查询接口</strong>：蓝图按业务拆分（auth/bonds），
+            JWT 保证只有登录用户能访问，Swagger 文档供前端联调，错误处理统一 JSON 返回。
+            生产中把 BONDS 内存字典换成数据库（SQLAlchemy），加缓存（Redis 热点债券）、
+            限流、审计日志，就是一个可上线的微服务。
+          </p>
+        </div>
+
+        <h2>8. 面试高频题</h2>
+
+        <h3>Q1：Flask 和 Django 的区别？</h3>
+        <div class="callout tip">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            ①Flask 是微框架，核心精简，靠扩展（Flask-SQLAlchemy、Flask-Login 等）组合，灵活但需自行选型。
+            ②Django 是全家桶，内置 ORM、Admin、Auth、Form、中间件，开箱即用但重、约定强。
+            ③Flask 适合微服务、API 网关、快速原型；Django 适合中大型后台、内容管理、企业系统。
+            ④性能：裸 Flask 略快，但生产差异主要在数据库和缓存。
+          </p>
+        </div>
+
+        <h3>Q2：RESTful 设计原则？</h3>
+        <div class="callout tip">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            ①资源用 URI 标识，名词复数，不用动词。②用 HTTP 方法（GET/POST/PUT/PATCH/DELETE）表达操作语义。
+            ③无状态，请求自带全部信息。④状态码语义正确（201 创建、204 删除、4xx 客户端、5xx 服务端）。
+            ⑤URL 版本化 /api/v1/。⑥支持过滤、分页、排序（查询参数）。⑦响应统一 JSON 格式。
+          </p>
+        </div>
+
+        <h3>Q3：JWT 和 Session 的区别？</h3>
+        <div class="callout tip">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            ①Session 有状态，会话存服务端，客户端只存 session_id；JWT 无状态，token 自带用户信息，服务端只验签。
+            ②JWT 易水平扩展（无 session 共享），适合分布式/微服务；Session 需共享存储（Redis）才能多实例。
+            ③JWT 无法主动失效（除非黑名单），注销要等过期；Session 服务端可直接删除。
+            ④JWT payload 不加密，不能放敏感信息；Session 数据在服务端更安全。
+          </p>
+        </div>
+
+        <h3>Q4：select_related 和 prefetch_related 的区别？</h3>
+        <div class="callout tip">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            ①select_related 用 SQL JOIN 一次查出，只支持外键/一对一的 Forward 关系，查询次数少但单 SQL 重。
+            ②prefetch_related 先发主查询再发 IN 查询，内存中拼装，支持多对多和反向关系，查询次数固定 2 次。
+            ③一对多、多对多用 prefetch_related；多对一、一对一对一用 select_related 更高效。
+            ④两者都是为了解决 N+1 查询问题。
+          </p>
+        </div>
+
+        <h3>Q5：蓝图（Blueprint）的作用？</h3>
+        <div class="callout tip">
+          <div class="callout-title">参考答案要点</div>
+          <p>
+            ①把大型 Flask 应用按业务模块拆分，每个蓝图有独立路由、静态文件、模板、错误处理。
+            ②可指定 url_prefix 命名空间，避免路由冲突。③蓝图可被多次注册到不同应用，提升复用。
+            ④本质是应用的「子集」，注册到 app 后才生效，便于团队并行开发和代码组织。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Flask 轻量灵活适合微服务，Django 全家桶适合中大型后台，FastAPI 异步高性能适合高并发 API。</li>
+          <li>Flask 路由支持变量转换器，request 取请求，Blueprint 按业务拆分模块，before/after_request 做钩子。</li>
+          <li>Django MVT 中 Model 用 ORM 映射表，filter/exclude/annotate 完成查询，CBV 复用性强、FBV 灵活。</li>
+          <li>DRF 用 Serializer 做序列化校验，ViewSet 集中 CRUD，Router 自动生成 URL，是 Django 做 RESTful 首选。</li>
+          <li>RESTful 核心：名词复数 URI + HTTP 方法语义 + 正确状态码 + 版本化 + 无状态 + 统一 JSON。</li>
+          <li>JWT 无状态易扩展但不加密、无法主动失效；Session 有状态更安全但需共享存储。</li>
+          <li>接口文档用 Flask-RESTX / drf-spectacular 自动生成 Swagger，保证代码与文档一致。</li>
+          <li>实战项目整合蓝图 + JWT + RESTX + 错误处理，对应 FICC 债券主数据查询的真实工作场景。</li>
+        </ul>
+
+        <section class="quiz-section">
+          <h2>本章测验</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B"
+               data-explain="POST 创建成功应返回 201 Created；200 是查询/更新成功，204 是删除成功无响应体，401 是未授权。">
+            <div class="quiz-question">1. （单选）RESTful API 中，POST 成功创建资源后应返回哪个状态码？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 200 OK</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 201 Created</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 204 No Content</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 401 Unauthorized</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D"
+               data-explain="JWT 的 payload 只是 base64 编码而非加密，任何人都能解码，因此敏感信息（如密码）绝不能放在 payload 中。">
+            <div class="quiz-question">2. （单选）关于 JWT，下列说法正确的是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. JWT 默认对 payload 加密，可安全存放密码</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. JWT 必须存放在服务端 session 中</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. JWT 注销时服务端可立即让其失效</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. JWT 的 payload 只是 base64 编码，不能放敏感信息</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C"
+               data-explain="Flask 蓝图（Blueprint）用于按业务模块拆分应用，每个蓝图有独立路由和 url_prefix，实现模块化；模板引擎是 Jinja2，钩子是 before_request，扩展是 Flask-SQLAlchemy。">
+            <div class="quiz-question">3. （单选）Flask 中用于将应用按业务模块拆分、提供独立路由命名空间的机制是？</div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. 模板引擎 Jinja2</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. before_request 钩子</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. 蓝图（Blueprint）</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. Flask-SQLAlchemy 扩展</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+          <div class="quiz" data-type="text"
+               data-answer="select_related|prefetch_related"
+               data-explain="select_related 用 JOIN 一次查出多对一/一对一关联；prefetch_related 用 IN 子查询处理一对多/多对多，两者都用于解决 N+1 查询问题。">
+            <div class="quiz-question">4. （填空）Django ORM 中，用 JOIN 一次性查出外键关联对象、解决 N+1 查询的方法是？（回答两种之一即可）</div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="在此输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback">
+              <div class="feedback-title"></div>
+              <div class="feedback-msg"></div>
+            </div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>Python 后端开发专题 · 第 36 章</p>
+  </footer>
+
+  <script src="../assets/js/nav.js?v=4"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>
