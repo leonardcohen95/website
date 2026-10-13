@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>英语口语流利度训练计划 · 运维工程师版</title>
+  <link rel="stylesheet" href="assets/css/style.css" />
+  <style>
+    /* 本页额外样式 */
+    .plan-hero {
+      text-align: center;
+      padding: 40px 20px 24px;
+      background: linear-gradient(160deg, #fef3c7 0%, #f0fdfa 100%);
+      border-radius: var(--radius-lg);
+      margin-bottom: 24px;
+    }
+    .plan-hero h1 {
+      font-size: 1.6rem;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, #d97706, #059669);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .plan-hero p { color: var(--color-text-light); max-width: 520px; margin: 0 auto; }
+    .plan-hero .target-tag {
+      display: inline-block;
+      margin-top: 14px;
+      padding: 4px 14px;
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      color: #92400e;
+      font-weight: 500;
+    }
+
+    /* 周次卡片 */
+    .week-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin: 16px 0;
+    }
+    @media (min-width: 640px) { .week-grid { grid-template-columns: repeat(2, 1fr); } }
+
+    .week-card {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 18px;
+      background: var(--color-surface);
+      transition: all 0.2s;
+    }
+    .week-card:hover { border-color: var(--color-primary); box-shadow: var(--shadow-md); }
+    .week-card .week-num {
+      display: inline-block;
+      background: var(--color-primary);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 2px 10px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+    }
+    .week-card.phase-1 .week-num { background: #10b981; }
+    .week-card.phase-2 .week-num { background: #3b82f6; }
+    .week-card.phase-3 .week-num { background: #8b5cf6; }
+    .week-card.phase-4 .week-num { background: #ef4444; }
+    .week-card h4 { margin-bottom: 6px; font-size: 1rem; }
+    .week-card .week-focus {
+      font-size: 0.85rem;
+      color: var(--color-text-light);
+      margin-bottom: 8px;
+    }
+    .week-card ul { padding-left: 18px; font-size: 0.88rem; }
+    .week-card ul li { margin-bottom: 3px; }
+
+    /* 每日流程 */
+    .daily-flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin: 16px 0;
+    }
+    .flow-step {
+      display: flex;
+      align-items: stretch;
+      border: 1px solid var(--color-border);
+      border-radius: 0;
+      padding: 12px 14px;
+      gap: 12px;
+      background: var(--color-surface);
+    }
+    .flow-step:first-child { border-radius: var(--radius-md) var(--radius-md) 0 0; }
+    .flow-step:last-child { border-radius: 0 0 var(--radius-md) var(--radius-md); }
+    .flow-step + .flow-step { border-top: none; }
+    .flow-time {
+      flex-shrink: 0;
+      min-width: 60px;
+      font-weight: 700;
+      color: var(--color-primary-dark);
+      font-size: 0.9rem;
+    }
+    .flow-content h5 { margin-bottom: 3px; font-size: 0.92rem; }
+    .flow-content p { font-size: 0.85rem; color: var(--color-text-light); margin-bottom: 0; }
+
+    /* 场景卡片 */
+    .scene-card {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      margin: 12px 0;
+      background: #fafbfc;
+    }
+    .scene-card h4 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      color: var(--color-primary-dark);
+    }
+    .scene-card .scene-icon { font-size: 1.2rem; }
+    .phrase-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 8px 0;
+    }
+    .phrase-chip {
+      background: var(--color-primary-light);
+      color: var(--color-primary-dark);
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-family: var(--font-mono);
+    }
+    .phrase-chip.en {
+      background: #ecfdf5;
+      color: #047857;
+    }
+
+    /* 工具推荐 */
+    .tool-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin: 16px 0;
+    }
+    @media (min-width: 640px) { .tool-grid { grid-template-columns: repeat(2, 1fr); } }
+    .tool-card {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      background: var(--color-surface);
+    }
+    .tool-card h5 { margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+    .tool-card p { font-size: 0.85rem; color: var(--color-text-light); margin-bottom: 6px; }
+    .tool-card a { font-size: 0.82rem; word-break: break-all; }
+
+    /* 进度追踪 */
+    .tracker-section {
+      margin-top: 20px;
+      padding: 20px;
+      background: linear-gradient(135deg, #fef3c7 0%, #fce7f3 100%);
+      border-radius: var(--radius-lg);
+      border: 1px solid #fde68a;
+    }
+    .tracker-section h2 { border: none; margin-top: 0; color: #92400e; }
+    .week-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 10px 0;
+      flex-wrap: wrap;
+    }
+    .week-label {
+      min-width: 50px;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+    .day-checks {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .day-box {
+      width: 32px;
+      height: 32px;
+      border: 1.5px solid #fbbf24;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #92400e;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .day-box:hover { transform: scale(1.1); }
+    .day-box.done {
+      background: #10b981;
+      border-color: #10b981;
+      color: #fff;
+    }
+    .day-box.today {
+      border-color: #ef4444;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+    }
+    .stats-bar {
+      display: flex;
+      gap: 16px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    .stat-item {
+      flex: 1;
+      min-width: 100px;
+      background: #fff;
+      padding: 12px;
+      border-radius: var(--radius-md);
+      text-align: center;
+      border: 1px solid #fde68a;
+    }
+    .stat-num { font-size: 1.4rem; font-weight: 700; color: #d97706; }
+    .stat-label { font-size: 0.78rem; color: var(--color-text-light); margin-top: 2px; }
+
+    .reset-btn {
+      margin-top: 12px;
+      font-size: 0.8rem;
+      padding: 6px 14px;
+      background: #fff;
+      border: 1px solid #fbbf24;
+      border-radius: var(--radius-sm);
+      color: #92400e;
+      cursor: pointer;
+    }
+    .reset-btn:hover { background: #fef3c7; }
+
+    /* 本页迷你目录 */
+    .mini-toc a {
+      font-size: 0.82rem;
+      padding: 6px 8px;
+      display: block;
+      color: var(--color-text-light);
+      border-radius: var(--radius-sm);
+    }
+    .mini-toc a:hover { background: var(--color-primary-light); color: var(--color-primary-dark); }
+  </style>
+</head>
+<body data-page="speaking-plan">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="index.html" class="brand">
+        <span class="brand-logo">A</span><span>运维知识教程</span>
+      </a>
+      <button class="nav-toggle" id="nav-toggle" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="site-nav" id="site-nav"></nav>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>本页目录</h3>
+        <ul class="sidebar-list mini-toc" style="list-style:none; padding:0;">
+          <li><a href="#diagnosis">🎯 自我诊断</a></li>
+          <li><a href="#philosophy">💡 核心理念</a></li>
+          <li><a href="#phases">📅 8 周计划</a></li>
+          <li><a href="#daily">⏱️ 每日流程</a></li>
+          <li><a href="#scenes">💼 场景库</a></li>
+          <li><a href="#tools">🛠️ 推荐工具</a></li>
+          <li><a href="#tracker">🔥 打卡追踪</a></li>
+        </ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+
+        <!-- Hero -->
+        <div class="plan-hero">
+          <h1>英语口语流利度训练计划</h1>
+          <p>专为运维工程师 / 云架构师设计，8 周突破"能说但不流利"的瓶颈，自信应对英文面试与职场沟通。</p>
+          <span class="target-tag">🎯 每日 15-20 分钟 · 坚持就能见效</span>
+        </div>
+
+        <!-- 自我诊断 -->
+        <h2 id="diagnosis">🎯 先搞清楚：你现在在哪，要去哪</h2>
+
+        <div class="callout warn">
+          <div class="callout-title">你目前的状态（来自猎头反馈）</div>
+          <ul>
+            <li>✅ 能进行日常英语交流和自我介绍</li>
+            <li>✅ 技术词汇储备不缺（Kubernetes、DevOps、CI/CD……这些你都懂）</li>
+            <li>❌ 表达不够流利，容易"吞吞吐吐"</li>
+            <li>❌ 紧张时脑子一片空白，组织不出完整的句子</li>
+            <li>❌ 想表达的意思到了嘴边却说不出来</li>
+          </ul>
+        </div>
+
+        <h3>为什么会这样？</h3>
+        <p>
+          你不是英语差——你是<strong>"输出端卡住了"</strong>。能读、能写、能看懂技术文档，但<strong>嘴巴跟不上脑子</strong>。
+          这不是词汇量的问题，是<strong>肌肉记忆 + 思维切换速度</strong>的问题。
+        </p>
+
+        <h3>8 周后的目标</h3>
+        <ul>
+          <li>🎙️ 能<strong>流畅地</strong>用英语讲完 2 分钟自我介绍，不卡壳</li>
+          <li>💬 能<strong>清晰地</strong>解释一个技术概念（比如"Kubernetes 为什么比 Docker Swarm 好"）</li>
+          <li>🚨 能<strong>镇定地</strong>用英语描述一次故障排查经历</li>
+          <li>🤝 能<strong>自信地</strong>应对猎头或 HR 的英文面试，而不是"吞吞吐吐"</li>
+        </ul>
+
+        <!-- 核心理念 -->
+        <h2 id="philosophy">💡 核心理念：流利度到底怎么练出来</h2>
+
+        <div class="term-card">
+          <div class="term-name">流利度 = 可理解输入 + 大量输出 + 即时反馈</div>
+          <p>不是背更多单词，而是让你的"嘴"习惯英语的节奏。</p>
+        </div>
+
+        <h3>三个关键练习方法</h3>
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h4>影子跟读法（Shadowing）</h4>
+            <p>播放一段英语音频，延迟 0.5-1 秒跟着读。强迫你的嘴跟上英语的节奏、语调、连读。<strong>这是最有效的流利度训练法</strong>。</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h4>即兴输出（Impromptu Speaking）</h4>
+            <p>给自己一个话题，1 分钟准备，然后说 2-3 分钟。强迫大脑在"实时"状态下组织英语。一开始会卡，练多了就顺。</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <h4>AI 对话对练</h4>
+            <p>用 ChatGPT 或 Speak 当陪练。让它扮演面试官、技术同事、客户，跟它进行真实场景对话。AI 不会紧张你，说错了随时重来。</p>
+          </div>
+        </div>
+
+        <div class="callout tip">
+          <div class="callout-title">核心心态</div>
+          <p>
+            流利度训练的<strong>最大敌人是"怕说错"</strong>。
+            你作为运维工程师，一定知道：生产环境没测试直接上是作死，但<strong>英语口语就是那个必须在"测试环境"里大胆造的东西</strong>。
+            说错了没人扣你奖金，卡壳了没人给你 P0 故障——放心大胆地说。
+          </p>
+        </div>
+
+        <!-- 8 周计划 -->
+        <h2 id="phases">📅 8 周分阶段训练计划</h2>
+
+        <p>整个计划分为 4 个阶段，每周 7 天不间断（每天 15-20 分钟即可）。</p>
+
+        <div class="week-grid">
+          <div class="week-card phase-1">
+            <div class="week-num">第 1-2 周 · 破冰期</div>
+            <h4>消除恐惧，建立开口习惯</h4>
+            <div class="week-focus">🎯 目标：张嘴不再紧张，能流畅说 30 秒不间断</div>
+            <ul>
+              <li>每日 5 分钟绕口令 + 快速朗读热身</li>
+              <li>影子跟读法：TED/播客短片段（30-60 秒）</li>
+              <li>对着镜子用英语自言自语描述今天做了什么</li>
+              <li>主题：自我介绍、家庭、日常工作</li>
+            </ul>
+          </div>
+
+          <div class="week-card phase-1">
+            <div class="week-num">第 1-2 周 · 推荐材料</div>
+            <h4>适合这个阶段的输入</h4>
+            <ul>
+              <li>TED Talks（选语速慢的 speaker）</li>
+              <li>播客：English for Beginners、6 Minute English</li>
+              <li>YouTube：Easy English（街头采访）</li>
+              <li>App：ELSA Speak（打分 + 纠正发音）</li>
+            </ul>
+          </div>
+
+          <div class="week-card phase-2">
+            <div class="week-num">第 3-4 周 · 搭建期</div>
+            <h4>组织连贯表达</h4>
+            <div class="week-focus">🎯 目标：能说 1-2 分钟有结构的话（开头-主体-结尾）</div>
+            <ul>
+              <li>影子跟读法：技术访谈片段（1-2 分钟）</li>
+              <li>每日 1 分钟即兴演讲（抽一个话题直接说）</li>
+              <li>录音回听，自己找"卡壳点"</li>
+              <li>主题：讲你做过的项目、解释技术概念</li>
+            </ul>
+          </div>
+
+          <div class="week-card phase-2">
+            <div class="week-num">第 3-4 周 · 推荐材料</div>
+            <h4>适合这个阶段的输入</h4>
+            <ul>
+              <li>DevOps Podcast / Kubernetes Podcast</li>
+              <li>YouTube：TechWorld with Nana、KubeCon 演讲</li>
+              <li>TED Talks（Technology 分类）</li>
+              <li>YouTube 技术频道的产品介绍视频</li>
+            </ul>
+          </div>
+
+          <div class="week-card phase-3">
+            <div class="week-num">第 5-6 周 · 场景期</div>
+            <h4>针对性运维场景模拟</h4>
+            <div class="week-focus">🎯 目标：在真实工作场景中能对答如流</div>
+            <ul>
+              <li>每日 15 分钟 AI 对练（让 AI 扮演不同角色）</li>
+              <li>重点场景：故障排查、架构讨论、CI/CD 介绍</li>
+              <li>用 STAR 法则练习讲项目（Situation, Task, Action, Result）</li>
+              <li>录音 + 回听 + 复盘</li>
+            </ul>
+          </div>
+
+          <div class="week-card phase-3">
+            <div class="week-num">第 5-6 周 · 必练场景</div>
+            <h4>运维工程师高频场景</h4>
+            <ul>
+              <li>解释 Kubernetes Pod vs Docker Container</li>
+              <li>描述一次线上 P0 故障的排查过程</li>
+              <li>介绍公司的 CI/CD 流水线</li>
+              <li>讨论微服务 vs 单体架构的取舍</li>
+              <li>向非技术同事解释"云原生"</li>
+            </ul>
+          </div>
+
+          <div class="week-card phase-4">
+            <div class="week-num">第 7-8 周 · 面试冲刺期</div>
+            <h4>模拟真实英文面试</h4>
+            <div class="week-focus">🎯 目标：能完整走完一轮 30 分钟英文技术面试</div>
+            <ul>
+              <li>每日 20 分钟完整模拟面试（AI 扮演面试官）</li>
+              <li>准备 2 分钟 / 5 分钟两个版本的自我介绍</li>
+              <li>练习 10 个高频面试问题的口语化回答</li>
+              <li>模拟压力场景（面试官打断你、追问你）</li>
+            </ul>
+          </div>
+
+          <div class="week-card phase-4">
+            <div class="week-num">第 7-8 周 · 高频面试题</div>
+            <h4>技术面 + HR 面必练</h4>
+            <ul>
+              <li>Tell me about yourself（自我介绍）</li>
+              <li>Why do you want this role?（为什么想做这份工作）</li>
+              <li>Describe a challenging project（讲一个有挑战的项目）</li>
+              <li>How do you handle production incidents?（如何处理线上故障）</li>
+              <li>What's your greatest strength / weakness?（优缺点）</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- 每日流程 -->
+        <h2 id="daily">⏱️ 每日练习流程（15-20 分钟版）</h2>
+        <p>每天抽 20 分钟，按这个流程走一遍，坚持 8 周见效。</p>
+
+        <div class="daily-flow">
+          <div class="flow-step">
+            <div class="flow-time">0-3 min</div>
+            <div class="flow-content">
+              <h5>🔥 热身：绕口令 / 快速朗读</h5>
+              <p>选一段英文绕口令（比如 "She sells seashells by the seashore"），快速读 10 遍。或者找一段熟悉的英文文本，用最快但清晰的速度朗读。目的：让嘴巴"开机"。</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-time">3-10 min</div>
+            <div class="flow-content">
+              <h5>🎧 影子跟读法（Shadowing）</h5>
+              <p>打开音频，播放 3 秒暂停跟着读 3 秒。全程跟读完一段 1-2 分钟的材料。重点模仿 speaker 的语调、节奏、连读。<strong>这是流利度训练的核心</strong>。</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-time">10-15 min</div>
+            <div class="flow-content">
+              <h5>🗣️ 即兴输出 / AI 对练</h5>
+              <p>二选一：A) 抽一个话题，说 2-3 分钟；B) 打开 ChatGPT，让它扮演面试官/同事，进行真实对话。录音！</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-time">15-20 min</div>
+            <div class="flow-content">
+              <h5>📝 复盘 + 修正</h5>
+              <p>回听刚才的录音，标记卡壳的地方、用错的词、发音不准的地方。用一个新本子或笔记 App 记下来（比如："container orchestration 这个短语发音不准"），明天重点练。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 场景库 -->
+        <h2 id="scenes">💼 运维工程师高频场景库</h2>
+        <p>以下场景是你一定会遇到的，每个场景给你"关键短语 + 练习框架"。</p>
+
+        <!-- 场景 1 -->
+        <div class="scene-card">
+          <h4><span class="scene-icon">🎤</span> 场景 1：30 秒 / 2 分钟自我介绍</h4>
+          <p><strong>框架：</strong>我是谁 + 我做了什么 + 我擅长什么 + 我为什么适合这个岗位</p>
+          <p><strong>关键短语：</strong></p>
+          <div class="phrase-list">
+            <span class="phrase-chip.en">I'm a Cloud Operations Engineer with X years of experience in...</span>
+            <span class="phrase-chip.en">My core expertise is in Kubernetes, Docker, and cloud infrastructure.</span>
+            <span class="phrase-chip.en">In my previous role, I was responsible for...</span>
+            <span class="phrase-chip.en">I'm particularly proud of a project where I...</span>
+          </div>
+          <div class="phrase-list">
+            <span class="phrase-chip">cloud-native architect</span>
+            <span class="phrase-chip">SRE / DevOps engineer</span>
+            <span class="phrase-chip">CI/CD pipeline</span>
+            <span class="phrase-chip">infrastructure as code</span>
+            <span class="phrase-chip">observability stack</span>
+          </div>
+        </div>
+
+        <!-- 场景 2 -->
+        <div class="scene-card">
+          <h4><span class="scene-icon">🚨</span> 场景 2：描述一次故障排查经历（STAR 法则）</h4>
+          <p><strong>框架：</strong></p>
+          <ol>
+            <li><strong>S</strong>ituation：发生了什么情况？（"Last Tuesday at 3 AM, our production cluster experienced a sudden spike in 5xx errors..."）</li>
+            <li><strong>T</strong>ask：你的任务是什么？（"As the on-call engineer, I needed to identify and resolve the issue within 15 minutes."）</li>
+            <li><strong>A</strong>ction：你做了什么？（"I checked the Prometheus metrics, found the Redis connection pool was exhausted, increased the max connections, and rolled back the recent deployment."）</li>
+            <li><strong>R</strong>esult：结果怎么样？（"The incident was resolved in 12 minutes. Root cause was a memory leak in a Java service. We added monitoring alerts to prevent recurrence."）</li>
+          </ol>
+          <div class="phrase-list">
+            <span class="phrase-chip.en">This was a P0 incident that affected...</span>
+            <span class="phrase-chip.en">I was the on-call engineer that day.</span>
+            <span class="phrase-chip.en">I immediately checked our monitoring dashboard.</span>
+            <span class="phrase-chip.en">After some investigation, I identified the root cause as...</span>
+            <span class="phrase-chip.en">The issue was resolved within X minutes.</span>
+          </div>
+        </div>
+
+        <!-- 场景 3 -->
+        <div class="scene-card">
+          <h4><span class="scene-icon">☸️</span> 场景 3：解释技术概念（以 Kubernetes 为例）</h4>
+          <p><strong>框架：</strong>是什么 → 为什么用它 → 它和替代方案的区别 → 实战中怎么用</p>
+          <p><strong>示范回答思路：</strong></p>
+          <ol>
+            <li>"Kubernetes is an open-source container orchestration platform that automates deployment, scaling, and management of containerized applications."</li>
+            <li>"We use it because manual container management doesn't scale—when you have dozens of services across multiple hosts, you need a control plane."</li>
+            <li>"Compared to Docker Swarm, Kubernetes has a richer feature set—rolling updates, self-healing, service discovery, and it's become the de facto standard in the industry."</li>
+            <li>"In our production environment, we run about 200 microservices on a 12-node EKS cluster, using Helm for deployments and Prometheus for monitoring."</li>
+          </ol>
+          <div class="phrase-list">
+            <span class="phrase-chip">orchestration / ˌɔːrkɪˈstreɪʃn /</span>
+            <span class="phrase-chip">control plane</span>
+            <span class="phrase-chip">de facto standard</span>
+            <span class="phrase-chip">self-healing</span>
+            <span class="phrase-chip">rolling update</span>
+            <span class="phrase-chip">declarative model</span>
+          </div>
+        </div>
+
+        <!-- 场景 4 -->
+        <div class="scene-card">
+          <h4><span class="scene-icon">🏗️</span> 场景 4：介绍你的 CI/CD 流水线或项目架构</h4>
+          <p><strong>框架：</strong>整体流程图（口语版）→ 每个环节做什么 → 你负责哪部分 → 效果/收益</p>
+          <div class="phrase-list">
+            <span class="phrase-chip.en">Our CI/CD pipeline has four main stages: build, test, deploy, and verify.</span>
+            <span class="phrase-chip.en">Developers push code to GitLab, which triggers a Jenkins job.</span>
+            <span class="phrase-chip.en">We use SonarQube for code quality checks and Trivy for image scanning.</span>
+            <span class="phrase-chip.en">The whole process takes about 8 minutes from commit to production.</span>
+            <span class="phrase-chip.en">Deployments went from weekly to multiple times per day.</span>
+          </div>
+          <div class="phrase-list">
+            <span class="phrase-chip">pipeline stages</span>
+            <span class="phrase-chip">code quality gate</span>
+            <span class="phrase-chip">blue-green deployment</span>
+            <span class="phrase-chip">canary release</span>
+            <span class="phrase-chip">zero-downtime deployment</span>
+          </div>
+        </div>
+
+        <!-- 场景 5 -->
+        <div class="scene-card">
+          <h4><span class="scene-icon">👥</span> 场景 5：和老外同事讨论技术方案</h4>
+          <p><strong>常用表达：</strong></p>
+          <div class="phrase-list">
+            <span class="phrase-chip.en">I think we should consider using X instead of Y because...</span>
+            <span class="phrase-chip.en">From my perspective, the main concern is...</span>
+            <span class="phrase-chip.en">Have you considered the trade-offs between performance and cost?</span>
+            <span class="phrase-chip.en">Let me walk you through the architecture I'm thinking about.</span>
+            <span class="phrase-chip.en">What's your take on this approach?</span>
+            <span class="phrase-chip.en">Good point. I hadn't thought of it that way.</span>
+          </div>
+        </div>
+
+        <!-- 推荐工具 -->
+        <h2 id="tools">🛠️ 推荐工具清单</h2>
+
+        <div class="tool-grid">
+          <div class="tool-card">
+            <h5>🤖 AI 对话陪练</h5>
+            <p>最强陪练，扮演面试官/同事/客户，无限次重来不会紧张。</p>
+            <a href="https://chatgpt.com" target="_blank">chatgpt.com</a>
+            <p style="margin-top:4px;"><strong>推荐 Prompt：</strong>"Act as a senior DevOps engineer interviewing me for a Cloud Operations role. Ask me questions one at a time, wait for my answer, then give feedback on fluency, vocabulary, and content."</p>
+          </div>
+          <div class="tool-card">
+            <h5>🎙️ 发音打分</h5>
+            <p>上传录音或实时跟读，AI 给你发音打分，告诉你哪个音不准。</p>
+            <a href="https://elsaspeak.com" target="_blank">elsaspeak.com</a>
+            <p style="margin-top:4px;">免费版每天有限额，够热身用。</p>
+          </div>
+          <div class="tool-card">
+            <h5>🎧 技术播客</h5>
+            <p>练耳朵 + 学技术 + 接触真实职场英语。</p>
+            <a href="https://www.devopsparadox.com/" target="_blank">DevOps Paradox</a>
+            <br><a href="https://kubernetespodcast.com/" target="_blank">Kubernetes Podcast</a>
+            <br><a href="https://www.devopschatshow.com/" target="_blank">DevOps Chat</a>
+          </div>
+          <div class="tool-card">
+            <h5>📺 技术 YouTube 频道</h5>
+            <p>Shadowing 的绝佳素材来源。</p>
+            <a href="https://www.youtube.com/@TechWorldwithNana" target="_blank">TechWorld with Nana</a>
+            <br><a href="https://www.youtube.com/@KubeCon" target="_blank">KubeCon</a>
+            <br><a href="https://www.youtube.com/@GoogleCloudTech" target="_blank">Google Cloud Tech</a>
+          </div>
+          <div class="tool-card">
+            <h5>📝 录音工具</h5>
+            <p>手机自带录音 App 就行。关键是<strong>录了就要听</strong>。</p>
+            <p>推荐配合：<a href="https://otter.ai" target="_blank">otter.ai</a>（自动把录音转文字，方便对比"你想说的"和"你实际说的"）</p>
+          </div>
+          <div class="tool-card">
+            <h5>📚 技术英语词典</h5>
+            <p>遇到陌生技术词，查 + 跟读发音。</p>
+            <p><a href="https://dictionary.cambridge.org/" target="_blank">Cambridge Dictionary</a>（有英音/美音朗读）</p>
+            <p>Chrome 插件：沉浸式翻译（读英文文档时鼠标悬浮即显示翻译 + 发音）</p>
+          </div>
+        </div>
+
+        <!-- 进度追踪 -->
+        <div class="tracker-section" id="tracker">
+          <h2>🔥 8 周打卡追踪表</h2>
+          <p style="font-size:0.88rem; margin-bottom: 12px;">点格子打卡！进度自动保存在浏览器本地。</p>
+
+          <div id="tracker-container"></div>
+
+          <div class="stats-bar">
+            <div class="stat-item">
+              <div class="stat-num" id="stat-streak">0</div>
+              <div class="stat-label">🔥 连续天数</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-num" id="stat-total">0</div>
+              <div class="stat-label">✅ 累计打卡</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-num" id="stat-percent">0%</div>
+              <div class="stat-label">📊 完成进度</div>
+            </div>
+          </div>
+
+          <button class="reset-btn" onclick="if(confirm('确定要重置所有打卡记录吗？')){localStorage.removeItem('speaking-plan-checkins'); location.reload();}">🔄 重置打卡记录</button>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>英语口语流利度训练计划 · 运维工程师定制版</p>
+    <p style="margin-top:6px;">💬 记住：流利不是天生的，是练出来的。坚持 8 周，你一定能看到变化。</p>
+  </footer>
+
+  <script src="assets/js/nav.js?v=4"></script>
+  <script>
+    /* ======== 打卡追踪逻辑 ======== */
+    (function() {
+      const STORAGE_KEY = 'speaking-plan-checkins';
+      const WEEKS = 8;
+      const DAYS = 7;
+
+      function getTodayIndex() {
+        const now = new Date();
+        const start = new Date(); start.setHours(0,0,0,0);
+        const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1; // Mon=0, Sun=6
+        return { week: null, day: dayOfWeek };
+      }
+
+      function loadData() {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+        catch(e) { return {}; }
+      }
+      function saveData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+
+      function render() {
+        const data = loadData();
+        const container = document.getElementById('tracker-container');
+        if (!container) return;
+        const { day: todayDay } = getTodayIndex();
+
+        let html = '';
+        const phaseNames = ['破冰期', '破冰期', '搭建期', '搭建期', '场景期', '场景期', '面试冲刺', '面试冲刺'];
+        const phaseColors = ['#10b981','#10b981','#3b82f6','#3b82f6','#8b5cf6','#8b5cf6','#ef4444','#ef4444'];
+
+        for (let w = 0; w < WEEKS; w++) {
+          const checked = data['w'+w] || [];
+          html += '<div class="week-row">';
+          html += `<span class="week-label" style="color:${phaseColors[w]}">W${w+1} · ${phaseNames[w]}</span>`;
+          html += '<div class="day-checks">';
+          for (let d = 0; d < DAYS; d++) {
+            const isDone = checked.indexOf(d) !== -1;
+            const isToday = w === 0 && d === todayDay; // 仅第 1 周标记今天
+            const cls = 'day-box' + (isDone ? ' done' : '') + (isToday ? ' today' : '');
+            html += `<div class="${cls}" data-w="${w}" data-d="${d}" title="Day ${d+1}">${d+1}</div>`;
+          }
+          html += '</div></div>';
+        }
+        container.innerHTML = html;
+
+        // 绑定点击
+        container.querySelectorAll('.day-box').forEach(el => {
+          el.addEventListener('click', function() {
+            const w = parseInt(this.dataset.w);
+            const d = parseInt(this.dataset.d);
+            const current = loadData();
+            const week = current['w'+w] || [];
+            const idx = week.indexOf(d);
+            if (idx === -1) week.push(d); else week.splice(idx, 1);
+            current['w'+w] = week;
+            saveData(current);
+            render();
+            updateStats();
+          });
+        });
+
+        updateStats();
+      }
+
+      function updateStats() {
+        const data = loadData();
+        let total = 0;
+        for (let w in data) total += (data[w] || []).length;
+        document.getElementById('stat-total').textContent = total;
+        document.getElementById('stat-percent').textContent = Math.round(total / (WEEKS * DAYS) * 100) + '%';
+
+        // 计算连续天数（从今天往前推）
+        let streak = 0;
+        const checkedDays = {}; // "w-d" -> true
+        for (let w in data) (data[w] || []).forEach(d => checkedDays[w+'-'+d] = true);
+
+        let w = 0, d = getTodayIndex().day;
+        // 检查今天是否打卡了
+        let current = checkedDays['0-'+d];
+        if (!current) {
+          // 如果今天没打，看看昨天
+          d = d === 0 ? 6 : d - 1;
+          w = 0;
+          current = checkedDays[w+'-'+d];
+          if (current) streak = 0; else { document.getElementById('stat-streak').textContent = 0; return; }
+        }
+
+        while (current && streak < WEEKS * DAYS) {
+          streak++;
+          d = d === 0 ? 6 : d - 1;
+          if (d === 6) w++; // 跨周
+          if (w >= WEEKS) break;
+          current = checkedDays[w+'-'+d];
+        }
+        document.getElementById('stat-streak').textContent = streak;
+      }
+
+      document.addEventListener('DOMContentLoaded', render);
+    })();
+  </script>
+</body>
+</html>
