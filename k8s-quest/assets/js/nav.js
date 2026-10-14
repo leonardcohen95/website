@@ -51,11 +51,18 @@ function renderTopNav() {
     { href: prefix + "leaderboard.html", label: "排行榜", id: "leaderboard" },
     { href: prefix + "profile.html", label: "我的", id: "profile" },
   ];
+  const isMobile = window.innerWidth <= 640;
+  const linkHtml = links.map(l => {
+    const icon = l.id === 'home' ? '🏠' : l.id === 'leaderboard' ? '🏆' : '👤';
+    const label = isMobile ? '' : `<span class="nav-link-text">${l.label}</span>`;
+    return `<a href="${l.href}" class="nav-link ${page === l.id ? "active" : ""}" title="${l.label}">${icon}${label}</a>`;
+  }).join("");
+
   nav.innerHTML = `
     <span class="star-display">⭐ <span id="star-count">0</span></span>
     <span id="nav-title" style="font-size:0.85rem;color:var(--color-text-light);display:none;"></span>
     <span id="nav-auth"></span>
-    ${links.map(l => `<a href="${l.href}" class="nav-link ${page === l.id ? "active" : ""}">${l.label}</a>`).join("")}
+    ${linkHtml}
   `;
 }
 
