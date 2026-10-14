@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第3章 核心概念速览 | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="03-core">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>核心概念速览</h1>
+        <p>上一章我们了解了 K8s 的"硬件"架构。这一章，我们来认识 K8s 的"软件"概念——也就是你会天天打交道的那些 API 对象：Pod、Deployment、Service、ConfigMap、Secret、Volume。掌握这些，才算真正入门 K8s。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Pod 是 K8s 最小的部署单元</li>
+          <li>掌握 Deployment 管理 Pod 副本和滚动更新的能力</li>
+          <li>了解 Service 如何提供服务发现和负载均衡</li>
+          <li>知道 ConfigMap 与 Secret 的用途区别</li>
+          <li>理解 Volume 解决容器数据持久化的问题</li>
+        </ul>
+
+        <h2>1. Pod —— 最小部署单元</h2>
+        <div class="term-card">
+          <div class="term-name">🫛 Pod</div>
+          <p>
+            Pod 是 Kubernetes 中<strong>最小的部署单元</strong>。一个 Pod 包含一个或多个紧密协作的容器，
+            它们共享网络命名空间（同一个 IP 和端口空间）和存储卷。
+            K8s 不直接管理容器，而是管理 Pod。
+          </p>
+        </div>
+
+        <p>
+          通常我们<strong>一个 Pod 只放一个容器</strong>，但在某些场景（如 sidecar 模式）下，
+          一个 Pod 会包含多个容器，比如一个主应用容器 + 一个日志采集容器。
+        </p>
+
+        <div class="callout tip">
+          <div class="callout-title">🌰 类比</div>
+          <p>
+            Pod 就像一个"豆荚"，里面装着一颗或多颗"豆子"（容器）。
+            同一个豆荚里的豆子共享水分和养分（共享网络和存储）。
+            K8s 调度的最小单位是豆荚，而不是豆子。
+          </p>
+        </div>
+
+        <h2>2. Deployment —— Pod 的管理者</h2>
+        <div class="term-card">
+          <div class="term-name">🚀 Deployment</div>
+          <p>
+            Deployment 用于<strong>管理 Pod 的副本数量</strong>并支持<strong>滚动更新</strong>。
+            你声明"我要 3 个副本"，Deployment 就会确保始终有 3 个 Pod 在运行；
+            你更新镜像版本，它会逐个替换旧 Pod，实现零停机发布。
+          </p>
+        </div>
+
+        <p>Deployment 底层通过 ReplicaSet 来控制 Pod 副本数，日常使用中你几乎不需要直接操作 ReplicaSet。</p>
+
+        <div class="callout">
+          <div class="callout-title">🔄 滚动更新的工作方式</div>
+          <p>
+            假设你有 3 个 Pod 运行着 v1 版本。当你把镜像更新为 v2 时，Deployment 会：<br />
+            1. 先启动 1 个 v2 的 Pod<br />
+            2. 确认 v2 Pod 正常后，杀掉 1 个 v1 的 Pod<br />
+            3. 重复上述过程，直到所有 Pod 都变成 v2<br />
+            整个过程服务不中断，出问题还能一键回滚到 v1。
+          </p>
+        </div>
+
+        <h2>3. Service —— 服务发现与负载均衡</h2>
+        <div class="term-card">
+          <div class="term-name">🌐 Service</div>
+          <p>
+            Pod 的 IP 是会变的（重启、迁移后 IP 就变了），直接访问 Pod IP 不靠谱。
+            <strong>Service</strong> 为一组 Pod 提供一个<strong>固定的访问入口</strong>（ClusterIP），
+            并对这组 Pod 进行<strong>负载均衡</strong>。其他服务只需访问 Service 的名字或 IP，
+            无需关心后端 Pod 的变化。
+          </p>
+        </div>
+
+        <p>Service 通过 Label Selector 来选择后端 Pod——只要 Pod 的标签匹配，就会被纳入这个 Service 的负载均衡池。</p>
+
+        <div class="callout tip">
+          <div class="callout-title">🏷️ 标签（Label）的魔力</div>
+          <p>
+            K8s 用 Label（键值对，如 <code>app=nginx</code>）来组织和选择对象。
+            Service 就是靠 Label Selector 找到它要代理的 Pod。
+            这是一种解耦的设计：Service 和 Pod 之间没有硬编码的关联，全靠标签匹配。
+          </p>
+        </div>
+
+        <h2>4. ConfigMap 与 Secret —— 配置管理</h2>
+        <p>把配置写死在镜像里是反模式。K8s 提供了两种对象来管理配置：</p>
+
+        <div class="term-card">
+          <div class="term-name">⚙️ ConfigMap</div>
+          <p>
+            用于存储<strong>非敏感的配置信息</strong>，如环境变量、配置文件内容。
+            可以挂载到 Pod 中作为环境变量或文件使用，实现配置与镜像分离。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🔐 Secret</div>
+          <p>
+            用于存储<strong>敏感信息</strong>，如密码、API Key、TLS 证书。
+            用法与 ConfigMap 类似，但数据以 base64 编码存储（注意：这不是加密，生产环境应配合 RBAC 和加密机制）。
+          </p>
+        </div>
+
+        <h2>5. Volume —— 数据持久化</h2>
+        <div class="term-card">
+          <div class="term-name">💾 Volume</div>
+          <p>
+            容器里的文件系统是临时的，容器一删数据就没了。
+            <strong>Volume</strong> 提供<strong>持久化存储</strong>，它挂载到 Pod 中，
+            容器可以在 Volume 里读写数据，即使容器销毁重建，数据依然保留。
+          </p>
+        </div>
+
+        <p>Volume 支持多种后端：emptyDir（Pod 内临时共享）、hostPath（节点本地目录）、NFS、云存储等。</p>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ emptyDir 的注意点</div>
+          <p>
+            emptyDir 类型的 Volume 虽然能让 Pod 内多个容器共享数据，
+            但它的生命周期和 Pod 绑定——Pod 被删除时，emptyDir 里的数据也会被清除。
+            要真正持久化，需要用持久卷（PV/PVC，后续章节讲解）。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Pod 是 K8s 最小部署单元，可含一个或多个容器</li>
+          <li>Deployment 管理 Pod 副本数量，支持滚动更新和回滚</li>
+          <li>Service 为一组 Pod 提供固定访问入口和负载均衡，靠 Label Selector 匹配</li>
+          <li>ConfigMap 管普通配置，Secret 管敏感配置</li>
+          <li>Volume 解决容器数据持久化问题</li>
+        </ul>
+
+        <!-- 测试题 -->
+        <section class="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+
+          <div class="quiz" data-type="choice" data-answer="A" data-stars="1"
+               data-chapter="03-core" data-qid="q1"
+               data-explain="Pod 是 Kubernetes 中最小的部署单元，K8s 直接管理的是 Pod 而非容器。">
+            <div class="quiz-question">1. Kubernetes 中最小的部署单元是什么？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. Pod</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. Container</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. Deployment</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. Node</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C" data-stars="1"
+               data-chapter="03-core" data-qid="q2"
+               data-explain="Deployment 负责管理 Pod 副本数量并支持滚动更新，是最常用的工作负载控制器。">
+            <div class="quiz-question">2. 要管理一组 Pod 的副本数量并实现滚动更新，应使用哪个对象？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. Service</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. ConfigMap</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. Deployment</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. Volume</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="B" data-stars="1"
+               data-chapter="03-core" data-qid="q3"
+               data-explain="Service 通过 Label Selector（标签选择器）来选择后端 Pod，实现服务发现和负载均衡。">
+            <div class="quiz-question">3. Service 通过什么机制找到需要代理的后端 Pod？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. Pod 的固定 IP 地址</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. Label Selector（标签选择器）</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. Pod 的名称</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. 节点名称</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="judge" data-answer="F" data-stars="1"
+               data-chapter="03-core" data-qid="q4"
+               data-explain="Secret 存储的是 base64 编码数据，不是加密。生产环境需配合 RBAC 权限控制和 etcd 加密来保护敏感数据。">
+            <div class="quiz-question">4. Kubernetes 中的 Secret 会对数据进行加密存储，因此绝对安全。<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q4" value="T" /> 正确</label></li>
+              <li><label><input type="radio" name="q4" value="F" /> 错误</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="multi" data-answer="B|D" data-stars="2"
+               data-chapter="03-core" data-qid="q5"
+               data-explain="ConfigMap 存储非敏感配置，Secret 存储敏感信息如密码和证书。镜像和 Pod 不是配置管理对象。">
+            <div class="quiz-question">5. 以下哪些对象用于管理应用配置？（多选）<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="checkbox" name="q5" value="A" /> A. 镜像（Image）</label></li>
+              <li><label><input type="checkbox" name="q5" value="B" /> B. ConfigMap</label></li>
+              <li><label><input type="checkbox" name="q5" value="C" /> C. Pod</label></li>
+              <li><label><input type="checkbox" name="q5" value="D" /> D. Secret</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="text" data-answer="volume" data-stars="1"
+               data-chapter="03-core" data-qid="q6"
+               data-explain="Volume 提供持久化存储，解决容器删除后数据丢失的问题。">
+            <div class="quiz-question">6. 要解决容器删除后数据丢失的问题，需要挂载什么对象到 Pod 中？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 3 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

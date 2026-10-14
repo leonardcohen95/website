@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第5章 搭建本地集群 | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="05-setup">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>搭建本地集群</h1>
+        <p>光说不练假把式。本章我们会真正动手，用 minikube 在本地搭建一个单节点 K8s 集群，然后部署你的第一个应用并访问它。完成本章后，你就拥有了一个可以随时练习的本地 K8s 环境。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>了解 minikube 和 kind 两种本地集群工具</li>
+          <li>成功安装并启动 minikube 集群</li>
+          <li>用 kubectl 验证集群状态</li>
+          <li>部署第一个应用并暴露服务</li>
+          <li>通过 minikube service 访问应用</li>
+        </ul>
+
+        <h2>1. 本地集群工具：minikube 与 kind</h2>
+        <p>在本地机器上跑一个完整的 K8s 集群有多种方案，最常用的有两个：</p>
+
+        <div class="term-card">
+          <div class="term-name">🐳 minikube</div>
+          <p>
+            官方推荐的本地 K8s 工具，在虚拟机或容器里运行一个单节点集群。
+            功能丰富，支持多种驱动（VirtualBox、Docker、KVM 等），
+            还自带 dashboard、ingress 等插件，非常适合初学者。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🎯 kind</div>
+          <p>
+            Kubernetes IN Docker 的缩写，把整个集群跑在 Docker 容器里。
+            启动极快、资源占用小，适合 CI/CD 场景和高级用户。
+            但功能插件不如 minikube 丰富。
+          </p>
+        </div>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 本教程选择 minikube</div>
+          <p>
+            minikube 对新手最友好，文档齐全，一条命令就能拉起集群。
+            本章后续操作全部基于 minikube。
+          </p>
+        </div>
+
+        <h2>2. 安装 minikube</h2>
+        <p>安装前请确保你的机器上已安装 Docker（或其他支持的容器/虚拟化驱动）。以下是常见系统的安装方式：</p>
+
+<pre><code># macOS（Homebrew）
+brew install minikube
+
+# Windows（Chocolatey）
+choco install minikube
+
+# Linux（直接下载二进制）
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
+
+# 验证安装
+minikube version</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ 前置依赖</div>
+          <p>
+            minikube 默认使用 Docker 驱动，所以请先安装并启动 Docker Desktop。
+            如果你的系统不支持 Docker，也可以选择 VirtualBox、Hyper-V 等驱动。
+          </p>
+        </div>
+
+        <h2>3. 启动集群 —— minikube start</h2>
+
+<pre><code># 启动集群（默认使用 Docker 驱动）
+minikube start
+
+# 指定驱动和资源（可选）
+minikube start --driver=docker --cpus=2 --memory=4096
+
+# 查看集群状态
+minikube status</code></pre>
+
+        <p>首次启动会下载 K8s 组件镜像，需要等待几分钟。启动成功后，你会看到 "Done! kubectl is now configured to use ..." 的提示。</p>
+
+        <h2>4. 验证集群 —— kubectl get nodes</h2>
+        <p>集群启动后，用 kubectl 确认节点状态。一个健康的单节点集群应该显示如下：</p>
+
+<pre><code># 查看节点状态
+kubectl get nodes
+
+# 预期输出（STATUS 为 Ready 表示正常）
+# NAME       STATUS   ROLES           AGE   VERSION
+# minikube   Ready    control-plane   2m    v1.30.0
+
+# 查看系统命名空间下的 Pod，确认核心组件正常运行
+kubectl get pods -n kube-system</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">✅ 健康检查清单</div>
+          <p>
+            节点 STATUS = Ready ✅<br />
+            kube-system 下的 Pod 全部 Running ✅<br />
+            满足这两个条件，就说明你的本地集群就绪了！
+          </p>
+        </div>
+
+        <h2>5. 部署第一个应用</h2>
+        <p>现在让我们用经典的 nginx 镜像部署第一个应用。一条命令搞定：</p>
+
+<pre><code># 创建一个名为 nginx 的 Deployment，使用 nginx 镜像
+kubectl create deployment nginx --image=nginx
+
+# 查看 Deployment 和 Pod 状态
+kubectl get deploy
+kubectl get pods</code></pre>
+
+        <p>等待 Pod 的 STATUS 变为 <code>Running</code>，说明应用已成功部署。</p>
+
+        <h2>6. 暴露服务并访问</h2>
+        <p>Pod 跑起来了，但默认只能在集群内部访问。要从外部访问，需要创建一个 Service：</p>
+
+<pre><code># 将 nginx Deployment 暴露为 NodePort 类型的 Service，端口 80
+kubectl expose deployment nginx --type=NodePort --port=80
+
+# 查看 Service
+kubectl get svc
+
+# 用 minikube 打开浏览器访问服务（自动获取 NodePort 并打开）
+minikube service nginx</code></pre>
+
+        <p>执行 <code>minikube service nginx</code> 后，会自动打开浏览器，你就能看到 nginx 的欢迎页面了！🎉</p>
+
+        <div class="callout">
+          <div class="callout-title">🧹 清理环境</div>
+          <p>
+            练习完毕后，可以清理资源：<br />
+            <code>kubectl delete deployment nginx</code><br />
+            <code>kubectl delete svc nginx</code><br />
+            或者直接停掉集群：<code>minikube stop</code>，下次用 <code>minikube start</code> 再启动。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>minikube 是本地搭建 K8s 集群的首选工具，kind 适合 CI 场景</li>
+          <li><code>minikube start</code> 一键启动集群，<code>minikube status</code> 查看状态</li>
+          <li><code>kubectl get nodes</code> 验证节点是否 Ready</li>
+          <li><code>kubectl create deployment</code> 部署应用</li>
+          <li><code>kubectl expose</code> 暴露服务，<code>minikube service</code> 访问应用</li>
+        </ul>
+
+        <!-- 测试题 -->
+        <section class="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B" data-stars="1"
+               data-chapter="05-setup" data-qid="q1"
+               data-explain="minikube start 是启动本地 K8s 集群的命令。">
+            <div class="quiz-question">1. 启动 minikube 集群使用的命令是？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. minikube run</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. minikube start</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. minikube up</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. minikube init</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A" data-stars="1"
+               data-chapter="05-setup" data-qid="q2"
+               data-explain="kubectl get nodes 用于查看集群节点及其状态，STATUS 为 Ready 表示节点正常。">
+            <div class="quiz-question">2. 要验证本地集群节点是否正常运行，应执行哪个命令？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. kubectl get nodes</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. kubectl get cluster</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. minikube check</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. kubectl status</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D" data-stars="2"
+               data-chapter="05-setup" data-qid="q3"
+               data-explain="kubectl expose deployment nginx --type=NodePort --port=80 会为 nginx 创建一个 NodePort 类型的 Service，使外部可以访问。">
+            <div class="quiz-question">3. 要让外部可以访问集群内运行的 nginx 应用，应执行哪个命令？<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. kubectl open nginx</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. kubectl expose pod nginx</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. minikube expose nginx</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. kubectl expose deployment nginx --type=NodePort --port=80</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="judge" data-answer="T" data-stars="2"
+               data-chapter="05-setup" data-qid="q4"
+               data-explain="minikube 在本地运行的是单节点集群，控制平面和数据平面都在同一个节点上。">
+            <div class="quiz-question">4. minikube 默认搭建的是一个单节点 Kubernetes 集群。<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q4" value="T" /> 正确</label></li>
+              <li><label><input type="radio" name="q4" value="F" /> 错误</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="multi" data-answer="A|C" data-stars="2"
+               data-chapter="05-setup" data-qid="q5"
+               data-explain="minikube 和 kind 都是本地搭建 K8s 集群的工具。kubectl 是命令行工具而非集群工具，kubeadm 用于搭建生产集群。">
+            <div class="quiz-question">5. 以下哪些是常用于本地搭建 Kubernetes 集群的工具？（多选）<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="checkbox" name="q5" value="A" /> A. minikube</label></li>
+              <li><label><input type="checkbox" name="q5" value="B" /> B. kubectl</label></li>
+              <li><label><input type="checkbox" name="q5" value="C" /> C. kind</label></li>
+              <li><label><input type="checkbox" name="q5" value="D" /> D. kubeadm</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="text" data-answer="minikube service" data-stars="2"
+               data-chapter="05-setup" data-qid="q6"
+               data-explain="minikube service 命令可以自动获取服务地址并在浏览器中打开，方便本地访问集群中的服务。">
+            <div class="quiz-question">6. 要通过浏览器快速访问 minikube 集群中暴露的 nginx 服务，使用的命令是 <code>______ nginx</code>（填空）<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 5 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

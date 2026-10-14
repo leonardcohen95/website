@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第4章 kubectl入门 | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="04-kubectl">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>kubectl 入门</h1>
+        <p>kubectl 是与 Kubernetes 集群交互的命令行工具，可以理解为 K8s 的"遥控器"。无论是查看资源、创建应用还是排查问题，都离不开它。本章带你掌握 kubectl 的核心命令和使用套路。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>掌握 kubectl 命令的基本语法结构</li>
+          <li>熟练使用 get、describe、create、apply、delete 等核心命令</li>
+          <li>了解 logs、exec 用于排查和调试 Pod</li>
+          <li>理解 namespace 的概念和用法</li>
+          <li>记住常用资源类型的缩写</li>
+        </ul>
+
+        <h2>1. kubectl 命令语法</h2>
+        <p>kubectl 命令遵循一个统一的语法模式：</p>
+
+<pre><code>kubectl [action] [resource] [name] [flags]</code></pre>
+
+        <ul>
+          <li><strong>action（动作）</strong>：你想做什么，如 get、describe、create、delete</li>
+          <li><strong>resource（资源类型）</strong>：操作的对象，如 pods、deployments、services</li>
+          <li><strong>name（资源名称）</strong>：可选，指定具体某个资源，不填则列出全部</li>
+          <li><strong>flags（参数）</strong>：可选，如 <code>-n</code> 指定命名空间、<code>-o wide</code> 输出更多信息</li>
+        </ul>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 小技巧</div>
+          <p>
+            资源类型可以用缩写：pods → pod，deployments → deploy，services → svc，
+            configmaps → cm，secrets → secret，namespaces → ns。熟练使用缩写能大幅提高效率。
+          </p>
+        </div>
+
+        <h2>2. 查看资源 —— get 与 describe</h2>
+
+        <h3>kubectl get —— 列出资源</h3>
+        <p>最常用的命令，用于查看资源列表。后面的章节你会频繁用到它。</p>
+
+<pre><code># 查看所有 Pod
+kubectl get pods
+
+# 查看所有 Deployment（用缩写 deploy）
+kubectl get deploy
+
+# 查看所有 Service
+kubectl get svc
+
+# 查看更详细的信息（如 Pod 所在节点、IP）
+kubectl get pods -o wide
+
+# 以 YAML 格式查看某个 Pod 的完整定义
+kubectl get pod my-pod -o yaml
+
+# 查看所有命名空间的 Pod
+kubectl get pods -A</code></pre>
+
+        <h3>kubectl describe —— 查看资源详情</h3>
+        <p>get 看概览，describe 看详情。describe 会展示资源的完整描述、事件（Events）等，是排查问题的利器。</p>
+
+<pre><code># 查看某个 Pod 的详情和事件
+kubectl describe pod my-pod
+
+# 查看某个节点的详情
+kubectl describe node node-1</code></pre>
+
+        <h2>3. 创建与更新资源 —— create 与 apply</h2>
+
+        <h3>kubectl create —— 直接创建</h3>
+        <p>通过命令行参数或 YAML 文件创建资源。如果资源已存在会报错。</p>
+
+<pre><code># 用命令直接创建一个 Deployment
+kubectl create deployment nginx --image=nginx
+
+# 从 YAML 文件创建
+kubectl create -f nginx-deploy.yaml</code></pre>
+
+        <h3>kubectl apply —— 声明式创建/更新</h3>
+        <p>apply 是<strong>声明式</strong>的：你告诉 K8s"我期望的状态是什么"，K8s 会自动对比并调整。如果资源不存在就创建，已存在就更新。这是生产环境的推荐做法。</p>
+
+<pre><code># 根据 YAML 文件创建或更新资源
+kubectl apply -f nginx-deploy.yaml
+
+# 应用整个目录下的所有 YAML
+kubectl apply -f ./manifests/</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">create vs apply</div>
+          <p>
+            <strong>create</strong>：命令式，只能创建，已存在会报错。<br />
+            <strong>apply</strong>：声明式，可创建也可更新，幂等（多次执行结果相同）。<br />
+            日常开发和生产环境推荐用 <code>apply</code>。
+          </p>
+        </div>
+
+        <h2>4. 删除资源 —— delete</h2>
+
+<pre><code># 删除一个 Pod
+kubectl delete pod my-pod
+
+# 删除一个 Deployment
+kubectl delete deploy nginx
+
+# 按 YAML 文件删除对应资源
+kubectl delete -f nginx-deploy.yaml</code></pre>
+
+        <h2>5. 调试与排障 —— logs 与 exec</h2>
+
+        <h3>kubectl logs —— 查看容器日志</h3>
+        <p>Pod 运行不正常时，第一时间看日志。</p>
+
+<pre><code># 查看 Pod 日志
+kubectl logs my-pod
+
+# 持续跟踪日志（类似 tail -f）
+kubectl logs -f my-pod
+
+# 多容器 Pod 指定容器名
+kubectl logs my-pod -c main-container</code></pre>
+
+        <h3>kubectl exec —— 进入容器</h3>
+        <p>类似 docker exec，可以在运行中的容器里执行命令，进入交互式 shell 调试。</p>
+
+<pre><code># 进入容器的交互式 shell
+kubectl exec -it my-pod -- /bin/sh
+
+# 在容器内执行单条命令
+kubectl exec my-pod -- ls /app</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ 注意 -- 的含义</div>
+          <p>
+            <code>exec</code> 命令中，<code>--</code> 后面的内容会原样传给容器内的命令。
+            务必加上 <code>-it</code> 才能进入交互式终端（i=输入，t=终端）。
+          </p>
+        </div>
+
+        <h2>6. 命名空间（Namespace）</h2>
+        <p>
+          Namespace 是 K8s 用来<strong>隔离资源</strong>的逻辑分组机制。不同命名空间里的资源互相不可见，
+          适合用来区分不同的环境（dev、staging、prod）或不同的团队。
+        </p>
+
+<pre><code># 查看所有命名空间
+kubectl get ns
+
+# 创建一个命名空间
+kubectl create namespace dev
+
+# 在指定命名空间中操作资源（加 -n 参数）
+kubectl get pods -n dev
+kubectl apply -f nginx.yaml -n dev
+
+# 不指定 -n 时，默认使用 default 命名空间</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">🏷️ 常用资源类型速查</div>
+          <p>
+            pod（pods）、deploy（deployments）、svc（services）、cm（configmaps）、
+            secret（secrets）、ns（namespaces）、node（nodes）、rs（replicasets）、
+            pvc（persistentvolumeclaims）、ing（ingresses）。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>kubectl 命令语法：<code>kubectl [action] [resource] [name] [flags]</code></li>
+          <li>get 看列表，describe 看详情，是最常用的两个查询命令</li>
+          <li>create 是命令式创建，apply 是声明式创建/更新，推荐用 apply</li>
+          <li>logs 看日志，exec 进容器，是排查问题的利器</li>
+          <li>namespace 用于逻辑隔离资源，用 <code>-n</code> 指定</li>
+        </ul>
+
+        <!-- 测试题 -->
+        <section class="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B" data-stars="1"
+               data-chapter="04-kubectl" data-qid="q1"
+               data-explain="get 用于列出资源，是查看资源列表最常用的命令。">
+            <div class="quiz-question">1. 要列出集群中所有的 Pod，应使用哪个命令？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. kubectl list pods</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. kubectl get pods</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. kubectl show pods</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. kubectl view pods</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C" data-stars="1"
+               data-chapter="04-kubectl" data-qid="q2"
+               data-explain="describe 用于查看资源的详细信息和事件，是排查问题的利器。">
+            <div class="quiz-question">2. 要查看某个 Pod 的详细信息和事件日志，应使用哪个命令？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. kubectl get pod my-pod</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. kubectl info pod my-pod</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. kubectl describe pod my-pod</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. kubectl detail pod my-pod</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A" data-stars="1"
+               data-chapter="04-kubectl" data-qid="q3"
+               data-explain="apply 是声明式命令，可创建也可更新资源，且幂等，是生产环境的推荐做法。">
+            <div class="quiz-question">3. 以下关于 create 和 apply 的说法，哪个正确？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. apply 既可创建也可更新资源，是声明式的</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. create 可以更新已存在的资源</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. create 和 apply 完全相同</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. apply 只能创建不能更新</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D" data-stars="1"
+               data-chapter="04-kubectl" data-qid="q4"
+               data-explain="进入 Pod 的交互式 shell 需要使用 exec -it 命令，并在 -- 后指定要执行的 shell。">
+            <div class="quiz-question">4. 要进入一个运行中的 Pod 内部进行交互式调试，应使用哪个命令？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q4" value="A" /> A. kubectl ssh my-pod</label></li>
+              <li><label><input type="radio" name="q4" value="B" /> B. kubectl login my-pod</label></li>
+              <li><label><input type="radio" name="q4" value="C" /> C. kubectl enter my-pod</label></li>
+              <li><label><input type="radio" name="q4" value="D" /> D. kubectl exec -it my-pod -- /bin/sh</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="multi" data-answer="A|C|D" data-stars="2"
+               data-chapter="04-kubectl" data-qid="q5"
+               data-explain="pod、svc、cm 都是常用缩写，分别对应 pods、services、configmaps。img 不是 K8s 资源类型。">
+            <div class="quiz-question">5. 以下哪些是 kubectl 中合法的资源类型缩写？（多选）<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="checkbox" name="q5" value="A" /> A. pod</label></li>
+              <li><label><input type="checkbox" name="q5" value="B" /> B. img</label></li>
+              <li><label><input type="checkbox" name="q5" value="C" /> C. svc</label></li>
+              <li><label><input type="checkbox" name="q5" value="D" /> D. cm</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="text" data-answer="namespace|namespaces|ns" data-stars="1"
+               data-chapter="04-kubectl" data-qid="q6"
+               data-explain="Namespace 是 K8s 中用于逻辑隔离资源的分组机制，常用缩写为 ns。">
+            <div class="quiz-question">6. Kubernetes 中用于逻辑隔离资源（如区分开发/生产环境）的对象叫什么？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 4 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

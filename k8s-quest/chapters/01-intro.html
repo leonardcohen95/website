@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第1章 什么是 Kubernetes | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="01-intro">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>什么是 Kubernetes</h1>
+        <p>在动手之前，我们先搞清楚：Kubernetes 到底是什么？它解决了什么问题？为什么所有云原生公司都在用它？</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解容器编排的概念</li>
+          <li>知道 Kubernetes 能解决什么问题</li>
+          <li>了解 K8s 的核心价值</li>
+        </ul>
+
+        <h2>1. 从容器到容器编排</h2>
+        <p>
+          你应该已经听过 <strong>Docker</strong> 了。Docker 让我们可以把应用打包成容器，
+          一次打包，到处运行。但问题来了：当你的应用从 <strong>1 个容器</strong> 变成
+          <strong>100 个、1000 个容器</strong> 时，谁来管理它们？
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">举个例子</div>
+          <p>
+            你有一个电商网站，用了 50 个微服务，每个服务跑 3 个容器，总共 150 个容器。
+            突然某个容器挂了，谁来重启它？流量大了，谁来自动扩容？
+            要发布新版本，谁来帮你滚动更新而不影响用户？
+          </p>
+        </div>
+
+        <p>这就是 <strong>容器编排（Container Orchestration）</strong> 要解决的问题。</p>
+
+        <h2>2. Kubernetes 是什么</h2>
+        <p>
+          <strong>Kubernetes</strong>（简称 K8s，因为 K 和 s 之间有 8 个字母）是 Google 开源的
+          <strong>容器编排平台</strong>。它的作用是：<strong>自动化部署、扩展和管理容器化应用</strong>。
+        </p>
+
+        <div class="callout tip">
+          <div class="callout-title">大白话理解</div>
+          <p>
+            如果把容器比作"集装箱"，那 K8s 就是"港口调度系统"。
+            它帮你决定：哪个集装箱放哪艘船、船怎么编队、出问题了怎么换、货多了怎么加船。
+          </p>
+        </div>
+
+        <h2>3. K8s 能做什么</h2>
+        <div class="term-card">
+          <div class="term-name">🤖 自动调度</div>
+          <p>自动决定容器在哪个节点上运行，根据资源情况智能分配。</p>
+        </div>
+        <div class="term-card">
+          <div class="term-name">❤️ 自我修复</div>
+          <p>容器挂了自动重启，节点挂了自动迁移容器到其他节点。</p>
+        </div>
+        <div class="term-card">
+          <div class="term-name">📈 自动扩缩容</div>
+          <p>根据 CPU/内存或自定义指标，自动增加或减少容器数量。</p>
+        </div>
+        <div class="term-card">
+          <div class="term-name">🔄 滚动更新</div>
+          <p>发布新版本时逐个替换容器，不中断服务，出问题可一键回滚。</p>
+        </div>
+        <div class="term-card">
+          <div class="term-name">🌐 服务发现</div>
+          <p>容器之间可以通过名字互相访问，不用关心 IP 变化。</p>
+        </div>
+        <div class="term-card">
+          <div class="term-name">💾 存储编排</div>
+          <p>自动挂载存储卷，支持本地存储、云存储等多种后端。</p>
+        </div>
+
+        <h2>4. 为什么选 K8s</h2>
+        <p>市面上也有其他容器编排工具（如 Docker Swarm、Apache Mesos），但 K8s 已经成为事实标准，原因是：</p>
+        <ul>
+          <li><strong>功能强大</strong>：覆盖部署、网络、存储、安全全链路</li>
+          <li><strong>生态丰富</strong>：Helm、Prometheus、Istio 等工具无缝集成</li>
+          <li><strong>云厂商支持</strong>：AWS EKS、Azure AKS、Google GKE 都是托管 K8s</li>
+          <li><strong>社区活跃</strong>：Google、Red Hat、Microsoft 等大厂共同维护</li>
+        </ul>
+
+        <div class="callout warn">
+          <div class="callout-title">注意</div>
+          <p>K8s 功能强大，但学习曲线也陡。本教程会循序渐进，从概念到实操，帮你一步步征服它。</p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>K8s 是容器编排平台，自动化管理大规模容器</li>
+          <li>核心能力：调度、自愈、扩缩容、滚动更新、服务发现</li>
+          <li>K8s 是云原生时代的事实标准</li>
+        </ul>
+
+        <!-- 测试题 -->
+        <section class="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B" data-stars="1"
+               data-chapter="01-intro" data-qid="q1"
+               data-explain="K8s 是容器编排平台，负责自动化部署、扩展和管理容器化应用。">
+            <div class="quiz-question">1. Kubernetes 的主要作用是什么？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 打包应用成镜像</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 编排和管理容器化应用</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 编写应用代码</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 监控服务器硬件</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="judge" data-answer="T" data-stars="1"
+               data-chapter="01-intro" data-qid="q2"
+               data-explain="K8s 是 Google 开源的容器编排项目。">
+            <div class="quiz-question">2. Kubernetes 是由 Google 开源的。<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="T" /> 正确</label></li>
+              <li><label><input type="radio" name="q2" value="F" /> 错误</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="multi" data-answer="A|B|D" data-stars="2"
+               data-chapter="01-intro" data-qid="q3"
+               data-explain="K8s 的核心能力包括自动调度、自我修复、自动扩缩容、滚动更新等。编译代码不是 K8s 的功能。">
+            <div class="quiz-question">3. 以下哪些是 Kubernetes 的核心能力？（多选）<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="checkbox" name="q3" value="A" /> A. 自动调度</label></li>
+              <li><label><input type="checkbox" name="q3" value="B" /> B. 自我修复</label></li>
+              <li><label><input type="checkbox" name="q3" value="C" /> C. 编译源代码</label></li>
+              <li><label><input type="checkbox" name="q3" value="D" /> D. 滚动更新</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="text" data-answer="k8s|kubernetes" data-stars="1"
+               data-chapter="01-intro" data-qid="q4"
+               data-explain="Kubernetes 常被缩写为 K8s，因为 K 和 s 之间有 8 个字母。">
+            <div class="quiz-question">4. Kubernetes 的常见缩写是什么？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C" data-stars="1"
+               data-chapter="01-intro" data-qid="q5"
+               data-explain="当管理大量容器时，需要容器编排工具来自动化管理，K8s 就是为此而生。">
+            <div class="quiz-question">5. 我们需要 Kubernetes 的最主要原因是？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q5" value="A" /> A. 让应用跑得更快</label></li>
+              <li><label><input type="radio" name="q5" value="B" /> B. 节省服务器成本</label></li>
+              <li><label><input type="radio" name="q5" value="C" /> C. 自动化管理大规模容器</label></li>
+              <li><label><input type="radio" name="q5" value="D" /> D. 编写更安全的代码</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 1 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

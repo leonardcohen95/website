@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>个人中心 | K8s Quest</title>
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body data-page="profile">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="container" style="max-width: 900px; padding: 24px 20px;">
+
+    <!-- 个人头部 -->
+    <div class="profile-header">
+      <div class="profile-avatar" id="profile-avatar">🚀</div>
+      <div style="flex:1;">
+        <div class="profile-name" id="profile-name">学员</div>
+        <div class="profile-title" id="profile-title">K8s 新手</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:2rem; font-weight:800;" id="profile-stars">0 ⭐</div>
+        <div style="font-size:0.82rem; opacity:0.8;">总星星</div>
+      </div>
+    </div>
+
+    <!-- 头衔进度条 -->
+    <div id="title-bar" class="title-bar"></div>
+
+    <!-- 统计 -->
+    <div class="profile-stats">
+      <div class="stat-card gold">
+        <div class="stat-num" id="stat-stars">0</div>
+        <div class="stat-label">⭐ 总星星</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="stat-chapters">0 / 20</div>
+        <div class="stat-label">📖 通关章节</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="stat-questions">0</div>
+        <div class="stat-label">✅ 答对题目</div>
+      </div>
+    </div>
+
+    <!-- 章节进度 -->
+    <h2 style="margin: 32px 0 16px;">📚 学习进度</h2>
+    <div class="progress-list" id="progress-list"></div>
+
+    <!-- 头衔列表 -->
+    <h2 style="margin: 32px 0 16px;">👑 头衔收集</h2>
+    <div class="titles-grid" id="titles-grid"></div>
+
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 个人中心</p>
+  </footer>
+
+  <script src="assets/js/game.js"></script>
+  <script src="assets/js/nav.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const data = GameSystem.load();
+      const cur = GameSystem.getCurrentTitle(data.stars);
+
+      document.getElementById("profile-name").textContent = data.userName;
+      document.getElementById("profile-title").textContent = cur.emoji + " " + cur.name;
+      document.getElementById("profile-avatar").textContent = cur.emoji;
+      document.getElementById("profile-stars").textContent = data.stars + " ⭐";
+      document.getElementById("stat-stars").textContent = data.stars;
+
+      // 统计通关章节和答对数
+      let doneChapters = 0, doneQuestions = 0;
+      for (const chId in data.chapters) {
+        if (data.chapters[chId].completed) doneChapters++;
+        doneQuestions += Object.keys(data.chapters[chId].questions || {}).length;
+      }
+      document.getElementById("stat-chapters").textContent = doneChapters + " / 20";
+      document.getElementById("stat-questions").textContent = doneQuestions;
+
+      // 头衔进度条
+      GameSystem.renderTitleBar();
+
+      // 章节进度列表
+      const progressList = document.getElementById("progress-list");
+      progressList.innerHTML = window.QUEST_CONFIG.chapters.map((c, i) => {
+        const chData = data.chapters[c.id] || { completed: false, stars: 0 };
+        const done = chData.completed;
+        const myStars = chData.stars || 0;
+        return `<a href="${c.file}" class="progress-item ${done ? "done" : ""}" style="text-decoration:none;color:inherit;">
+          <div class="pi-num">${done ? "✓" : (i + 1)}</div>
+          <div class="pi-info">
+            <div class="pi-name">${c.title}</div>
+            <div class="pi-stars">⭐ ${myStars} / ${c.stars}</div>
+          </div>
+        </a>`;
+      }).join("");
+
+      // 头衔列表
+      const titlesGrid = document.getElementById("titles-grid");
+      titlesGrid.innerHTML = GameSystem.TITLES.map(t => {
+        const unlocked = data.stars >= t.stars;
+        return `<div class="title-card ${unlocked ? "unlocked" : "locked"}">
+          <div class="title-emoji">${t.emoji}</div>
+          <div style="flex:1;">
+            <div class="title-name">${t.name}</div>
+            <div class="title-req">${unlocked ? "✅ 已解锁" : "需要 ⭐ " + t.stars + " 解锁"}</div>
+          </div>
+        </div>`;
+      }).join("");
+    });
+  </script>
+</body>
+</html>
