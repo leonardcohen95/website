@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第7章 Deployment部署 | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="07-deployment">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>Deployment 部署</h1>
+        <p>Deployment 是 Kubernetes 中最常用的工作负载控制器。它管理 Pod 的副本数量，确保你的应用始终以期望的状态运行，并支持滚动更新、回滚、暂停等高级部署能力。掌握 Deployment，你就能从容应对应用的发布和变更。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Deployment 的作用：管理 Pod 副本，维持期望状态</li>
+          <li>掌握滚动更新的工作原理和参数配置</li>
+          <li>学会使用 kubectl rollout 进行回滚、暂停、恢复</li>
+          <li>区分 RollingUpdate 和 Recreate 两种部署策略</li>
+          <li>理解 maxSurge 和 maxUnavailable 参数的含义</li>
+          <li>学会查看 rollout status 和 history</li>
+        </ul>
+
+        <h2>1. Deployment 是什么</h2>
+        <div class="term-card">
+          <div class="term-name">🚀 Deployment</div>
+          <p>
+            Deployment 用于<strong>声明式地管理 Pod 副本</strong>。你只需声明"我要 3 个 nginx Pod"，
+            Deployment 就会通过 ReplicaSet 确保始终有 3 个 Pod 在运行——Pod 挂了会自动重建，
+            多了会自动删除。
+          </p>
+        </div>
+
+        <p>
+          Deployment 底层依赖 ReplicaSet（副本集）来控制 Pod 数量，
+          日常使用中你几乎不需要直接操作 ReplicaSet，Deployment 会帮你管理。
+        </p>
+
+<pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deploy
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25
+        ports:
+        - containerPort: 80</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 三层关系</div>
+          <p>
+            Deployment → ReplicaSet → Pod<br />
+            Deployment 管理多个 ReplicaSet（每个版本对应一个 RS），ReplicaSet 管理一组 Pod 副本。
+            回滚本质上就是切换到旧版本的 ReplicaSet。
+          </p>
+        </div>
+
+        <h2>2. 滚动更新</h2>
+        <p>
+          当你更新 Deployment 的 Pod 模板（比如修改镜像版本）时，K8s 会触发一次<strong>滚动更新</strong>，
+          逐个替换旧 Pod，实现零停机发布。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">🔄 滚动更新流程（以 3 副本为例）</div>
+          <p>
+            1. 创建新版本的 ReplicaSet<br />
+            2. 逐步增加新 RS 的 Pod 数量，同时减少旧 RS 的 Pod 数量<br />
+            3. 每一步都会等待新 Pod 就绪（readinessProbe 通过）才继续<br />
+            4. 直到所有 Pod 都替换为新版本，旧 RS 被保留（用于回滚）
+          </p>
+        </div>
+
+<pre><code># 更新镜像版本，触发滚动更新
+kubectl set image deployment/nginx-deploy nginx=nginx:1.26
+
+# 实时查看滚动更新进度
+kubectl rollout status deployment/nginx-deploy</code></pre>
+
+        <h2>3. 部署策略：RollingUpdate 与 Recreate</h2>
+        <p>Deployment 支持两种部署策略，通过 <code>strategy.type</code> 字段指定：</p>
+
+        <div class="term-card">
+          <div class="term-name">🔄 RollingUpdate（默认）</div>
+          <p>
+            滚动更新，<strong>逐个替换</strong> Pod，更新过程中服务不中断。
+            这是默认策略，适用于大多数无状态应用。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">💥 Recreate</div>
+          <p>
+            先<strong>杀掉所有旧 Pod</strong>，再创建新 Pod。更新过程中服务会短暂中断。
+            适用于不允许同时运行两个版本的场景（如数据库迁移、单实例应用）。
+          </p>
+        </div>
+
+<pre><code>strategy:
+  type: Recreate</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ Recreate 的风险</div>
+          <p>
+            Recreate 策略会导致服务在更新期间完全不可用。除非你的应用明确不允许多版本共存，
+            否则建议始终使用 RollingUpdate。
+          </p>
+        </div>
+
+        <h2>4. maxSurge 与 maxUnavailable</h2>
+        <p>
+          RollingUpdate 策略下，有两个关键参数控制更新的节奏和可用性：
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">📈 maxSurge</div>
+          <p>
+            更新过程中<strong>最多可以比期望副本数多出多少个 Pod</strong>。
+            可以是绝对值（如 1）或百分比（如 25%）。默认值为 25%。
+            maxSurge 越大，更新速度越快，但消耗的资源也越多。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">📉 maxUnavailable</div>
+          <p>
+            更新过程中<strong>最多允许多少个 Pod 不可用</strong>。
+            可以是绝对值（如 1）或百分比（如 25%）。默认值为 25%。
+            maxUnavailable 越小，服务可用性越高，但更新速度越慢。
+          </p>
+        </div>
+
+<pre><code>strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1          # 最多多 1 个 Pod
+    maxUnavailable: 0    # 不允许任何 Pod 不可用（零停机）</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 参数组合建议</div>
+          <p>
+            • <code>maxSurge: 1, maxUnavailable: 0</code>：最稳妥，始终保证全部副本可用，更新稍慢<br />
+            • <code>maxSurge: 25%, maxUnavailable: 25%</code>：默认配置，平衡速度与可用性<br />
+            • <code>maxSurge: 100%, maxUnavailable: 0</code>：先全部启动新版本，再关闭旧版本
+          </p>
+        </div>
+
+        <h2>5. 回滚</h2>
+        <p>
+          如果新版本有问题，Deployment 支持快速回滚到上一个版本或任意历史版本。
+        </p>
+
+<pre><code># 回滚到上一个版本
+kubectl rollout undo deployment/nginx-deploy
+
+# 查看历史版本
+kubectl rollout history deployment/nginx-deploy
+
+# 回滚到指定版本（revision 编号）
+kubectl rollout undo deployment/nginx-deploy --to-revision=2</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">📜 版本历史的保留</div>
+          <p>
+            Deployment 默认保留最近 10 个 ReplicaSet 版本（通过 <code>revisionHistoryLimit</code> 配置）。
+            每个版本对应一次 Pod 模板变更。回滚时只需切换到对应的旧 ReplicaSet 即可。
+          </p>
+        </div>
+
+        <h2>6. 暂停与恢复</h2>
+        <p>
+          有时候你需要连续修改多个字段，但不希望每改一次就触发一次滚动更新。
+          这时可以先暂停 Deployment，修改完毕后再恢复。
+        </p>
+
+<pre><code># 暂停滚动更新
+kubectl rollout pause deployment/nginx-deploy
+
+# 暂停期间可以多次修改而不触发更新
+kubectl set image deployment/nginx-deploy nginx=nginx:1.27
+kubectl set resources deployment/nginx-deploy -c=nginx --limits=cpu=500m
+
+# 恢复滚动更新（此时才会真正执行一次更新）
+kubectl rollout resume deployment/nginx-deploy</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 为什么需要暂停</div>
+          <p>
+            如果不暂停，每执行一次 <code>kubectl set</code> 命令就会触发一次滚动更新，
+            多次修改会导致多次滚动更新。暂停后批量修改，再恢复，可以只触发一次更新。
+          </p>
+        </div>
+
+        <h2>7. 状态查看</h2>
+        <p>K8s 提供了多个命令来查看 Deployment 的更新状态和历史：</p>
+
+<pre><code># 查看滚动更新状态（阻塞直到完成）
+kubectl rollout status deployment/nginx-deploy
+
+# 查看更新历史
+kubectl rollout history deployment/nginx-deploy
+
+# 查看 Deployment 详情（包括事件）
+kubectl describe deployment nginx-deploy
+
+# 查看 ReplicaSet
+kubectl get rs</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">🔍 常用排查命令</div>
+          <p>
+            • <code>kubectl get deploy</code>：查看 Deployment 副本数（DESIRED / CURRENT / UP-TO-DATE / AVAILABLE）<br />
+            • <code>kubectl get pods</code>：查看 Pod 状态<br />
+            • <code>kubectl rollout history</code>：查看版本变更记录<br />
+            • <code>kubectl describe deploy</code>：查看事件和错误信息
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Deployment 管理 Pod 副本，通过 ReplicaSet 确保期望数量运行</li>
+          <li>滚动更新逐个替换 Pod，实现零停机发布</li>
+          <li>kubectl rollout undo 可以回滚到上一个或指定版本</li>
+          <li>策略有 RollingUpdate（默认，逐个替换）和 Recreate（先删后建，会中断）</li>
+          <li>maxSurge 控制最多多出的 Pod 数，maxUnavailable 控制最多不可用的 Pod 数</li>
+          <li>kubectl rollout pause/resume 可以暂停和恢复滚动更新</li>
+          <li>kubectl rollout status/history 查看更新状态和历史版本</li>
+        </ul>
+
+        <!-- 测试题 -->
+        <section class="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+
+          <div class="quiz" data-type="choice" data-answer="C" data-stars="1"
+               data-chapter="07-deployment" data-qid="q1"
+               data-explain="Deployment 的核心作用是管理 Pod 副本数量，确保始终有期望数量的 Pod 在运行，并支持滚动更新和回滚。">
+            <div class="quiz-question">1. Deployment 的主要作用是什么？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 为 Pod 提供固定的网络入口</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 在每个节点上运行一个 Pod</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 管理 Pod 副本数量，确保期望数量运行</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 执行一次性任务</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A" data-stars="1"
+               data-chapter="07-deployment" data-qid="q2"
+               data-explain="RollingUpdate 是默认的部署策略，逐个替换 Pod，更新过程中服务不中断。">
+            <div class="quiz-question">2. Deployment 默认的部署策略是？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. RollingUpdate</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. Recreate</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. BlueGreen</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. Canary</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="B" data-stars="2"
+               data-chapter="07-deployment" data-qid="q3"
+               data-explain="kubectl rollout undo 用于回滚 Deployment 到上一个版本，加上 --to-revision 可以指定回滚到的版本。">
+            <div class="quiz-question">3. 要将 Deployment 回滚到上一个版本，应使用哪个命令？<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. kubectl rollback deployment/myapp</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. kubectl rollout undo deployment/myapp</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. kubectl revert deployment/myapp</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. kubectl rollout revert deployment/myapp</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D" data-stars="2"
+               data-chapter="07-deployment" data-qid="q4"
+               data-explain="maxUnavailable 表示滚动更新过程中最多允许多少个 Pod 不可用。设置为 0 意味着更新期间不允许任何 Pod 不可用，实现零停机。">
+            <div class="quiz-question">4. 在 RollingUpdate 策略中，maxUnavailable 参数的含义是？<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q4" value="A" /> A. 最多可以比期望副本数多出的 Pod 数量</label></li>
+              <li><label><input type="radio" name="q4" value="B" /> B. 更新完成后保留的旧版本 Pod 数量</label></li>
+              <li><label><input type="radio" name="q4" value="C" /> C. 每次滚动更新替换的 Pod 数量</label></li>
+              <li><label><input type="radio" name="q4" value="D" /> D. 更新过程中最多允许不可用的 Pod 数量</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="judge" data-answer="F" data-stars="2"
+               data-chapter="07-deployment" data-qid="q5"
+               data-explain="Recreate 策略会先杀掉所有旧 Pod 再创建新 Pod，更新期间服务会完全中断。RollingUpdate 才是逐个替换、不中断服务的策略。">
+            <div class="quiz-question">5. Recreate 部署策略会逐个替换 Pod，更新过程中服务不会中断。<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q5" value="T" /> 正确</label></li>
+              <li><label><input type="radio" name="q5" value="F" /> 错误</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="multi" data-answer="B|C" data-stars="2"
+               data-chapter="07-deployment" data-qid="q6"
+               data-explain="kubectl rollout pause 暂停滚动更新，kubectl rollout resume 恢复。rollout status 查看状态，rollout history 查看历史，它们不用于暂停/恢复。">
+            <div class="quiz-question">6. 以下哪些命令与 Deployment 的暂停/恢复滚动更新相关？（多选）<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="checkbox" name="q6" value="A" /> A. kubectl rollout status</label></li>
+              <li><label><input type="checkbox" name="q6" value="B" /> B. kubectl rollout pause</label></li>
+              <li><label><input type="checkbox" name="q6" value="C" /> C. kubectl rollout resume</label></li>
+              <li><label><input type="checkbox" name="q6" value="D" /> D. kubectl rollout history</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="text" data-answer="rollout status" data-stars="2"
+               data-chapter="07-deployment" data-qid="q7"
+               data-explain="kubectl rollout status deployment/xxx 用于实时查看滚动更新的进度，该命令会阻塞直到更新完成。">
+            <div class="quiz-question">7. 要实时查看 Deployment 滚动更新的进度，使用命令 <code>kubectl ______ deployment/myapp</code>（填两个英文单词）<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 7 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

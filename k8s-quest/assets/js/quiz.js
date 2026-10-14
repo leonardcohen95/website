@@ -13,7 +13,7 @@
     });
   }
 
-  function handleSubmit(quiz) {
+  async function handleSubmit(quiz) {
     const type = quiz.dataset.type || "choice";
     const answer = quiz.dataset.answer || "";
     const explain = quiz.dataset.explain || "";
@@ -57,20 +57,24 @@
 
     if (isCorrect) {
       // 加星星
-      const result = GameSystem.addStars(chapterId, questionId, stars);
+      const result = await GameSystem.addStars(chapterId, questionId, stars);
       let msg = "回答正确！";
       if (!result.alreadyDone) {
-        msg += ` 获得 ${stars} ⭐`;
+        msg += ` 获得 ${result.newStars || stars} ⭐`;
+        if (result.chapterCompleted) msg += " 🎉 章节通关奖励 +5 ⭐";
         // 星星动画
         const rect = quiz.getBoundingClientRect();
-        GameSystem.flyStars(rect.left + rect.width / 2, rect.top, stars);
+        GameSystem.flyStars(rect.left + rect.width / 2, rect.top, result.newStars || stars);
+        // 成就弹窗
+        if (result.newAchievements) {
+          result.newAchievements.forEach((a, i) => setTimeout(() => GameSystem.showAchievementPopup(a), i * 800));
+        }
         // 更新顶部星星数
         GameSystem.renderStarDisplay();
       } else {
         msg += "（此题已答过，不重复加星）";
       }
       showFeedback(quiz, true, msg, explain);
-      // 标记题已答
       quiz.classList.add("answered");
     } else {
       showFeedback(quiz, false, "回答错误，再想想~", explain);

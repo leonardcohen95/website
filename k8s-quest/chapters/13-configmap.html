@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第13章 ConfigMap配置 | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="13-configmap">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>ConfigMap 配置</h1>
+        <p>应用程序的配置（如数据库地址、日志级别、功能开关等）不应该硬编码在镜像里，否则每次修改配置都要重新构建镜像。Kubernetes 提供了 ConfigMap 来存储非敏感的配置数据，并可以将其以环境变量或文件的形式注入到容器中。本章我们来学习 ConfigMap 的创建与使用。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 ConfigMap 的作用和适用场景</li>
+          <li>掌握 ConfigMap 的三种创建方式</li>
+          <li>掌握将 ConfigMap 注入容器的两种方式（环境变量、Volume 挂载）</li>
+          <li>理解 ConfigMap 热更新的行为差异</li>
+          <li>了解 ConfigMap 的使用注意事项</li>
+        </ul>
+
+        <h2>1. ConfigMap 是什么</h2>
+        <p><strong>ConfigMap</strong> 是 Kubernetes 中用于存储非敏感配置数据的 API 对象。它以键值对的形式保存配置，可以在 Pod 中作为环境变量、命令行参数或配置文件使用。</p>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ ConfigMap 不存储敏感信息</div>
+          <p>
+            ConfigMap 中的数据以明文形式存储，<strong>不应用于存放密码、密钥、token 等敏感信息</strong>。
+            敏感数据请使用下一章的 Secret。
+          </p>
+        </div>
+
+        <h2>2. 创建 ConfigMap</h2>
+        <p>ConfigMap 有多种创建方式：</p>
+
+        <h3>方式一：从字面量创建（--from-literal）</h3>
+        <pre><code>kubectl create configmap app-config \
+  --from-literal=DB_HOST=mysql.default.svc.cluster.local \
+  --from-literal=LOG_LEVEL=info \
+  --from-literal=FEATURE_FLAG=true</code></pre>
+
+        <h3>方式二：从文件创建（--from-file）</h3>
+        <pre><code># 假设 app.properties 文件内容如下：
+# db.host=127.0.0.1
+# db.port=3306
+
+kubectl create configmap app-config --from-file=app.properties
+
+# 也可以指定键名
+kubectl create configmap app-config --from-file=config=app.properties</code></pre>
+
+        <h3>方式三：从目录创建</h3>
+        <pre><code># 目录下所有文件都会成为 ConfigMap 的一个键值对
+kubectl create configmap app-config --from-file=./config-dir/</code></pre>
+
+        <h3>方式四：从 YAML 定义创建</h3>
+        <pre><code>apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  DB_HOST: "mysql.default.svc.cluster.local"
+  LOG_LEVEL: "info"
+  app.properties: |
+    db.host=127.0.0.1
+    db.port=3306</code></pre>
+
+        <p>查看 ConfigMap：<code>kubectl get configmap app-config -o yaml</code></p>
+
+        <h2>3. 使用 ConfigMap</h2>
+        <p>ConfigMap 创建后，可以通过两种方式注入到容器中。</p>
+
+        <h3>方式一：作为环境变量注入</h3>
+        <pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-env
+spec:
+  containers:
+  - name: app
+    image: nginx
+    env:
+    - name: DB_HOST
+      valueFrom:
+        configMapKeyRef:
+          name: app-config       # ConfigMap 名称
+          key: DB_HOST           # 要引用的键
+    envFrom:
+    - configMapRef:
+        name: app-config        # 把整个 ConfigMap 所有键值对注入为环境变量</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 envFrom 的便捷之处</div>
+          <p>
+            当 ConfigMap 中有很多键值对时，使用 <code>envFrom</code> 可以一次性把所有键值对注入为环境变量，
+            不需要逐个用 <code>configMapKeyRef</code> 引用。
+          </p>
+        </div>
+
+        <h3>方式二：作为 Volume 挂载为文件</h3>
+        <pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-volume
+spec:
+  containers:
+  - name: app
+    image: nginx
+    volumeMounts:
+    - name: config-volume
+      mountPath: /etc/config     # 挂载到容器内的目录
+  volumes:
+  - name: config-volume
+    configMap:
+      name: app-config           # 引用 ConfigMap</code></pre>
+
+        <p>挂载后，ConfigMap 中的每个键值对会以文件形式出现在 <code>/etc/config</code> 目录下，文件名即键名，内容即值。</p>
+
+        <h2>4. ConfigMap 热更新</h2>
+        <p>当你修改了 ConfigMap 的内容后，已经在使用它的 Pod 会如何反应？</p>
+
+        <ul>
+          <li><strong>Volume 挂载方式</strong>：ConfigMap 更新后，挂载的文件会被<strong>自动更新</strong>（有一定延迟，约数十秒）。这是最推荐的使用方式。</li>
+          <li><strong>环境变量方式</strong>：ConfigMap 更新后，<strong>已注入的环境变量不会自动更新</strong>，需要重启 Pod 才能生效。</li>
+        </ul>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ 热更新的局限</div>
+          <p>
+            即使使用 Volume 挂载方式，应用程序本身也需要支持重新读取配置文件才能生效。
+            有些应用启动时只读一次配置，这种情况下仍需重启 Pod。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>ConfigMap 用于存储非敏感的配置数据，以键值对形式存在</li>
+          <li>创建方式：<code>--from-literal</code>、<code>--from-file</code>、<code>--from-env-file</code>、YAML 定义</li>
+          <li>使用方式：环境变量注入（env / envFrom）、Volume 挂载为文件</li>
+          <li>热更新：Volume 挂载会自动更新，环境变量不会自动更新</li>
+          <li>ConfigMap 不应存储敏感信息，敏感数据用 Secret</li>
+        </ul>
+
+        <!-- 测试题 -->
+        <section class="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+
+          <div class="quiz" data-type="choice" data-answer="A" data-stars="1"
+               data-chapter="13-configmap" data-qid="q1"
+               data-explain="ConfigMap 用于存储非敏感的配置数据，密码、密钥等敏感信息应使用 Secret。">
+            <div class="quiz-question">1. ConfigMap 主要用于存储什么类型的数据？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 非敏感的配置数据</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 密码、密钥等敏感信息</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 容器镜像</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 持久化数据</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C" data-stars="1"
+               data-chapter="13-configmap" data-qid="q2"
+               data-explain="--from-literal 用于直接通过键值对字面量创建 ConfigMap，是最直接的创建方式之一。">
+            <div class="quiz-question">2. 要直接通过命令行传入键值对创建 ConfigMap，应使用哪个参数？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. --from-env</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. --from-key</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. --from-literal</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. --from-value</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="multi" data-answer="A|C" data-stars="2"
+               data-chapter="13-configmap" data-qid="q3"
+               data-explain="ConfigMap 可以通过环境变量（env / envFrom）或 Volume 挂载的方式注入到容器中。">
+            <div class="quiz-question">3. ConfigMap 可以通过以下哪些方式注入到容器中？（多选）<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="checkbox" name="q3" value="A" /> A. 作为环境变量注入</label></li>
+              <li><label><input type="checkbox" name="q3" value="B" /> B. 作为容器启动命令注入</label></li>
+              <li><label><input type="checkbox" name="q3" value="C" /> C. 作为 Volume 挂载为文件</label></li>
+              <li><label><input type="checkbox" name="q3" value="D" /> D. 作为镜像层注入</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="judge" data-answer="F" data-stars="2"
+               data-chapter="13-configmap" data-qid="q4"
+               data-explain="ConfigMap 更新后，以环境变量方式注入的值不会自动更新，需要重启 Pod 才能生效；只有以 Volume 挂载方式才会自动更新。">
+            <div class="quiz-question">4. ConfigMap 更新后，通过环境变量方式注入到容器中的值会立即自动更新。<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q4" value="T" /> 正确</label></li>
+              <li><label><input type="radio" name="q4" value="F" /> 错误</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="text" data-answer="volume" data-stars="2"
+               data-chapter="13-configmap" data-qid="q5"
+               data-explain="以 Volume 挂载方式使用 ConfigMap 时，ConfigMap 更新后挂载的文件会自动更新（有一定延迟），而环境变量方式不会。">
+            <div class="quiz-question">5. ConfigMap 更新后，以 <code>______</code> 挂载方式注入的配置文件会自动更新，而环境变量方式不会（填空，小写）<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D" data-stars="2"
+               data-chapter="13-configmap" data-qid="q6"
+               data-explain="envFrom 可以一次性将整个 ConfigMap 的所有键值对注入为容器的环境变量，无需逐个引用。">
+            <div class="quiz-question">6. 要将 ConfigMap 中的所有键值对一次性全部注入为容器的环境变量，应使用以下哪个字段？<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q6" value="A" /> A. configMapKeyRef</label></li>
+              <li><label><input type="radio" name="q6" value="B" /> B. env</label></li>
+              <li><label><input type="radio" name="q6" value="C" /> C. valueFrom</label></li>
+              <li><label><input type="radio" name="q6" value="D" /> D. envFrom</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 13 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

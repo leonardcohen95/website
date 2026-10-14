@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第19章 监控体系 | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="19-monitor">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>监控体系</h1>
+        <p>生产环境中，集群和应用的健康状况需要被实时掌握。Kubernetes 的监控体系以 <strong>Prometheus</strong> 为核心，配合 <strong>Grafana</strong> 做可视化、<strong>Alertmanager</strong> 做告警，形成一套完整的"采集 → 存储 → 展示 → 告警"闭环。本章我们将学习这套监控体系的组成与使用方法。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Prometheus 的角色与工作原理</li>
+          <li>掌握 Grafana 的可视化仪表盘作用</li>
+          <li>区分 Counter、Gauge、Histogram、Summary 四种指标类型</li>
+          <li>了解 exporter 的作用（node-exporter、kube-state-metrics）</li>
+          <li>理解 Alertmanager 的告警管理流程</li>
+          <li>了解 kubelet metrics 与 PromQL 基础</li>
+          <li>掌握告警规则的构成（持续时间 + 阈值）</li>
+        </ul>
+
+        <h2>1. Prometheus：时序数据库与指标抓取</h2>
+        <p><strong>Prometheus</strong> 是云原生监控的事实标准，是一个开源的时序数据库和监控系统。它的核心工作方式是<strong>主动拉取（pull）</strong>指标：</p>
+
+        <ul>
+          <li>Prometheus 定期向目标（target）的 <code>/metrics</code> 端点发送 HTTP 请求抓取指标</li>
+          <li>抓取到的指标数据按时间序列存储</li>
+          <li>通过 PromQL 查询语言对数据进行查询和聚合</li>
+        </ul>
+
+        <div class="term-card">
+          <div class="term-name">🔄 Pull 模型</div>
+          <p>
+            Prometheus 采用 pull 模型主动抓取指标，而不是等待目标推送。
+            这种方式便于集中管理抓取目标和频率，也能更好地发现目标是否存活。
+          </p>
+        </div>
+
+        <h2>2. 四种指标类型</h2>
+        <p>Prometheus 定义了四种核心指标类型，理解它们对正确使用和编写告警至关重要：</p>
+
+        <div class="term-card">
+          <div class="term-name">📈 Counter（计数器）</div>
+          <p>
+            只增不减的累积值，如请求总数、错误总数。使用时通常配合 <code>rate()</code> 或 <code>increase()</code> 函数计算增长率。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">📊 Gauge（仪表盘）</div>
+          <p>
+            可增可减的瞬时值，如当前内存使用量、当前连接数、温度。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">📐 Histogram（直方图）</div>
+          <p>
+            对观测值进行分桶统计，如请求延迟分布。可计算分位数（如 p99）。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">📋 Summary（摘要）</div>
+          <p>
+            客户端直接计算分位数并暴露，与 Histogram 类似但分位数在客户端计算。
+          </p>
+        </div>
+
+        <h2>3. Exporter：暴露指标的桥梁</h2>
+        <p>并不是所有系统都原生暴露 Prometheus 格式的指标，这时候就需要 <strong>exporter</strong>。Exporter 负责把第三方系统的指标转换成 Prometheus 能识别的格式。</p>
+
+        <p>常用的 exporter：</p>
+        <ul>
+          <li><strong>node-exporter</strong>：采集节点的 CPU、内存、磁盘、网络等硬件/OS 指标</li>
+          <li><strong>kube-state-metrics</strong>：采集 K8s 资源对象的状态（Pod 数量、Deployment 副本数等）</li>
+          <li><strong>kubelet</strong>：原生暴露节点和容器级别的指标</li>
+        </ul>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 kubelet metrics</div>
+          <p>
+            kubelet 本身就暴露了 <code>/metrics</code> 和 <code>/metrics/cadvisor</code> 端点，
+            提供节点资源使用、容器 CPU/内存等指标，Prometheus 可以直接抓取。
+          </p>
+        </div>
+
+        <h2>4. Grafana：可视化仪表盘</h2>
+        <p><strong>Grafana</strong> 是一个开源的数据可视化平台，支持多种数据源（Prometheus、MySQL、InfluxDB 等）。在 K8s 监控体系中，Grafana 负责将 Prometheus 中的指标以图表的形式展现出来。</p>
+
+        <p>Grafana 的核心概念：</p>
+        <ul>
+          <li><strong>Dashboard（仪表盘）</strong>：一组面板的集合，展示某个主题的监控数据</li>
+          <li><strong>Panel（面板）</strong>：单个图表，绑定一个 PromQL 查询</li>
+          <li><strong>Datasource（数据源）</strong>：配置连接的 Prometheus 地址</li>
+        </ul>
+
+        <h2>5. PromQL：Prometheus 查询语言</h2>
+        <p><strong>PromQL</strong> 是 Prometheus 内置的查询语言，用于从时序数据中筛选、聚合和计算。掌握 PromQL 是用好 Prometheus 的关键。</p>
+
+<pre><code># 查询当前所有 Pod 的 CPU 使用率
+rate(container_cpu_usage_seconds_total[5m])
+
+# 查询节点内存使用率
+1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+
+# 查询 HTTP 请求错误率（5xx 占比）
+sum(rate(http_requests_total{status=~"5.."}[5m]))
+/
+sum(rate(http_requests_total[5m]))</code></pre>
+
+        <h2>6. Alertmanager：告警管理</h2>
+        <p><strong>Alertmanager</strong> 负责处理 Prometheus 发出的告警，实现：</p>
+        <ul>
+          <li><strong>分组（Grouping）</strong>：将相似告警合并，避免告警风暴</li>
+          <li><strong>抑制（Inhibition）</strong>：高级别告警触发时，抑制低级别相关告警</li>
+          <li><strong>静默（Silence）</strong>：在维护期间临时屏蔽告警</li>
+          <li><strong>路由（Routing）</strong>：将告警发送到不同的接收者（邮件、钉钉、Slack 等）</li>
+        </ul>
+
+        <h2>7. 告警规则</h2>
+        <p>告警规则定义了"什么情况下触发告警"，核心由<strong>阈值</strong>和<strong>持续时间</strong>组成：</p>
+
+<pre><code>groups:
+- name: example
+  rules:
+  - alert: HighCPUUsage
+    expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Instance {{ $labels.instance }} CPU 使用率过高"
+      description: "{{ $labels.instance }} CPU 使用率超过 80% 持续 5 分钟"</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">✅ for 持续时间的意义</div>
+          <p>
+            <code>for</code> 字段指定条件需要持续满足多久才触发告警。
+            设置持续时间可以过滤掉短暂的指标抖动，避免误报。例如 CPU 偶尔冲高但很快恢复，就不会触发告警。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Prometheus 是时序数据库，采用 pull 模型主动抓取指标</li>
+          <li>四种指标类型：Counter（只增）、Gauge（瞬时）、Histogram（分桶）、Summary（摘要）</li>
+          <li>exporter 负责把第三方指标转换为 Prometheus 格式，如 node-exporter、kube-state-metrics</li>
+          <li>Grafana 负责将 Prometheus 指标可视化为仪表盘</li>
+          <li>PromQL 是 Prometheus 的查询语言，用于筛选和聚合指标</li>
+          <li>Alertmanager 负责告警的分组、抑制、静默和路由</li>
+          <li>告警规则 = 阈值（expr）+ 持续时间（for）</li>
+        </ul>
+
+        <!-- 测试题 -->
+        <section class="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B" data-stars="1"
+               data-chapter="19-monitor" data-qid="q1"
+               data-explain="Prometheus 采用 pull 模型，主动向目标的 /metrics 端点发送 HTTP 请求抓取指标数据。">
+            <div class="quiz-question">1. Prometheus 获取指标数据的方式是？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 目标主动推送（push）</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 主动拉取（pull）</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 通过消息队列订阅</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 从数据库轮询</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A" data-stars="2"
+               data-chapter="19-monitor" data-qid="q2"
+               data-explain="Counter 是只增不减的累积计数器，适合表示请求总数；错误率需要用 rate() 计算，内存使用量是 Gauge。">
+            <div class="quiz-question">2. "HTTP 请求总数"最适合用哪种 Prometheus 指标类型表示？<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. Counter</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. Gauge</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. Histogram</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. Summary</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C" data-stars="2"
+               data-chapter="19-monitor" data-qid="q3"
+               data-explain="Gauge 是可增可减的瞬时值，适合表示当前内存使用量、当前连接数等会上下波动的量。">
+            <div class="quiz-question">3. "当前内存使用量"最适合用哪种 Prometheus 指标类型表示？<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. Counter</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. Histogram</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. Gauge</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. Summary</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="multi" data-answer="A|C" data-stars="3"
+               data-chapter="19-monitor" data-qid="q4"
+               data-explain="node-exporter 采集节点硬件/OS 指标，kube-state-metrics 采集 K8s 资源状态。kubelet 是 K8s 组件不是 exporter，cadvisor 是内置指标源。">
+            <div class="quiz-question">4. 以下哪些是常用的 Prometheus exporter？（多选）<span class="star-badge">⭐3</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="checkbox" name="q4" value="A" /> A. node-exporter</label></li>
+              <li><label><input type="checkbox" name="q4" value="B" /> B. kubelet</label></li>
+              <li><label><input type="checkbox" name="q4" value="C" /> C. kube-state-metrics</label></li>
+              <li><label><input type="checkbox" name="q4" value="D" /> D. cadvisor</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D" data-stars="2"
+               data-chapter="19-monitor" data-qid="q5"
+               data-explain="Alertmanager 负责处理 Prometheus 发出的告警，实现分组、抑制、静默和路由等功能。Grafana 只负责展示。">
+            <div class="quiz-question">5. 在 K8s 监控体系中，负责告警的分组、抑制和路由分发的组件是？<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q5" value="A" /> A. Prometheus</label></li>
+              <li><label><input type="radio" name="q5" value="B" /> B. Grafana</label></li>
+              <li><label><input type="radio" name="q5" value="C" /> C. node-exporter</label></li>
+              <li><label><input type="radio" name="q5" value="D" /> D. Alertmanager</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="B" data-stars="2"
+               data-chapter="19-monitor" data-qid="q6"
+               data-explain="PromQL 是 Prometheus 内置的查询语言，用于从时序数据中筛选、聚合和计算指标。">
+            <div class="quiz-question">6. 查询 Prometheus 中的指标数据使用的语言是？<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q6" value="A" /> A. SQL</label></li>
+              <li><label><input type="radio" name="q6" value="B" /> B. PromQL</label></li>
+              <li><label><input type="radio" name="q6" value="C" /> C. GraphQL</label></li>
+              <li><label><input type="radio" name="q6" value="D" /> D. NoSQL</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="text" data-stars="2"
+               data-chapter="19-monitor" data-qid="q7"
+               data-answer="grafana"
+               data-explain="Grafana 是开源的数据可视化平台，在监控体系中负责将 Prometheus 指标以图表形式展示。">
+            <div class="quiz-question">7. K8s 监控体系中，负责将 Prometheus 指标可视化为仪表盘的组件是 <code>______</code>（填空）<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="judge" data-answer="F" data-stars="2"
+               data-chapter="19-monitor" data-qid="q8"
+               data-explain="告警规则中，for 字段表示条件需要持续满足多久才触发告警，设置它是为了过滤短暂抖动、避免误报，而不是必须设置为 0。">
+            <div class="quiz-question">8. Prometheus 告警规则中，<code>for</code> 字段的值必须设为 0，否则告警不会触发。<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q8" value="T" /> 正确</label></li>
+              <li><label><input type="radio" name="q8" value="F" /> 错误</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 19 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

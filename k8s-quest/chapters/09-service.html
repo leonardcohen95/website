@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第9章 Service服务发现 | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="09-service">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>Service 服务发现</h1>
+        <p>Pod 的 IP 是临时的——Pod 重启、迁移、伸缩后 IP 都会变化。直接访问 Pod IP 显然不靠谱。Service 就是为了解决这个问题而生的：它为一组 Pod 提供一个稳定的网络入口，并负责负载均衡。本章我们学习 Service 的四种类型、Headless Service 的用途，以及 kube-proxy 的工作模式。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Service 的作用：稳定网络入口 + 负载均衡</li>
+          <li>掌握 ClusterIP、NodePort、LoadBalancer 三种 Service 类型</li>
+          <li>理解 Headless Service 的用途（与 StatefulSet 配合）</li>
+          <li>了解 kube-proxy 的 iptables 和 ipvs 两种模式</li>
+          <li>学会创建和使用 Service</li>
+        </ul>
+
+        <h2>1. Service 是什么</h2>
+        <div class="term-card">
+          <div class="term-name">🌐 Service</div>
+          <p>
+            Service 为一组 Pod 提供一个<strong>稳定的访问入口</strong>（虚拟 IP / DNS 名称），
+            并对后端 Pod 进行<strong>负载均衡</strong>。Service 通过 Label Selector 选择后端 Pod，
+            客户端只需访问 Service，无需关心后端 Pod 的变化。
+          </p>
+        </div>
+
+        <p>
+          Service 的核心价值在于<strong>解耦</strong>：Service 和 Pod 之间没有硬编码的关联，
+          全靠标签匹配。Pod 增减、重启、迁移都不影响 Service 的访问地址。
+        </p>
+
+<pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-svc
+spec:
+  selector:
+    app: nginx          # 选择所有标签为 app=nginx 的 Pod
+  ports:
+  - protocol: TCP
+    port: 80            # Service 端口
+    targetPort: 80      # 后端 Pod 端口
+  type: ClusterIP</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 Service 的三种端口</div>
+          <p>
+            • <code>port</code>：Service 暴露的端口（集群内部访问用）<br />
+            • <code>targetPort</code>：后端 Pod 上的端口<br />
+            • <code>nodePort</code>：节点上开放的端口（仅 NodePort 类型，30000-32767 范围）
+          </p>
+        </div>
+
+        <h2>2. ClusterIP —— 集群内部访问</h2>
+        <div class="term-card">
+          <div class="term-name">🔵 ClusterIP（默认）</div>
+          <p>
+            为 Service 分配一个<strong>集群内部的虚拟 IP</strong>，只能在集群内部访问。
+            这是 Service 的<strong>默认类型</strong>，适合服务间内部通信。
+          </p>
+        </div>
+
+        <p>
+          集群内的 Pod 可以通过 Service 的 ClusterIP 或 DNS 名称（如 <code>nginx-svc.default.svc.cluster.local</code>）访问服务。
+          同命名空间下可以直接用 Service 名称访问。
+        </p>
+
+<pre><code># 查看 Service，CLUSTER-IP 列就是虚拟 IP
+kubectl get svc
+
+# 集群内 Pod 可通过 DNS 访问：
+# http://nginx-svc:80   （同命名空间）
+# http://nginx-svc.default.svc.cluster.local:80  （完整域名）</code></pre>
+
+        <h2>3. NodePort —— 通过节点端口暴露</h2>
+        <div class="term-card">
+          <div class="term-name">🟢 NodePort</div>
+          <p>
+            在每个节点上开放一个<strong>固定端口</strong>（默认范围 30000-32767），
+            外部可以通过 <code>任意节点IP:NodePort</code> 访问服务。
+            NodePort 内部会创建一个 ClusterIP，外部流量经节点端口转发到 ClusterIP，再负载均衡到后端 Pod。
+          </p>
+        </div>
+
+<pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-nodeport
+spec:
+  type: NodePort
+  selector:
+    app: nginx
+  ports:
+  - port: 80
+    targetPort: 80
+    nodePort: 30080     # 可选，不指定则自动分配（30000-32767）</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ NodePort 的局限</div>
+          <p>
+            NodePort 端口范围有限（30000-32767），且需要外部用户知道节点 IP。
+            生产环境通常不直接用 NodePort 对外服务，而是配合 LoadBalancer 或 Ingress 使用。
+          </p>
+        </div>
+
+        <h2>4. LoadBalancer —— 云厂商负载均衡</h2>
+        <div class="term-card">
+          <div class="term-name">🟣 LoadBalancer</div>
+          <p>
+            调用<strong>云厂商的负载均衡器</strong>，为 Service 分配一个<strong>外部 IP</strong>。
+            外部流量先到云负载均衡器，再转发到节点的 NodePort，最终到达后端 Pod。
+            此类型需要在支持 LoadBalancer 的环境（如 AWS、GCP、Azure、阿里云）中使用。
+          </p>
+        </div>
+
+<pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-lb
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx
+  ports:
+  - port: 80
+    targetPort: 80</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 LoadBalancer = NodePort + 外部 LB</div>
+          <p>
+            LoadBalancer 类型本质上是在 NodePort 的基础上，由云厂商自动创建一个外部负载均衡器。
+            因此它同时具备 NodePort 和 ClusterIP 的能力。
+          </p>
+        </div>
+
+        <h2>5. Headless Service</h2>
+        <div class="term-card">
+          <div class="term-name">⚫ Headless Service</div>
+          <p>
+            将 <code>clusterIP</code> 设为 <code>None</code>，Service 就不再分配虚拟 IP，
+            DNS 查询会<strong>直接返回后端 Pod 的 IP 列表</strong>，客户端可以直接连接到具体的 Pod。
+            常用于需要直连特定 Pod 的场景，尤其是与 StatefulSet 配合。
+          </p>
+        </div>
+
+<pre><code>apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-headless
+spec:
+  clusterIP: None        # 关键：设为 None 即为 Headless Service
+  selector:
+    app: mysql
+  ports:
+  - port: 3306
+    targetPort: 3306</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">🔑 Headless Service 的用途</div>
+          <p>
+            • <strong>StatefulSet 配套</strong>：为每个 Pod 提供稳定的 DNS 名称（如 <code>mysql-0.mysql-headless</code>）<br />
+            • <strong>客户端负载均衡</strong>：让客户端自己决定连哪个 Pod（如数据库主从）<br />
+            • <strong>服务发现</strong>：获取所有 Pod 的 IP 列表
+          </p>
+        </div>
+
+        <h2>6. kube-proxy 与负载均衡模式</h2>
+        <p>
+          kube-proxy 是运行在每个节点上的网络代理，负责实现 Service 的负载均衡和转发规则。
+          它支持两种工作模式：
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">📜 iptables 模式（默认）</div>
+          <p>
+            kube-proxy 通过配置 <strong>iptables</strong> 规则来实现流量转发。
+            当 Service 有多个后端 Pod 时，iptables 会用<strong>随机（轮询）</strong>方式选择一个后端。
+            优点是稳定可靠，缺点是规则数量随 Service 增多而膨胀，性能下降。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">⚡ ipvs 模式（高性能）</div>
+          <p>
+            基于内核的 <strong>IPVS</strong>（IP Virtual Server）实现负载均衡，
+            支持多种调度算法（轮询、最小连接、源地址哈希等），性能远高于 iptables，
+            适合大规模集群。需要内核加载 ip_vs 模块。
+          </p>
+        </div>
+
+<pre><code># 查看当前 kube-proxy 模式
+kubectl get configmap kube-proxy -n kube-system -o yaml | grep mode
+
+# 常见模式值："iptables" 或 "ipvs"</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 模式选择建议</div>
+          <p>
+            小规模集群 iptables 完全够用；大规模集群（Service 数量上千）建议切换到 ipvs 模式以获得更好的性能。
+            切换方式是修改 kube-proxy 的 ConfigMap 或启动参数 <code>--proxy-mode=ipvs</code>。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Service 为一组 Pod 提供稳定的网络入口，通过 Label Selector 匹配后端 Pod</li>
+          <li>ClusterIP 是默认类型，仅集群内部可访问</li>
+          <li>NodePort 在每个节点开放端口（30000-32767），可通过节点 IP 访问</li>
+          <li>LoadBalancer 调用云厂商负载均衡器，分配外部 IP，适合公有云</li>
+          <li>Headless Service（clusterIP: None）不分配虚拟 IP，直接返回 Pod IP，常用于 StatefulSet</li>
+          <li>kube-proxy 支持 iptables（默认）和 ipvs（高性能）两种模式</li>
+        </ul>
+
+        <!-- 测试题 -->
+        <section class="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B" data-stars="1"
+               data-chapter="09-service" data-qid="q1"
+               data-explain="Service 的核心作用是为一组 Pod 提供稳定的网络入口（虚拟 IP/DNS），并对后端 Pod 进行负载均衡，解决 Pod IP 不稳定的问题。">
+            <div class="quiz-question">1. Kubernetes 中 Service 的主要作用是？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. 管理 Pod 副本数量</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. 为一组 Pod 提供稳定的网络入口和负载均衡</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. 在每个节点上运行一个 Pod</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. 管理应用配置</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A" data-stars="1"
+               data-chapter="09-service" data-qid="q2"
+               data-explain="ClusterIP 是 Service 的默认类型，只在集群内部可访问，分配一个集群内部的虚拟 IP。">
+            <div class="quiz-question">2. Service 的默认类型是？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. ClusterIP</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. NodePort</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. LoadBalancer</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. Headless</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C" data-stars="2"
+               data-chapter="09-service" data-qid="q3"
+               data-explain="Headless Service 通过将 clusterIP 设置为 None 实现，此时 Service 不分配虚拟 IP，DNS 查询会直接返回后端 Pod 的 IP 列表。">
+            <div class="quiz-question">3. 要创建一个 Headless Service，需要如何配置？<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. type 设置为 Headless</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. type 设置为 None</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. clusterIP 设置为 None</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. selector 设置为空</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="B" data-stars="2"
+               data-chapter="09-service" data-qid="q4"
+               data-explain="NodePort 默认的端口范围是 30000-32767，外部用户通过 节点IP:NodePort 访问服务。">
+            <div class="quiz-question">4. NodePort 类型 Service 默认的端口范围是？<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q4" value="A" /> A. 1-65535</label></li>
+              <li><label><input type="radio" name="q4" value="B" /> B. 30000-32767</label></li>
+              <li><label><input type="radio" name="q4" value="C" /> C. 80-8080</label></li>
+              <li><label><input type="radio" name="q4" value="D" /> D. 1024-49151</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="judge" data-answer="T" data-stars="2"
+               data-chapter="09-service" data-qid="q5"
+               data-explain="LoadBalancer 类型需要云厂商的支持，由云厂商自动创建外部负载均衡器并分配外部 IP。在裸金属或本地环境中通常无法使用此类型。">
+            <div class="quiz-question">5. LoadBalancer 类型的 Service 需要云厂商提供负载均衡器支持才能获得外部 IP。<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q5" value="T" /> 正确</label></li>
+              <li><label><input type="radio" name="q5" value="F" /> 错误</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="multi" data-answer="A|C" data-stars="2"
+               data-chapter="09-service" data-qid="q6"
+               data-explain="kube-proxy 支持 iptables（默认）和 ipvs（高性能）两种代理模式。用户态（userspace）模式是早期版本的实现，已基本弃用。BGP 和 VXLAN 是网络插件的技术，不是 kube-proxy 模式。">
+            <div class="quiz-question">6. kube-proxy 支持以下哪些代理模式？（多选）<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="checkbox" name="q6" value="A" /> A. iptables</label></li>
+              <li><label><input type="checkbox" name="q6" value="B" /> B. BGP</label></li>
+              <li><label><input type="checkbox" name="q6" value="C" /> C. ipvs</label></li>
+              <li><label><input type="checkbox" name="q6" value="D" /> D. VXLAN</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="text" data-answer="label selector|selector" data-stars="2"
+               data-chapter="09-service" data-qid="q7"
+               data-explain="Service 通过 Label Selector（标签选择器）来选择需要代理的后端 Pod，实现 Service 与 Pod 的解耦。">
+            <div class="quiz-question">7. Service 通过 ______ 机制来选择它需要代理的后端 Pod（填两个英文单词，即"标签选择器"）<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 9 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

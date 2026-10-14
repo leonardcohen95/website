@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第6章 Pod详解 | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="06-pod">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>Pod 详解</h1>
+        <p>Pod 是 Kubernetes 中最小的部署单元，但它绝不仅仅是"装容器的盒子"。本章我们深入 Pod 的内部：它的生命周期、Init 容器、Sidecar 模式、资源限制、健康探针以及优雅终止机制。理解这些细节，才能让你的应用在 K8s 中稳定、高效地运行。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Pod 的定义以及共享网络与存储的特性</li>
+          <li>掌握 Pod 的生命周期与各阶段状态</li>
+          <li>了解 Init 容器和 Sidecar 模式的使用场景</li>
+          <li>学会配置 requests 和 limits 资源限制</li>
+          <li>掌握 liveness、readiness、startup 三种探针</li>
+          <li>理解优雅终止与 terminationGracePeriodSeconds</li>
+        </ul>
+
+        <h2>1. Pod 是什么</h2>
+        <div class="term-card">
+          <div class="term-name">🫛 Pod</div>
+          <p>
+            Pod 是 Kubernetes 中<strong>最小的部署单元</strong>。一个 Pod 包含一个或多个紧密协作的容器，
+            这些容器<strong>共享网络命名空间</strong>（同一个 IP 地址和端口空间）和
+            <strong>共享存储卷</strong>。容器之间可以通过 <code>localhost</code> 直接通信，并共享挂载的 Volume。
+          </p>
+        </div>
+
+        <p>
+          K8s 不直接管理容器，而是管理 Pod。调度器以 Pod 为单位分配到节点上，
+          同一个 Pod 内的容器始终被调度到同一个节点。
+        </p>
+
+        <div class="callout tip">
+          <div class="callout-title">🌰 为什么需要 Pod</div>
+          <p>
+            Docker 是单容器模型，容器之间相互隔离。但现实中，有些应用需要紧密协作——
+            比如主应用和日志收集器需要共享网络和数据。Pod 就是为了解决"多个容器需要共享上下文"的问题而设计的。
+          </p>
+        </div>
+
+        <h2>2. Pod 生命周期</h2>
+        <p>Pod 从创建到销毁会经历一系列状态变化，这些状态反映在 Pod 的 <code>status.phase</code> 字段中：</p>
+
+        <div class="term-card">
+          <div class="term-name">⏳ Pending</div>
+          <p>
+            Pod 已被 API Server 接收，但还没有被调度到节点上，或者镜像还在拉取中。
+            这是 Pod 创建后的初始状态。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🏃 Running</div>
+          <p>
+            Pod 已经调度到某个节点上，且至少有一个容器在运行。
+            容器可能正在启动、正在运行，或者正在重启。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">✅ Succeeded</div>
+          <p>
+            Pod 中的所有容器都已<strong>成功退出</strong>（退出码为 0），且不会再重启。
+            常见于 Job 类型的一次性任务。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">❌ Failed</div>
+          <p>
+            Pod 中的所有容器都已终止，且至少有一个容器以<strong>非零状态码</strong>退出，
+            或者被系统杀死。
+          </p>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ Unknown（补充）</div>
+          <p>
+            当节点失联或无法获取 Pod 状态时，Pod 会进入 Unknown 状态。
+            通常是节点故障或网络问题导致的。
+          </p>
+        </div>
+
+        <h2>3. Init 容器</h2>
+        <p>
+          Init 容器是在主容器启动之前运行的<strong>初始化容器</strong>。
+          它可以执行一些准备工作，比如拉取配置、等待依赖服务就绪、初始化数据库等。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">⚙️ Init Container 的特点</div>
+          <p>
+            • Init 容器<strong>按顺序</strong>运行，前一个成功完成后才会启动下一个<br />
+            • 所有 Init 容器都成功完成后，主容器才会启动<br />
+            • 如果某个 Init 容器失败，Pod 会不断重试（直到成功或达到 restartPolicy 限制）<br />
+            • Init 容器不支持就绪探针（readinessProbe），因为它们必须运行完成
+          </p>
+        </div>
+
+<pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+spec:
+  initContainers:
+  - name: wait-for-db
+    image: busybox
+    command: ['sh', '-c', 'until nslookup mydb; do sleep 2; done']
+  containers:
+  - name: myapp
+    image: myapp:latest</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 典型场景</div>
+          <p>
+            等待数据库服务就绪、初始化配置文件、从远程拉取数据、执行数据库迁移脚本等。
+            把这些逻辑放在 Init 容器里，可以让主容器保持纯净。
+          </p>
+        </div>
+
+        <h2>4. Sidecar 模式</h2>
+        <p>
+          Sidecar（边车）模式是指在一个 Pod 中，除了主应用容器外，
+          再运行一个或多个<strong>辅助容器</strong>，用于增强主容器的能力。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">🚗 Sidecar 模式的常见用途</div>
+          <p>
+            • <strong>日志收集</strong>：fluentd / filebeat 采集主容器的日志并转发到日志中心<br />
+            • <strong>服务代理</strong>：istio/envoy sidecar 拦截流量实现服务治理<br />
+            • <strong>配置同步</strong>：辅助容器定期拉取并刷新配置文件<br />
+            • <strong>数据同步</strong>：定时备份主容器产生的数据
+          </p>
+        </div>
+
+        <p>
+          Sidecar 容器和主容器共享网络和存储，因此它可以直接读取主容器写入 Volume 的日志文件，
+          或通过 <code>localhost</code> 与主容器通信。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">🔄 Sidecar vs Init Container</div>
+          <p>
+            Init 容器是"一次性"的，运行完就退出；Sidecar 容器是"常驻"的，和主容器一起运行。
+            前者用于启动前准备，后者用于运行时增强。
+          </p>
+        </div>
+
+        <h2>5. 资源限制：requests 与 limits</h2>
+        <p>
+          在 K8s 中，每个容器都可以声明资源需求。这不仅能保证容器获得足够的资源，
+          还能防止某个容器吃光节点资源影响其他应用。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">📥 requests（资源请求）</div>
+          <p>
+            容器启动时<strong>保证能分配到的资源量</strong>。
+            调度器根据 requests 来决定把 Pod 调度到哪个节点——只有剩余资源满足 requests 的节点才会被选中。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">📤 limits（资源上限）</div>
+          <p>
+            容器<strong>最多能使用的资源量</strong>。
+            超过 limits 的内存使用会导致容器被 OOMKilled，超过 limits 的 CPU 使用会被限流（throttled）。
+          </p>
+        </div>
+
+<pre><code>resources:
+  requests:
+    cpu: 100m        # 0.1 核 CPU
+    memory: 128Mi    # 128 MB 内存
+  limits:
+    cpu: 500m        # 0.5 核 CPU
+    memory: 512Mi    # 512 MB 内存</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ requests 与 limits 的关系</div>
+          <p>
+            如果只设置 limits 不设置 requests，K8s 会默认让 requests 等于 limits（保证服务质量 QoS = Guaranteed）。
+            生产环境建议两者都显式设置，避免资源浪费或被驱逐。
+          </p>
+        </div>
+
+        <h2>6. 健康探针</h2>
+        <p>
+          健康探针（Probe）是 K8s 判断容器是否健康的重要机制。通过探针，K8s 能知道容器是否活着、是否准备好接收流量。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">❤️ livenessProbe（存活探针）</div>
+          <p>
+            检测容器是否还<strong>活着</strong>。如果探针失败，kubelet 会<strong>杀掉容器</strong>并根据 restartPolicy 决定是否重启。
+            用于检测死锁、应用挂起等内部故障。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">✅ readinessProbe（就绪探针）</div>
+          <p>
+            检测容器是否<strong>准备好接收流量</strong>。如果探针失败，K8s 会把该 Pod 从 Service 的端点列表中<strong>移除</strong>，
+            但不会杀掉容器。用于应用启动慢、依赖未就绪等场景。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🚀 startupProbe（启动探针）</div>
+          <p>
+            专门用于检测容器的<strong>启动过程</strong>。在 startupProbe 成功之前，liveness 和 readiness 探针都会被暂时禁用。
+            非常适合启动慢的应用，避免在启动期间被 livenessProbe 误杀。
+          </p>
+        </div>
+
+        <p>探针支持三种检测方式：<code>httpGet</code>（HTTP 接口）、<code>tcpSocket</code>（TCP 端口）、<code>exec</code>（执行命令）。</p>
+
+<pre><code>livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 5
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  periodSeconds: 3</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 探针使用建议</div>
+          <p>
+            生产环境建议同时配置 livenessProbe 和 readinessProbe。
+            对于启动时间较长的应用，务必配置 startupProbe，否则可能在启动期间被 livenessProbe 反复重启。
+          </p>
+        </div>
+
+        <h2>7. 优雅终止</h2>
+        <p>
+          当一个 Pod 被删除时，K8s 不会立即强杀容器，而是给容器一个<strong>优雅关闭</strong>的机会。
+          整个过程涉及 <code>terminationGracePeriodSeconds</code> 参数（默认 30 秒）。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">🛑 优雅终止流程</div>
+          <p>
+            1. K8s 将 Pod 标记为 Terminating，并从 Service 端点中移除<br />
+            2. 同时给容器发送 <code>SIGTERM</code> 信号<br />
+            3. 容器在 <code>terminationGracePeriodSeconds</code> 时间内完成清理并退出<br />
+            4. 如果超时未退出，K8s 发送 <code>SIGKILL</code> 强制杀死容器<br />
+            5. kubelet 删除 Pod
+          </p>
+        </div>
+
+<pre><code>spec:
+  terminationGracePeriodSeconds: 60
+  containers:
+  - name: myapp
+    image: myapp:latest
+    lifecycle:
+      preStop:
+        exec:
+          command: ['sh', '-c', 'nginx -s quit']</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ preStop 钩子</div>
+          <p>
+            <code>preStop</code> 钩子会在收到 SIGTERM 之前执行，常用于执行优雅关闭命令（如 nginx -s quit）或通知负载均衡器摘除流量。
+            注意：preStop 的执行时间也计入 terminationGracePeriodSeconds。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Pod 是 K8s 最小部署单元，容器共享网络和存储</li>
+          <li>Pod 生命周期：Pending → Running → Succeeded / Failed</li>
+          <li>Init 容器在主容器前运行，用于初始化准备工作</li>
+          <li>Sidecar 模式：主容器 + 常驻辅助容器（日志、代理等）</li>
+          <li>requests 是资源请求（调度依据），limits 是资源上限（防止超用）</li>
+          <li>liveness 探针决定是否重启容器，readiness 探针决定是否接收流量，startup 探针保护慢启动应用</li>
+          <li>terminationGracePeriodSeconds 控制优雅终止的超时时间，默认 30 秒</li>
+        </ul>
+
+        <!-- 测试题 -->
+        <section class="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B" data-stars="1"
+               data-chapter="06-pod" data-qid="q1"
+               data-explain="Pod 是 Kubernetes 中最小的部署单元，K8s 以 Pod 为单位进行调度和管理，而不是直接管理容器。">
+            <div class="quiz-question">1. Kubernetes 中最小的部署单元是什么？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. Container</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. Pod</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. Deployment</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. Node</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C" data-stars="1"
+               data-chapter="06-pod" data-qid="q2"
+               data-explain="Pod 的生命周期阶段依次为 Pending（等待）→ Running（运行中）→ Succeeded（成功）或 Failed（失败）。Running 表示容器已在节点上运行。">
+            <div class="quiz-question">2. 一个 Pod 被调度到节点并开始运行容器时，所处的状态是？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. Pending</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. Succeeded</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. Running</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. Completed</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A" data-stars="2"
+               data-chapter="06-pod" data-qid="q3"
+               data-explain="Init 容器在主容器启动之前按顺序运行，用于执行初始化任务。所有 Init 容器成功完成后，主容器才会启动。">
+            <div class="quiz-question">3. 关于 Init 容器，下列说法正确的是？<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q3" value="A" /> A. 在主容器启动之前运行，用于初始化准备</label></li>
+              <li><label><input type="radio" name="q3" value="B" /> B. 和主容器同时启动，并行运行</label></li>
+              <li><label><input type="radio" name="q3" value="C" /> C. 在主容器退出后运行，用于清理资源</label></li>
+              <li><label><input type="radio" name="q3" value="D" /> D. 只能有一个，且必须成功退出</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="multi" data-answer="A|C" data-stars="2"
+               data-chapter="06-pod" data-qid="q4"
+               data-explain="Sidecar 模式常见用途包括日志收集（fluentd/filebeat）和服务代理（istio/envoy）。数据初始化通常用 Init 容器，定时批处理用 Job/CronJob。">
+            <div class="quiz-question">4. 以下哪些属于 Sidecar（边车）模式的典型应用场景？（多选）<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="checkbox" name="q4" value="A" /> A. 日志收集容器采集主容器日志</label></li>
+              <li><label><input type="checkbox" name="q4" value="B" /> B. 在主容器启动前初始化数据库</label></li>
+              <li><label><input type="checkbox" name="q4" value="C" /> C. envoy 代理容器实现服务治理</label></li>
+              <li><label><input type="checkbox" name="q4" value="D" /> D. 定时执行批处理任务</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="B" data-stars="2"
+               data-chapter="06-pod" data-qid="q5"
+               data-explain="requests 是容器启动时保证能分配到的资源量，是调度器的调度依据；limits 是容器最多能使用的资源上限。">
+            <div class="quiz-question">5. 在 K8s 资源配置中，requests 的作用是？<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q5" value="A" /> A. 限制容器最多能使用的资源量</label></li>
+              <li><label><input type="radio" name="q5" value="B" /> B. 声明容器启动时保证可获得的资源量，作为调度依据</label></li>
+              <li><label><input type="radio" name="q5" value="C" /> C. 监控容器实际使用的资源量</label></li>
+              <li><label><input type="radio" name="q5" value="D" /> D. 设置容器自动扩缩容的阈值</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="judge" data-answer="T" data-stars="2"
+               data-chapter="06-pod" data-qid="q6"
+               data-explain="readinessProbe 失败时，K8s 会把 Pod 从 Service 端点列表中移除，不再转发流量，但不会杀掉容器，应用仍在运行。">
+            <div class="quiz-question">6. readinessProbe 探针失败时，K8s 会将该 Pod 从 Service 的端点列表中移除，但不会杀掉容器。<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q6" value="T" /> 正确</label></li>
+              <li><label><input type="radio" name="q6" value="F" /> 错误</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="text" data-answer="terminationgraceperiodseconds|grace period" data-stars="2"
+               data-chapter="06-pod" data-qid="q7"
+               data-explain="terminationGracePeriodSeconds 控制 Pod 优雅终止的超时时间，默认值为 30 秒。超时后容器会被 SIGKILL 强制终止。">
+            <div class="quiz-question">7. 控制 Pod 优雅终止超时时间的参数是 <code>______</code>（默认 30 秒，填英文参数名）<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 6 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

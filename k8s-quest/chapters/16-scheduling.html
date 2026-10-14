@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第16章 调度与亲和性 | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="16-scheduling">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>调度与亲和性</h1>
+        <p>Pod 创建出来之后，到底该跑在哪个节点上？这就是 kube-scheduler 要解决的问题。本章我们会深入调度的核心流程，学习如何用 nodeSelector、亲和性、污点与容忍等机制，精细地控制 Pod 的节点分布，从而满足生产环境中各种"谁和谁在一起、谁不能和谁在一起"的部署需求。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 kube-scheduler 的职责与调度三步流程</li>
+          <li>掌握 nodeSelector 的基本用法</li>
+          <li>掌握 nodeAffinity、podAffinity、podAntiAffinity 三种亲和性</li>
+          <li>理解污点（Taint）与容忍（Toleration）的作用</li>
+          <li>学会使用 cordon / drain 进行节点维护</li>
+          <li>了解资源请求如何影响调度决策</li>
+        </ul>
+
+        <h2>1. kube-scheduler 与调度流程</h2>
+        <p><strong>kube-scheduler</strong> 是 Kubernetes 控制平面的核心组件之一，它的唯一职责就是：为新创建的、还没有绑定节点的 Pod 选择一个最合适的 Node。</p>
+
+        <p>调度过程可以概括为三步：</p>
+        <ol>
+          <li><strong>过滤（Filtering）</strong>：遍历所有节点，剔除不满足 Pod 要求的节点（如资源不足、端口冲突、污点不匹配等）。</li>
+          <li><strong>打分（Scoring）</strong>：对剩余的候选节点进行打分，选出得分最高的节点。</li>
+          <li><strong>选择（Selecting）</strong>：将 Pod 绑定到得分最高的节点上。</li>
+        </ol>
+
+        <div class="term-card">
+          <div class="term-name">🎯 过滤 + 打分</div>
+          <p>
+            过滤阶段解决"能不能跑"的问题，打分阶段解决"跑在哪更好"的问题。
+            常见的打分策略包括：节点资源分配均衡、Pod 尽量分散到不同节点等。
+          </p>
+        </div>
+
+        <h2>2. nodeSelector：最简单的节点选择</h2>
+        <p><code>nodeSelector</code> 是最简单的节点定向调度方式。它通过匹配节点的标签（label）来决定 Pod 可以调度到哪些节点上。</p>
+
+<pre><code># 给节点打上标签
+kubectl label nodes node-1 disktype=ssd
+
+# Pod 中指定 nodeSelector
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  nodeSelector:
+    disktype: ssd
+  containers:
+  - name: nginx
+    image: nginx</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 nodeSelector 的局限</div>
+          <p>
+            nodeSelector 只能做"精确匹配"，无法表达"或"、"不等于"等复杂条件。
+            要实现更灵活的调度规则，需要使用下面的亲和性机制。
+          </p>
+        </div>
+
+        <h2>3. 亲和性（Affinity）</h2>
+        <p>亲和性是比 nodeSelector 更强大的调度机制，分为三类：</p>
+
+        <div class="term-card">
+          <div class="term-name">🖥️ nodeAffinity（节点亲和性）</div>
+          <p>
+            控制 Pod 调度到具有特定标签的节点上。支持 <code>required</code>（硬要求，必须满足）和
+            <code>preferred</code>（软要求，尽量满足）两种模式。操作符包括 In、NotIn、Exists、DoesNotExist 等。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🤝 podAffinity（Pod 亲和性）</div>
+          <p>
+            控制 Pod 与已运行的某些 Pod 调度到<strong>同一</strong>拓扑域（如同一个节点、同一个可用区）。
+            适用于需要通信频繁、希望降低网络延迟的场景。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🚫 podAntiAffinity（Pod 反亲和性）</div>
+          <p>
+            控制 Pod 与已运行的某些 Pod 调度到<strong>不同</strong>拓扑域。
+            适用于高可用部署，避免多个副本集中在同一个节点上。
+          </p>
+        </div>
+
+<pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: with-node-affinity
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: disktype
+            operator: In
+            values:
+            - ssd
+            - nvme
+  containers:
+  - name: app
+    image: nginx</code></pre>
+
+        <h2>4. 污点与容忍（Taint & Toleration）</h2>
+        <p>亲和性是从 Pod 的角度"主动选择"节点；而<strong>污点（Taint）</strong>则是从节点的角度"排斥"Pod。</p>
+
+        <p>给节点打上污点后，没有对应容忍的 Pod 不会被调度到该节点上。Pod 通过声明<strong>容忍（Toleration）</strong>来允许自己在有污点的节点上运行。</p>
+
+<pre><code># 给节点添加污点（effect 为 NoSchedule）
+kubectl taint nodes node-1 key=value:NoSchedule
+
+# Pod 中声明容忍
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  tolerations:
+  - key: "key"
+    operator: "Equal"
+    value: "value"
+    effect: "NoSchedule"
+  containers:
+  - name: nginx
+    image: nginx</code></pre>
+
+        <p>污点的 effect 有三种：</p>
+        <ul>
+          <li><code>NoSchedule</code>：不调度新 Pod，但不驱逐已运行的 Pod</li>
+          <li><code>PreferNoSchedule</code>：尽量不调度，但不强制</li>
+          <li><code>NoExecute</code>：不调度新 Pod，并驱逐不匹配的已运行 Pod</li>
+        </ul>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ 控制平面节点的污点</div>
+          <p>
+            K8s 控制平面节点默认带有 <code>node-role.kubernetes.io/control-plane:NoSchedule</code> 污点，
+            普通 Pod 默认不会调度到控制平面节点上，这是出于安全与稳定性的考虑。
+          </p>
+        </div>
+
+        <h2>5. cordon 与 drain：节点维护</h2>
+        <p>当需要对节点进行维护（如升级内核、更换硬件）时，可以使用以下命令：</p>
+
+<pre><code># 标记节点为不可调度（cordon），新 Pod 不会再调度过来
+kubectl cordon node-1
+
+# 排空节点（drain），驱逐该节点上的所有 Pod
+kubectl drain node-1 --ignore-daemonsets --delete-emptydir-data
+
+# 维护完成后，恢复节点可调度
+kubectl uncordon node-1</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">✅ cordon vs drain</div>
+          <p>
+            <strong>cordon</strong> 只是让节点停止接收新 Pod，已有 Pod 继续运行；<br />
+            <strong>drain</strong> 则会先 cordon，再驱逐已有 Pod，让它们重新调度到其他节点。
+          </p>
+        </div>
+
+        <h2>6. 资源请求对调度的影响</h2>
+        <p>Pod 的 <code>resources.requests</code> 是调度器的重要依据。调度器在过滤阶段会检查节点剩余可分配资源是否满足 Pod 的 requests。如果 Pod 请求的 CPU/内存超出了任何节点的剩余容量，Pod 就会一直处于 <code>Pending</code> 状态。</p>
+
+<pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: resource-demo
+spec:
+  containers:
+  - name: app
+    image: nginx
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "256Mi"
+      limits:
+        cpu: "1000m"
+        memory: "512Mi"</code></pre>
+
+        <p>合理设置 requests 不仅影响调度，还影响节点的资源利用率。设置过大浪费资源，设置过小可能导致节点过载。</p>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>kube-scheduler 负责为 Pod 选择节点，流程为 过滤 → 打分 → 选择</li>
+          <li>nodeSelector 通过标签精确匹配节点，简单但不够灵活</li>
+          <li>亲和性分 nodeAffinity、podAffinity、podAntiAffinity，支持硬/软要求</li>
+          <li>污点（Taint）让节点排斥 Pod，容忍（Toleration）让 Pod 允许在带污点节点运行</li>
+          <li>cordon 标记节点不可调度，drain 排空节点用于维护</li>
+          <li>Pod 的 resources.requests 直接影响调度能否成功</li>
+        </ul>
+
+        <!-- 测试题 -->
+        <section class="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+
+          <div class="quiz" data-type="choice" data-answer="B" data-stars="1"
+               data-chapter="16-scheduling" data-qid="q1"
+               data-explain="kube-scheduler 是控制平面中负责为 Pod 选择运行节点的组件。">
+            <div class="quiz-question">1. Kubernetes 中负责为 Pod 选择运行节点的组件是？<span class="star-badge">⭐1</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q1" value="A" /> A. kubelet</label></li>
+              <li><label><input type="radio" name="q1" value="B" /> B. kube-scheduler</label></li>
+              <li><label><input type="radio" name="q1" value="C" /> C. kube-controller-manager</label></li>
+              <li><label><input type="radio" name="q1" value="D" /> D. kube-proxy</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="C" data-stars="2"
+               data-chapter="16-scheduling" data-qid="q2"
+               data-explain="调度流程为：过滤（剔除不满足条件的节点）→ 打分（对候选节点排序）→ 选择（绑定到最优节点）。">
+            <div class="quiz-question">2. kube-scheduler 的调度流程正确顺序是？<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q2" value="A" /> A. 打分 → 过滤 → 选择</label></li>
+              <li><label><input type="radio" name="q2" value="B" /> B. 选择 → 过滤 → 打分</label></li>
+              <li><label><input type="radio" name="q2" value="C" /> C. 过滤 → 打分 → 选择</label></li>
+              <li><label><input type="radio" name="q2" value="D" /> D. 过滤 → 选择 → 打分</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="multi" data-answer="A|B|C" data-stars="3"
+               data-chapter="16-scheduling" data-qid="q3"
+               data-explain="Kubernetes 提供了 nodeAffinity（节点亲和性）、podAffinity（Pod亲和性）和 podAntiAffinity（Pod反亲和性）三种亲和性机制。">
+            <div class="quiz-question">3. Kubernetes 中支持以下哪些亲和性（Affinity）机制？（多选）<span class="star-badge">⭐3</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="checkbox" name="q3" value="A" /> A. nodeAffinity</label></li>
+              <li><label><input type="checkbox" name="q3" value="B" /> B. podAffinity</label></li>
+              <li><label><input type="checkbox" name="q3" value="C" /> C. podAntiAffinity</label></li>
+              <li><label><input type="checkbox" name="q3" value="D" /> D. containerAffinity</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="D" data-stars="2"
+               data-chapter="16-scheduling" data-qid="q4"
+               data-explain="污点（Taint）作用在节点上，用于排斥没有对应容忍的 Pod；而亲和性是作用在 Pod 上主动选择节点。">
+            <div class="quiz-question">4. 关于污点（Taint）的说法，下列哪项是正确的？<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q4" value="A" /> A. 污点配置在 Pod 上，用于选择节点</label></li>
+              <li><label><input type="radio" name="q4" value="B" /> B. 有污点的节点不能运行任何 Pod</label></li>
+              <li><label><input type="radio" name="q4" value="C" /> C. 污点和容忍是同一概念的不同叫法</label></li>
+              <li><label><input type="radio" name="q4" value="D" /> D. 污点作用在节点上，Pod 需要声明容忍才能调度上去</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="A" data-stars="3"
+               data-chapter="16-scheduling" data-qid="q5"
+               data-explain="NoExecute 会立即驱逐不匹配的已运行 Pod；NoSchedule 只阻止新 Pod 调度；PreferNoSchedule 是尽量不调度。">
+            <div class="quiz-question">5. 哪种污点 effect 会立即驱逐节点上不匹配的已运行 Pod？<span class="star-badge">⭐3</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q5" value="A" /> A. NoExecute</label></li>
+              <li><label><input type="radio" name="q5" value="B" /> B. NoSchedule</label></li>
+              <li><label><input type="radio" name="q5" value="C" /> C. PreferNoSchedule</label></li>
+              <li><label><input type="radio" name="q5" value="D" /> D. Evict</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="choice" data-answer="B" data-stars="2"
+               data-chapter="16-scheduling" data-qid="q6"
+               data-explain="cordon 仅标记节点不可调度，新 Pod 不会调度过来，但已有 Pod 继续运行；drain 才会驱逐已有 Pod。">
+            <div class="quiz-question">6. 执行 <code>kubectl cordon node-1</code> 后，节点上已运行的 Pod 会怎样？<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q6" value="A" /> A. 立即被驱逐到其他节点</label></li>
+              <li><label><input type="radio" name="q6" value="B" /> B. 继续运行，不受影响</label></li>
+              <li><label><input type="radio" name="q6" value="C" /> C. 自动停止</label></li>
+              <li><label><input type="radio" name="q6" value="D" /> D. 被杀死并重建</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="text" data-answer="drain" data-stars="2"
+               data-chapter="16-scheduling" data-qid="q7"
+               data-explain="kubectl drain 会先 cordon 节点，再驱逐其上的 Pod，用于节点维护前的安全排空。">
+            <div class="quiz-question">7. 要在维护节点前将其上的 Pod 安全驱逐到其他节点，应使用命令 <code>kubectl ______ node-1</code>（填空）<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><input type="text" placeholder="输入你的答案" /></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+          <div class="quiz" data-type="judge" data-answer="F" data-stars="2"
+               data-chapter="16-scheduling" data-qid="q8"
+               data-explain="影响调度的是 resources.requests（请求量），而不是 limits（上限）。调度器根据 requests 判断节点是否有足够资源。">
+            <div class="quiz-question">8. Pod 能否被调度到某个节点上，主要取决于它的 <code>resources.limits</code> 是否超出节点剩余资源。<span class="star-badge">⭐2</span></div>
+            <ul class="quiz-options">
+              <li><label><input type="radio" name="q8" value="T" /> 正确</label></li>
+              <li><label><input type="radio" name="q8" value="F" /> 错误</label></li>
+            </ul>
+            <button class="quiz-btn">提交答案</button>
+            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
+          </div>
+
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 16 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>
