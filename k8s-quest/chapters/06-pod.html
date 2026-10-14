@@ -308,103 +308,9 @@ readinessProbe:
           <li>terminationGracePeriodSeconds 控制优雅终止的超时时间，默认 30 秒</li>
         </ul>
 
-        <!-- 测试题 -->
-        <section class="quiz-section">
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
           <h2>🎯 本章测试（答对赚星星！）</h2>
-
-          <div class="quiz" data-type="choice" data-answer="B" data-stars="1"
-               data-chapter="06-pod" data-qid="q1"
-               data-explain="Pod 是 Kubernetes 中最小的部署单元，K8s 以 Pod 为单位进行调度和管理，而不是直接管理容器。">
-            <div class="quiz-question">1. Kubernetes 中最小的部署单元是什么？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q1" value="A" /> A. Container</label></li>
-              <li><label><input type="radio" name="q1" value="B" /> B. Pod</label></li>
-              <li><label><input type="radio" name="q1" value="C" /> C. Deployment</label></li>
-              <li><label><input type="radio" name="q1" value="D" /> D. Node</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="C" data-stars="1"
-               data-chapter="06-pod" data-qid="q2"
-               data-explain="Pod 的生命周期阶段依次为 Pending（等待）→ Running（运行中）→ Succeeded（成功）或 Failed（失败）。Running 表示容器已在节点上运行。">
-            <div class="quiz-question">2. 一个 Pod 被调度到节点并开始运行容器时，所处的状态是？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q2" value="A" /> A. Pending</label></li>
-              <li><label><input type="radio" name="q2" value="B" /> B. Succeeded</label></li>
-              <li><label><input type="radio" name="q2" value="C" /> C. Running</label></li>
-              <li><label><input type="radio" name="q2" value="D" /> D. Completed</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="A" data-stars="2"
-               data-chapter="06-pod" data-qid="q3"
-               data-explain="Init 容器在主容器启动之前按顺序运行，用于执行初始化任务。所有 Init 容器成功完成后，主容器才会启动。">
-            <div class="quiz-question">3. 关于 Init 容器，下列说法正确的是？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q3" value="A" /> A. 在主容器启动之前运行，用于初始化准备</label></li>
-              <li><label><input type="radio" name="q3" value="B" /> B. 和主容器同时启动，并行运行</label></li>
-              <li><label><input type="radio" name="q3" value="C" /> C. 在主容器退出后运行，用于清理资源</label></li>
-              <li><label><input type="radio" name="q3" value="D" /> D. 只能有一个，且必须成功退出</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="multi" data-answer="A|C" data-stars="2"
-               data-chapter="06-pod" data-qid="q4"
-               data-explain="Sidecar 模式常见用途包括日志收集（fluentd/filebeat）和服务代理（istio/envoy）。数据初始化通常用 Init 容器，定时批处理用 Job/CronJob。">
-            <div class="quiz-question">4. 以下哪些属于 Sidecar（边车）模式的典型应用场景？（多选）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="checkbox" name="q4" value="A" /> A. 日志收集容器采集主容器日志</label></li>
-              <li><label><input type="checkbox" name="q4" value="B" /> B. 在主容器启动前初始化数据库</label></li>
-              <li><label><input type="checkbox" name="q4" value="C" /> C. envoy 代理容器实现服务治理</label></li>
-              <li><label><input type="checkbox" name="q4" value="D" /> D. 定时执行批处理任务</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="B" data-stars="2"
-               data-chapter="06-pod" data-qid="q5"
-               data-explain="requests 是容器启动时保证能分配到的资源量，是调度器的调度依据；limits 是容器最多能使用的资源上限。">
-            <div class="quiz-question">5. 在 K8s 资源配置中，requests 的作用是？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q5" value="A" /> A. 限制容器最多能使用的资源量</label></li>
-              <li><label><input type="radio" name="q5" value="B" /> B. 声明容器启动时保证可获得的资源量，作为调度依据</label></li>
-              <li><label><input type="radio" name="q5" value="C" /> C. 监控容器实际使用的资源量</label></li>
-              <li><label><input type="radio" name="q5" value="D" /> D. 设置容器自动扩缩容的阈值</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="judge" data-answer="T" data-stars="2"
-               data-chapter="06-pod" data-qid="q6"
-               data-explain="readinessProbe 失败时，K8s 会把 Pod 从 Service 端点列表中移除，不再转发流量，但不会杀掉容器，应用仍在运行。">
-            <div class="quiz-question">6. readinessProbe 探针失败时，K8s 会将该 Pod 从 Service 的端点列表中移除，但不会杀掉容器。<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q6" value="T" /> 正确</label></li>
-              <li><label><input type="radio" name="q6" value="F" /> 错误</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="text" data-answer="terminationgraceperiodseconds|grace period" data-stars="2"
-               data-chapter="06-pod" data-qid="q7"
-               data-explain="terminationGracePeriodSeconds 控制 Pod 优雅终止的超时时间，默认值为 30 秒。超时后容器会被 SIGKILL 强制终止。">
-            <div class="quiz-question">7. 控制 Pod 优雅终止超时时间的参数是 <code>______</code>（默认 30 秒，填英文参数名）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><input type="text" placeholder="输入你的答案" /></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
         </section>
 
         <div class="page-nav" id="page-nav"></div>
@@ -418,6 +324,7 @@ readinessProbe:
 
   <script src="../assets/js/game.js"></script>
   <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
   <script src="../assets/js/quiz.js"></script>
 </body>
 </html>

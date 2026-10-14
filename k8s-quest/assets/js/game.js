@@ -202,6 +202,32 @@ const GameSystem = (function () {
     return { alreadyDone: false, newStars: starCount + (chapterCompleted ? 5 : 0), data, chapterCompleted, newAchievements };
   }
 
+  // 消耗星星（重新答题等）
+  async function spendStars(count = 1) {
+    // 后端模式
+    if (backendAvailable && isLoggedIn()) {
+      try {
+        const res = await fetch('/api/spend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({ count })
+        });
+        if (res.ok) {
+          const result = await res.json();
+          return result;
+        }
+      } catch {}
+    }
+    // 本地模式
+    const data = await load();
+    if (data.stars < count) {
+      return { success: false, reason: 'stars', data };
+    }
+    data.stars -= count;
+    saveLocal(data);
+    return { success: true, data };
+  }
+
   function isChapterCompleted(chapterId) {
     const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     return data.chapters?.[chapterId]?.completed || false;
@@ -333,7 +359,7 @@ const GameSystem = (function () {
     TITLES, ACHIEVEMENTS,
     load, saveLocal,
     getCurrentTitle, getNextTitle,
-    addStars, isChapterCompleted, getChapterStars, isQuestionDone,
+    addStars, spendStars, isChapterCompleted, getChapterStars, isQuestionDone,
     flyStars, showAchievementPopup,
     renderStarDisplay, renderTitleBar,
     showLoginModal, login, register, logout, isLoggedIn, getAuth,

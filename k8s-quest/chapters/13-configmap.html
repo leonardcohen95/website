@@ -162,89 +162,9 @@ spec:
           <li>ConfigMap 不应存储敏感信息，敏感数据用 Secret</li>
         </ul>
 
-        <!-- 测试题 -->
-        <section class="quiz-section">
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
           <h2>🎯 本章测试（答对赚星星！）</h2>
-
-          <div class="quiz" data-type="choice" data-answer="A" data-stars="1"
-               data-chapter="13-configmap" data-qid="q1"
-               data-explain="ConfigMap 用于存储非敏感的配置数据，密码、密钥等敏感信息应使用 Secret。">
-            <div class="quiz-question">1. ConfigMap 主要用于存储什么类型的数据？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q1" value="A" /> A. 非敏感的配置数据</label></li>
-              <li><label><input type="radio" name="q1" value="B" /> B. 密码、密钥等敏感信息</label></li>
-              <li><label><input type="radio" name="q1" value="C" /> C. 容器镜像</label></li>
-              <li><label><input type="radio" name="q1" value="D" /> D. 持久化数据</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="C" data-stars="1"
-               data-chapter="13-configmap" data-qid="q2"
-               data-explain="--from-literal 用于直接通过键值对字面量创建 ConfigMap，是最直接的创建方式之一。">
-            <div class="quiz-question">2. 要直接通过命令行传入键值对创建 ConfigMap，应使用哪个参数？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q2" value="A" /> A. --from-env</label></li>
-              <li><label><input type="radio" name="q2" value="B" /> B. --from-key</label></li>
-              <li><label><input type="radio" name="q2" value="C" /> C. --from-literal</label></li>
-              <li><label><input type="radio" name="q2" value="D" /> D. --from-value</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="multi" data-answer="A|C" data-stars="2"
-               data-chapter="13-configmap" data-qid="q3"
-               data-explain="ConfigMap 可以通过环境变量（env / envFrom）或 Volume 挂载的方式注入到容器中。">
-            <div class="quiz-question">3. ConfigMap 可以通过以下哪些方式注入到容器中？（多选）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="checkbox" name="q3" value="A" /> A. 作为环境变量注入</label></li>
-              <li><label><input type="checkbox" name="q3" value="B" /> B. 作为容器启动命令注入</label></li>
-              <li><label><input type="checkbox" name="q3" value="C" /> C. 作为 Volume 挂载为文件</label></li>
-              <li><label><input type="checkbox" name="q3" value="D" /> D. 作为镜像层注入</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="judge" data-answer="F" data-stars="2"
-               data-chapter="13-configmap" data-qid="q4"
-               data-explain="ConfigMap 更新后，以环境变量方式注入的值不会自动更新，需要重启 Pod 才能生效；只有以 Volume 挂载方式才会自动更新。">
-            <div class="quiz-question">4. ConfigMap 更新后，通过环境变量方式注入到容器中的值会立即自动更新。<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q4" value="T" /> 正确</label></li>
-              <li><label><input type="radio" name="q4" value="F" /> 错误</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="text" data-answer="volume" data-stars="2"
-               data-chapter="13-configmap" data-qid="q5"
-               data-explain="以 Volume 挂载方式使用 ConfigMap 时，ConfigMap 更新后挂载的文件会自动更新（有一定延迟），而环境变量方式不会。">
-            <div class="quiz-question">5. ConfigMap 更新后，以 <code>______</code> 挂载方式注入的配置文件会自动更新，而环境变量方式不会（填空，小写）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><input type="text" placeholder="输入你的答案" /></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="D" data-stars="2"
-               data-chapter="13-configmap" data-qid="q6"
-               data-explain="envFrom 可以一次性将整个 ConfigMap 的所有键值对注入为容器的环境变量，无需逐个引用。">
-            <div class="quiz-question">6. 要将 ConfigMap 中的所有键值对一次性全部注入为容器的环境变量，应使用以下哪个字段？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q6" value="A" /> A. configMapKeyRef</label></li>
-              <li><label><input type="radio" name="q6" value="B" /> B. env</label></li>
-              <li><label><input type="radio" name="q6" value="C" /> C. valueFrom</label></li>
-              <li><label><input type="radio" name="q6" value="D" /> D. envFrom</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
         </section>
 
         <div class="page-nav" id="page-nav"></div>
@@ -258,6 +178,7 @@ spec:
 
   <script src="../assets/js/game.js"></script>
   <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
   <script src="../assets/js/quiz.js"></script>
 </body>
 </html>

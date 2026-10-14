@@ -252,103 +252,9 @@ spec:
           <li>选型口诀：无状态 Deployment，有状态 StatefulSet，每节点 DaemonSet，一次性 Job，定时 CronJob</li>
         </ul>
 
-        <!-- 测试题 -->
-        <section class="quiz-section">
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
           <h2>🎯 本章测试（答对赚星星！）</h2>
-
-          <div class="quiz" data-type="choice" data-answer="B" data-stars="1"
-               data-chapter="08-workload" data-qid="q1"
-               data-explain="StatefulSet 用于管理有状态应用，为每个 Pod 提供稳定的网络标识（固定 DNS 名称）和稳定的持久化存储。">
-            <div class="quiz-question">1. 要部署一个 MySQL 主从集群，需要稳定的网络标识和持久化存储，应使用哪种工作负载？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q1" value="A" /> A. Deployment</label></li>
-              <li><label><input type="radio" name="q1" value="B" /> B. StatefulSet</label></li>
-              <li><label><input type="radio" name="q1" value="C" /> C. DaemonSet</label></li>
-              <li><label><input type="radio" name="q1" value="D" /> D. Job</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="C" data-stars="1"
-               data-chapter="08-workload" data-qid="q2"
-               data-explain="DaemonSet 确保每个节点上都运行一个 Pod 副本，常用于日志收集 Agent、监控 Agent、网络插件等需要在每个节点运行的组件。">
-            <div class="quiz-question">2. 需要在集群的每个节点上都运行一个日志收集 Agent，应使用哪种工作负载？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q2" value="A" /> A. Deployment</label></li>
-              <li><label><input type="radio" name="q2" value="B" /> B. StatefulSet</label></li>
-              <li><label><input type="radio" name="q2" value="C" /> C. DaemonSet</label></li>
-              <li><label><input type="radio" name="q2" value="D" /> D. CronJob</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="A" data-stars="2"
-               data-chapter="08-workload" data-qid="q3"
-               data-explain="Job 用于执行一次性任务，任务完成后 Pod 会进入 Completed 状态并退出，不会被重启。">
-            <div class="quiz-question">3. 需要执行一次数据库迁移任务，完成后退出，应使用哪种工作负载？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q3" value="A" /> A. Job</label></li>
-              <li><label><input type="radio" name="q3" value="B" /> B. Deployment</label></li>
-              <li><label><input type="radio" name="q3" value="C" /> C. DaemonSet</label></li>
-              <li><label><input type="radio" name="q3" value="D" /> D. StatefulSet</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="D" data-stars="2"
-               data-chapter="08-workload" data-qid="q4"
-               data-explain="CronJob 基于时间调度 Job，使用标准的 5 段 cron 表达式定义调度规则，类似 Linux 的 crontab。">
-            <div class="quiz-question">4. 需要每天凌晨 2 点自动执行数据库备份任务，应使用哪种工作负载？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q4" value="A" /> A. Job</label></li>
-              <li><label><input type="radio" name="q4" value="B" /> B. DaemonSet</label></li>
-              <li><label><input type="radio" name="q4" value="C" /> C. StatefulSet</label></li>
-              <li><label><input type="radio" name="q4" value="D" /> D. CronJob</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="judge" data-answer="T" data-stars="2"
-               data-chapter="08-workload" data-qid="q5"
-               data-explain="StatefulSet 的 Pod 名称是固定且有序的，格式为 {statefulset-name}-{序号}，例如 mysql-0、mysql-1。即使 Pod 被重建，名称和网络标识也保持不变。">
-            <div class="quiz-question">5. StatefulSet 中的 Pod 拥有固定且有序的名称（如 mysql-0、mysql-1），Pod 重建后名称保持不变。<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q5" value="T" /> 正确</label></li>
-              <li><label><input type="radio" name="q5" value="F" /> 错误</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="multi" data-answer="A|C" data-stars="2"
-               data-chapter="08-workload" data-qid="q6"
-               data-explain="Job 的 restartPolicy 必须为 OnFailure 或 Never，不能是 Always。因为 Job 是一次性任务，完成后应该退出，不能被无限重启。">
-            <div class="quiz-question">6. Job 类型的工作负载，restartPolicy 可以设置为哪些值？（多选）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="checkbox" name="q6" value="A" /> A. OnFailure</label></li>
-              <li><label><input type="checkbox" name="q6" value="B" /> B. Always</label></li>
-              <li><label><input type="checkbox" name="q6" value="C" /> C. Never</label></li>
-              <li><label><input type="checkbox" name="q6" value="D" /> D. IfNotPresent</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="text" data-answer="daemonset" data-stars="2"
-               data-chapter="08-workload" data-qid="q7"
-               data-explain="DaemonSet 确保集群中每个节点上都运行一个 Pod 副本，常用于日志收集、监控 Agent 等节点级组件。">
-            <div class="quiz-question">7. 在 K8s 中，确保每个节点都运行一个 Pod 副本的工作负载类型是 ______（填英文名称）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><input type="text" placeholder="输入你的答案" /></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
         </section>
 
         <div class="page-nav" id="page-nav"></div>
@@ -362,6 +268,7 @@ spec:
 
   <script src="../assets/js/game.js"></script>
   <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
   <script src="../assets/js/quiz.js"></script>
 </body>
 </html>

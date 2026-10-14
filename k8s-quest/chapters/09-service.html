@@ -237,103 +237,9 @@ kubectl get configmap kube-proxy -n kube-system -o yaml | grep mode
           <li>kube-proxy 支持 iptables（默认）和 ipvs（高性能）两种模式</li>
         </ul>
 
-        <!-- 测试题 -->
-        <section class="quiz-section">
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
           <h2>🎯 本章测试（答对赚星星！）</h2>
-
-          <div class="quiz" data-type="choice" data-answer="B" data-stars="1"
-               data-chapter="09-service" data-qid="q1"
-               data-explain="Service 的核心作用是为一组 Pod 提供稳定的网络入口（虚拟 IP/DNS），并对后端 Pod 进行负载均衡，解决 Pod IP 不稳定的问题。">
-            <div class="quiz-question">1. Kubernetes 中 Service 的主要作用是？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q1" value="A" /> A. 管理 Pod 副本数量</label></li>
-              <li><label><input type="radio" name="q1" value="B" /> B. 为一组 Pod 提供稳定的网络入口和负载均衡</label></li>
-              <li><label><input type="radio" name="q1" value="C" /> C. 在每个节点上运行一个 Pod</label></li>
-              <li><label><input type="radio" name="q1" value="D" /> D. 管理应用配置</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="A" data-stars="1"
-               data-chapter="09-service" data-qid="q2"
-               data-explain="ClusterIP 是 Service 的默认类型，只在集群内部可访问，分配一个集群内部的虚拟 IP。">
-            <div class="quiz-question">2. Service 的默认类型是？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q2" value="A" /> A. ClusterIP</label></li>
-              <li><label><input type="radio" name="q2" value="B" /> B. NodePort</label></li>
-              <li><label><input type="radio" name="q2" value="C" /> C. LoadBalancer</label></li>
-              <li><label><input type="radio" name="q2" value="D" /> D. Headless</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="C" data-stars="2"
-               data-chapter="09-service" data-qid="q3"
-               data-explain="Headless Service 通过将 clusterIP 设置为 None 实现，此时 Service 不分配虚拟 IP，DNS 查询会直接返回后端 Pod 的 IP 列表。">
-            <div class="quiz-question">3. 要创建一个 Headless Service，需要如何配置？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q3" value="A" /> A. type 设置为 Headless</label></li>
-              <li><label><input type="radio" name="q3" value="B" /> B. type 设置为 None</label></li>
-              <li><label><input type="radio" name="q3" value="C" /> C. clusterIP 设置为 None</label></li>
-              <li><label><input type="radio" name="q3" value="D" /> D. selector 设置为空</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="B" data-stars="2"
-               data-chapter="09-service" data-qid="q4"
-               data-explain="NodePort 默认的端口范围是 30000-32767，外部用户通过 节点IP:NodePort 访问服务。">
-            <div class="quiz-question">4. NodePort 类型 Service 默认的端口范围是？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q4" value="A" /> A. 1-65535</label></li>
-              <li><label><input type="radio" name="q4" value="B" /> B. 30000-32767</label></li>
-              <li><label><input type="radio" name="q4" value="C" /> C. 80-8080</label></li>
-              <li><label><input type="radio" name="q4" value="D" /> D. 1024-49151</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="judge" data-answer="T" data-stars="2"
-               data-chapter="09-service" data-qid="q5"
-               data-explain="LoadBalancer 类型需要云厂商的支持，由云厂商自动创建外部负载均衡器并分配外部 IP。在裸金属或本地环境中通常无法使用此类型。">
-            <div class="quiz-question">5. LoadBalancer 类型的 Service 需要云厂商提供负载均衡器支持才能获得外部 IP。<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q5" value="T" /> 正确</label></li>
-              <li><label><input type="radio" name="q5" value="F" /> 错误</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="multi" data-answer="A|C" data-stars="2"
-               data-chapter="09-service" data-qid="q6"
-               data-explain="kube-proxy 支持 iptables（默认）和 ipvs（高性能）两种代理模式。用户态（userspace）模式是早期版本的实现，已基本弃用。BGP 和 VXLAN 是网络插件的技术，不是 kube-proxy 模式。">
-            <div class="quiz-question">6. kube-proxy 支持以下哪些代理模式？（多选）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="checkbox" name="q6" value="A" /> A. iptables</label></li>
-              <li><label><input type="checkbox" name="q6" value="B" /> B. BGP</label></li>
-              <li><label><input type="checkbox" name="q6" value="C" /> C. ipvs</label></li>
-              <li><label><input type="checkbox" name="q6" value="D" /> D. VXLAN</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="text" data-answer="label selector|selector" data-stars="2"
-               data-chapter="09-service" data-qid="q7"
-               data-explain="Service 通过 Label Selector（标签选择器）来选择需要代理的后端 Pod，实现 Service 与 Pod 的解耦。">
-            <div class="quiz-question">7. Service 通过 ______ 机制来选择它需要代理的后端 Pod（填两个英文单词，即"标签选择器"）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><input type="text" placeholder="输入你的答案" /></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
         </section>
 
         <div class="page-nav" id="page-nav"></div>
@@ -347,6 +253,7 @@ kubectl get configmap kube-proxy -n kube-system -o yaml | grep mode
 
   <script src="../assets/js/game.js"></script>
   <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
   <script src="../assets/js/quiz.js"></script>
 </body>
 </html>

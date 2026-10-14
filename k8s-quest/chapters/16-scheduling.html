@@ -220,117 +220,9 @@ spec:
           <li>Pod 的 resources.requests 直接影响调度能否成功</li>
         </ul>
 
-        <!-- 测试题 -->
-        <section class="quiz-section">
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
           <h2>🎯 本章测试（答对赚星星！）</h2>
-
-          <div class="quiz" data-type="choice" data-answer="B" data-stars="1"
-               data-chapter="16-scheduling" data-qid="q1"
-               data-explain="kube-scheduler 是控制平面中负责为 Pod 选择运行节点的组件。">
-            <div class="quiz-question">1. Kubernetes 中负责为 Pod 选择运行节点的组件是？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q1" value="A" /> A. kubelet</label></li>
-              <li><label><input type="radio" name="q1" value="B" /> B. kube-scheduler</label></li>
-              <li><label><input type="radio" name="q1" value="C" /> C. kube-controller-manager</label></li>
-              <li><label><input type="radio" name="q1" value="D" /> D. kube-proxy</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="C" data-stars="2"
-               data-chapter="16-scheduling" data-qid="q2"
-               data-explain="调度流程为：过滤（剔除不满足条件的节点）→ 打分（对候选节点排序）→ 选择（绑定到最优节点）。">
-            <div class="quiz-question">2. kube-scheduler 的调度流程正确顺序是？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q2" value="A" /> A. 打分 → 过滤 → 选择</label></li>
-              <li><label><input type="radio" name="q2" value="B" /> B. 选择 → 过滤 → 打分</label></li>
-              <li><label><input type="radio" name="q2" value="C" /> C. 过滤 → 打分 → 选择</label></li>
-              <li><label><input type="radio" name="q2" value="D" /> D. 过滤 → 选择 → 打分</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="multi" data-answer="A|B|C" data-stars="3"
-               data-chapter="16-scheduling" data-qid="q3"
-               data-explain="Kubernetes 提供了 nodeAffinity（节点亲和性）、podAffinity（Pod亲和性）和 podAntiAffinity（Pod反亲和性）三种亲和性机制。">
-            <div class="quiz-question">3. Kubernetes 中支持以下哪些亲和性（Affinity）机制？（多选）<span class="star-badge">⭐3</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="checkbox" name="q3" value="A" /> A. nodeAffinity</label></li>
-              <li><label><input type="checkbox" name="q3" value="B" /> B. podAffinity</label></li>
-              <li><label><input type="checkbox" name="q3" value="C" /> C. podAntiAffinity</label></li>
-              <li><label><input type="checkbox" name="q3" value="D" /> D. containerAffinity</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="D" data-stars="2"
-               data-chapter="16-scheduling" data-qid="q4"
-               data-explain="污点（Taint）作用在节点上，用于排斥没有对应容忍的 Pod；而亲和性是作用在 Pod 上主动选择节点。">
-            <div class="quiz-question">4. 关于污点（Taint）的说法，下列哪项是正确的？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q4" value="A" /> A. 污点配置在 Pod 上，用于选择节点</label></li>
-              <li><label><input type="radio" name="q4" value="B" /> B. 有污点的节点不能运行任何 Pod</label></li>
-              <li><label><input type="radio" name="q4" value="C" /> C. 污点和容忍是同一概念的不同叫法</label></li>
-              <li><label><input type="radio" name="q4" value="D" /> D. 污点作用在节点上，Pod 需要声明容忍才能调度上去</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="A" data-stars="3"
-               data-chapter="16-scheduling" data-qid="q5"
-               data-explain="NoExecute 会立即驱逐不匹配的已运行 Pod；NoSchedule 只阻止新 Pod 调度；PreferNoSchedule 是尽量不调度。">
-            <div class="quiz-question">5. 哪种污点 effect 会立即驱逐节点上不匹配的已运行 Pod？<span class="star-badge">⭐3</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q5" value="A" /> A. NoExecute</label></li>
-              <li><label><input type="radio" name="q5" value="B" /> B. NoSchedule</label></li>
-              <li><label><input type="radio" name="q5" value="C" /> C. PreferNoSchedule</label></li>
-              <li><label><input type="radio" name="q5" value="D" /> D. Evict</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="B" data-stars="2"
-               data-chapter="16-scheduling" data-qid="q6"
-               data-explain="cordon 仅标记节点不可调度，新 Pod 不会调度过来，但已有 Pod 继续运行；drain 才会驱逐已有 Pod。">
-            <div class="quiz-question">6. 执行 <code>kubectl cordon node-1</code> 后，节点上已运行的 Pod 会怎样？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q6" value="A" /> A. 立即被驱逐到其他节点</label></li>
-              <li><label><input type="radio" name="q6" value="B" /> B. 继续运行，不受影响</label></li>
-              <li><label><input type="radio" name="q6" value="C" /> C. 自动停止</label></li>
-              <li><label><input type="radio" name="q6" value="D" /> D. 被杀死并重建</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="text" data-answer="drain" data-stars="2"
-               data-chapter="16-scheduling" data-qid="q7"
-               data-explain="kubectl drain 会先 cordon 节点，再驱逐其上的 Pod，用于节点维护前的安全排空。">
-            <div class="quiz-question">7. 要在维护节点前将其上的 Pod 安全驱逐到其他节点，应使用命令 <code>kubectl ______ node-1</code>（填空）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><input type="text" placeholder="输入你的答案" /></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="judge" data-answer="F" data-stars="2"
-               data-chapter="16-scheduling" data-qid="q8"
-               data-explain="影响调度的是 resources.requests（请求量），而不是 limits（上限）。调度器根据 requests 判断节点是否有足够资源。">
-            <div class="quiz-question">8. Pod 能否被调度到某个节点上，主要取决于它的 <code>resources.limits</code> 是否超出节点剩余资源。<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q8" value="T" /> 正确</label></li>
-              <li><label><input type="radio" name="q8" value="F" /> 错误</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
         </section>
 
         <div class="page-nav" id="page-nav"></div>
@@ -344,6 +236,7 @@ spec:
 
   <script src="../assets/js/game.js"></script>
   <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
   <script src="../assets/js/quiz.js"></script>
 </body>
 </html>

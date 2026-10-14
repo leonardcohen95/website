@@ -189,146 +189,9 @@ kubectl describe node node-1</code></pre>
           <li>节点问题看 NotReady 和各种 Pressure 状态</li>
         </ul>
 
-        <!-- 测试题 -->
-        <section class="quiz-section">
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
           <h2>🎯 本章测试（答对赚星星！）</h2>
-
-          <div class="quiz" data-type="choice" data-answer="A" data-stars="1"
-               data-chapter="20-troubleshoot" data-qid="q1"
-               data-explain="Pod 反复崩溃重启时会显示 CrashLoopBackOff，说明容器启动后立即退出，K8s 在反复尝试重启。">
-            <div class="quiz-question">1. 当一个 Pod 不断崩溃退出、K8s 反复重启它时，Pod 状态通常显示为？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q1" value="A" /> A. CrashLoopBackOff</label></li>
-              <li><label><input type="radio" name="q1" value="B" /> B. ImagePullBackOff</label></li>
-              <li><label><input type="radio" name="q1" value="C" /> C. Terminating</label></li>
-              <li><label><input type="radio" name="q1" value="D" /> D. Completed</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="B" data-stars="2"
-               data-chapter="20-troubleshoot" data-qid="q2"
-               data-explain="ImagePullBackOff 表示镜像拉取失败，常见原因包括镜像名错误、私有仓库认证失败、网络不可达。">
-            <div class="quiz-question">2. Pod 状态为 ImagePullBackOff，最可能的原因是？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q2" value="A" /> A. 应用代码运行崩溃</label></li>
-              <li><label><input type="radio" name="q2" value="B" /> B. 镜像拉取失败</label></li>
-              <li><label><input type="radio" name="q2" value="C" /> C. 资源不足导致调度失败</label></li>
-              <li><label><input type="radio" name="q2" value="D" /> D. 配置文件语法错误</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="C" data-stars="2"
-               data-chapter="20-troubleshoot" data-qid="q3"
-               data-explain="OOMKilled 表示容器因内存使用量超过 limits 被内核 OOM Killer 杀死，需要调高 limits 或优化应用。">
-            <div class="quiz-question">3. Pod 状态显示 OOMKilled，说明什么问题？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q3" value="A" /> A. CPU 使用率过高</label></li>
-              <li><label><input type="radio" name="q3" value="B" /> B. 磁盘空间不足</label></li>
-              <li><label><input type="radio" name="q3" value="C" /> C. 内存使用超出限制被杀死</label></li>
-              <li><label><input type="radio" name="q3" value="D" /> D. 网络连接超时</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="D" data-stars="2"
-               data-chapter="20-troubleshoot" data-qid="q4"
-               data-explain="kubectl describe pod 会显示 Pod 的详细信息，包括底部的 Events 事件列表，是排查 Pod 问题最常用的命令。">
-            <div class="quiz-question">4. 要查看 Pod 的调度、拉镜像、启动等阶段发生的事件，应使用哪个命令？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q4" value="A" /> A. kubectl get pod</label></li>
-              <li><label><input type="radio" name="q4" value="B" /> B. kubectl logs pod</label></li>
-              <li><label><input type="radio" name="q4" value="C" /> C. kubectl exec pod</label></li>
-              <li><label><input type="radio" name="q4" value="D" /> D. kubectl describe pod</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="B" data-stars="2"
-               data-chapter="20-troubleshoot" data-qid="q5"
-               data-explain="kubectl logs --previous 可以查看上一个（已退出的）容器实例的日志，对于排查 CrashLoopBackOff 非常关键。">
-            <div class="quiz-question">5. 对于 CrashLoopBackOff 的 Pod，要查看容器上一次崩溃前的日志，应使用？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q5" value="A" /> A. kubectl logs my-pod --tail</label></li>
-              <li><label><input type="radio" name="q5" value="B" /> B. kubectl logs my-pod --previous</label></li>
-              <li><label><input type="radio" name="q5" value="C" /> C. kubectl logs my-pod --crash</label></li>
-              <li><label><input type="radio" name="q5" value="D" /> D. kubectl logs my-pod -f</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="multi" data-answer="A|B|C" data-stars="3"
-               data-chapter="20-troubleshoot" data-qid="q6"
-               data-explain="Pod 处于 Pending 的常见原因包括节点资源不足、节点选择器无匹配节点、污点无容忍。镜像拉取失败对应的是 ImagePullBackOff。">
-            <div class="quiz-question">6. Pod 一直处于 Pending 状态，可能的原因有哪些？（多选）<span class="star-badge">⭐3</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="checkbox" name="q6" value="A" /> A. 所有节点资源不足，无法调度</label></li>
-              <li><label><input type="checkbox" name="q6" value="B" /> B. nodeSelector / 亲和性没有匹配的节点</label></li>
-              <li><label><input type="checkbox" name="q6" value="C" /> C. 节点有污点但 Pod 没有对应的容忍</label></li>
-              <li><label><input type="checkbox" name="q6" value="D" /> D. 镜像名称拼写错误</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="A" data-stars="2"
-               data-chapter="20-troubleshoot" data-qid="q7"
-               data-explain="Service 没有后端 Pod 最常见的原因是 selector 与 Pod 的 labels 不匹配，此时 endpoints 为空。">
-            <div class="quiz-question">7. Service 能创建但访问不到后端，<code>kubectl get endpoints</code> 显示为空，最可能的原因是？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q7" value="A" /> A. Service 的 selector 与 Pod 的 labels 不匹配</label></li>
-              <li><label><input type="radio" name="q7" value="B" /> B. Service 类型错误</label></li>
-              <li><label><input type="radio" name="q7" value="C" /> C. DNS 解析失败</label></li>
-              <li><label><input type="radio" name="q7" value="D" /> D. 节点磁盘已满</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="text" data-stars="2"
-               data-chapter="20-troubleshoot" data-qid="q8"
-               data-answer="notready"
-               data-explain="节点状态为 NotReady 表示 kubelet 停止响应，该节点上的 Pod 无法正常工作，是严重的节点问题。">
-            <div class="quiz-question">8. 当节点上的 kubelet 停止响应时，<code>kubectl get nodes</code> 显示该节点的 STATUS 为 <code>______</code>（填空）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><input type="text" placeholder="输入你的答案" /></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="judge" data-answer="T" data-stars="2"
-               data-chapter="20-troubleshoot" data-qid="q9"
-               data-explain="正确的排查顺序是：先看状态（get）了解表面现象，再看事件（describe）定位阶段，然后看日志（logs）找根因，最后看资源（top）确认是否资源问题。">
-            <div class="quiz-question">9. 故障排查的推荐顺序是：看状态 → 看事件 → 看日志 → 看资源。<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q9" value="T" /> 正确</label></li>
-              <li><label><input type="radio" name="q9" value="F" /> 错误</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="D" data-stars="3"
-               data-chapter="20-troubleshoot" data-qid="q10"
-               data-explain="kubectl exec -it 可以以交互式方式进入运行中的容器内部，排查环境变量、配置文件、网络连通性等问题。">
-            <div class="quiz-question">10. 要进入一个正在运行的 Pod 容器内部执行命令进行排查，应使用？<span class="star-badge">⭐3</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q10" value="A" /> A. kubectl attach</label></li>
-              <li><label><input type="radio" name="q10" value="B" /> B. kubectl ssh</label></li>
-              <li><label><input type="radio" name="q10" value="C" /> C. kubectl enter</label></li>
-              <li><label><input type="radio" name="q10" value="D" /> D. kubectl exec -it</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
         </section>
 
         <div class="page-nav" id="page-nav"></div>
@@ -342,6 +205,7 @@ kubectl describe node node-1</code></pre>
 
   <script src="../assets/js/game.js"></script>
   <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
   <script src="../assets/js/quiz.js"></script>
 </body>
 </html>

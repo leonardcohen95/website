@@ -30,12 +30,12 @@ function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
-// 章节题目数配置
+// 章节题目数配置（每章 10 题）
 const QUESTION_COUNTS = {
-  '01-intro':5,'02-arch':5,'03-core':6,'04-kubectl':6,'05-setup':6,
-  '06-pod':7,'07-deployment':7,'08-workload':7,'09-service':7,'10-ingress':7,
-  '11-volume':6,'12-pv-pvc':7,'13-configmap':6,'14-secret':6,'15-rbac':8,
-  '16-scheduling':8,'17-hpa':7,'18-helm':8,'19-monitor':8,'20-troubleshoot':10
+  '01-intro':10,'02-arch':10,'03-core':10,'04-kubectl':10,'05-setup':10,
+  '06-pod':10,'07-deployment':10,'08-workload':10,'09-service':10,'10-ingress':10,
+  '11-volume':10,'12-pv-pvc':10,'13-configmap':10,'14-secret':10,'15-rbac':10,
+  '16-scheduling':10,'17-hpa':10,'18-helm':10,'19-monitor':10,'20-troubleshoot':10
 };
 
 function hashPassword(pwd) {
@@ -136,6 +136,22 @@ app.post('/api/submit', (req, res) => {
   saveData(data);
 
   res.json({ alreadyDone: false, newStars: starCount + bonus, stars: data.totalStars[userId], chapterCompleted: ch.completed });
+});
+
+// 消耗星星（重新答题）
+app.post('/api/spend', (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) return res.status(401).json({ error: '未登录' });
+
+  const count = parseInt(req.body.count) || 1;
+  const data = loadData();
+  const stars = data.totalStars[userId] || 0;
+  if (stars < count) {
+    return res.json({ success: false, reason: 'stars', stars });
+  }
+  data.totalStars[userId] = stars - count;
+  saveData(data);
+  res.json({ success: true, stars: data.totalStars[userId] });
 });
 
 // 排行榜

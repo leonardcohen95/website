@@ -257,103 +257,9 @@ kubectl get rs</code></pre>
           <li>kubectl rollout status/history 查看更新状态和历史版本</li>
         </ul>
 
-        <!-- 测试题 -->
-        <section class="quiz-section">
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
           <h2>🎯 本章测试（答对赚星星！）</h2>
-
-          <div class="quiz" data-type="choice" data-answer="C" data-stars="1"
-               data-chapter="07-deployment" data-qid="q1"
-               data-explain="Deployment 的核心作用是管理 Pod 副本数量，确保始终有期望数量的 Pod 在运行，并支持滚动更新和回滚。">
-            <div class="quiz-question">1. Deployment 的主要作用是什么？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q1" value="A" /> A. 为 Pod 提供固定的网络入口</label></li>
-              <li><label><input type="radio" name="q1" value="B" /> B. 在每个节点上运行一个 Pod</label></li>
-              <li><label><input type="radio" name="q1" value="C" /> C. 管理 Pod 副本数量，确保期望数量运行</label></li>
-              <li><label><input type="radio" name="q1" value="D" /> D. 执行一次性任务</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="A" data-stars="1"
-               data-chapter="07-deployment" data-qid="q2"
-               data-explain="RollingUpdate 是默认的部署策略，逐个替换 Pod，更新过程中服务不中断。">
-            <div class="quiz-question">2. Deployment 默认的部署策略是？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q2" value="A" /> A. RollingUpdate</label></li>
-              <li><label><input type="radio" name="q2" value="B" /> B. Recreate</label></li>
-              <li><label><input type="radio" name="q2" value="C" /> C. BlueGreen</label></li>
-              <li><label><input type="radio" name="q2" value="D" /> D. Canary</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="B" data-stars="2"
-               data-chapter="07-deployment" data-qid="q3"
-               data-explain="kubectl rollout undo 用于回滚 Deployment 到上一个版本，加上 --to-revision 可以指定回滚到的版本。">
-            <div class="quiz-question">3. 要将 Deployment 回滚到上一个版本，应使用哪个命令？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q3" value="A" /> A. kubectl rollback deployment/myapp</label></li>
-              <li><label><input type="radio" name="q3" value="B" /> B. kubectl rollout undo deployment/myapp</label></li>
-              <li><label><input type="radio" name="q3" value="C" /> C. kubectl revert deployment/myapp</label></li>
-              <li><label><input type="radio" name="q3" value="D" /> D. kubectl rollout revert deployment/myapp</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="D" data-stars="2"
-               data-chapter="07-deployment" data-qid="q4"
-               data-explain="maxUnavailable 表示滚动更新过程中最多允许多少个 Pod 不可用。设置为 0 意味着更新期间不允许任何 Pod 不可用，实现零停机。">
-            <div class="quiz-question">4. 在 RollingUpdate 策略中，maxUnavailable 参数的含义是？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q4" value="A" /> A. 最多可以比期望副本数多出的 Pod 数量</label></li>
-              <li><label><input type="radio" name="q4" value="B" /> B. 更新完成后保留的旧版本 Pod 数量</label></li>
-              <li><label><input type="radio" name="q4" value="C" /> C. 每次滚动更新替换的 Pod 数量</label></li>
-              <li><label><input type="radio" name="q4" value="D" /> D. 更新过程中最多允许不可用的 Pod 数量</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="judge" data-answer="F" data-stars="2"
-               data-chapter="07-deployment" data-qid="q5"
-               data-explain="Recreate 策略会先杀掉所有旧 Pod 再创建新 Pod，更新期间服务会完全中断。RollingUpdate 才是逐个替换、不中断服务的策略。">
-            <div class="quiz-question">5. Recreate 部署策略会逐个替换 Pod，更新过程中服务不会中断。<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q5" value="T" /> 正确</label></li>
-              <li><label><input type="radio" name="q5" value="F" /> 错误</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="multi" data-answer="B|C" data-stars="2"
-               data-chapter="07-deployment" data-qid="q6"
-               data-explain="kubectl rollout pause 暂停滚动更新，kubectl rollout resume 恢复。rollout status 查看状态，rollout history 查看历史，它们不用于暂停/恢复。">
-            <div class="quiz-question">6. 以下哪些命令与 Deployment 的暂停/恢复滚动更新相关？（多选）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="checkbox" name="q6" value="A" /> A. kubectl rollout status</label></li>
-              <li><label><input type="checkbox" name="q6" value="B" /> B. kubectl rollout pause</label></li>
-              <li><label><input type="checkbox" name="q6" value="C" /> C. kubectl rollout resume</label></li>
-              <li><label><input type="checkbox" name="q6" value="D" /> D. kubectl rollout history</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="text" data-answer="rollout status" data-stars="2"
-               data-chapter="07-deployment" data-qid="q7"
-               data-explain="kubectl rollout status deployment/xxx 用于实时查看滚动更新的进度，该命令会阻塞直到更新完成。">
-            <div class="quiz-question">7. 要实时查看 Deployment 滚动更新的进度，使用命令 <code>kubectl ______ deployment/myapp</code>（填两个英文单词）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><input type="text" placeholder="输入你的答案" /></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
         </section>
 
         <div class="page-nav" id="page-nav"></div>
@@ -367,6 +273,7 @@ kubectl get rs</code></pre>
 
   <script src="../assets/js/game.js"></script>
   <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
   <script src="../assets/js/quiz.js"></script>
 </body>
 </html>

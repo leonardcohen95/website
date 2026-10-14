@@ -192,89 +192,9 @@ spec:
           <li>其他常用类型：nfs（网络共享）、configMap / secret（注入配置）</li>
         </ul>
 
-        <!-- 测试题 -->
-        <section class="quiz-section">
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
           <h2>🎯 本章测试（答对赚星星！）</h2>
-
-          <div class="quiz" data-type="choice" data-answer="B" data-stars="1"
-               data-chapter="11-volume" data-qid="q1"
-               data-explain="emptyDir 在 Pod 创建时生成空目录，Pod 删除时随之删除，数据不会持久化。">
-            <div class="quiz-question">1. 关于 emptyDir 类型的 Volume，下列说法正确的是？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q1" value="A" /> A. 数据会持久化保存，Pod 删除后仍可恢复</label></li>
-              <li><label><input type="radio" name="q1" value="B" /> B. 数据在 Pod 生命周期内有效，Pod 删除则数据丢失</label></li>
-              <li><label><input type="radio" name="q1" value="C" /> C. 数据只能被一个容器挂载，无法共享</label></li>
-              <li><label><input type="radio" name="q1" value="D" /> D. emptyDir 必须指定宿主机上的路径</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="C" data-stars="2"
-               data-chapter="11-volume" data-qid="q2"
-               data-explain="hostPath 会挂载宿主机（Node）上的文件或目录到 Pod 中，使 Pod 可以直接访问宿主机文件系统。">
-            <div class="quiz-question">2. 要让 Pod 能够读取宿主机上 /var/log 目录的内容，应使用哪种 Volume 类型？<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q2" value="A" /> A. emptyDir</label></li>
-              <li><label><input type="radio" name="q2" value="B" /> B. configMap</label></li>
-              <li><label><input type="radio" name="q2" value="C" /> C. hostPath</label></li>
-              <li><label><input type="radio" name="q2" value="D" /> D. secret</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="multi" data-answer="A|B|C|D" data-stars="2"
-               data-chapter="11-volume" data-qid="q3"
-               data-explain="emptyDir、hostPath、nfs、configMap、secret 都是 Kubernetes 支持的 Volume 类型。">
-            <div class="quiz-question">3. 以下哪些属于 Kubernetes 支持的 Volume 类型？（多选）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="checkbox" name="q3" value="A" /> A. emptyDir</label></li>
-              <li><label><input type="checkbox" name="q3" value="B" /> B. hostPath</label></li>
-              <li><label><input type="checkbox" name="q3" value="C" /> C. nfs</label></li>
-              <li><label><input type="checkbox" name="q3" value="D" /> D. configMap</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="judge" data-answer="T" data-stars="2"
-               data-chapter="11-volume" data-qid="q4"
-               data-explain="hostPath 允许 Pod 直接访问宿主机文件系统，如果挂载了敏感目录可能导致容器逃逸，因此存在安全风险，生产环境应谨慎使用。">
-            <div class="quiz-question">4. hostPath 类型的 Volume 存在安全风险，生产环境中普通业务 Pod 不应随意使用。<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q4" value="T" /> 正确</label></li>
-              <li><label><input type="radio" name="q4" value="F" /> 错误</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="text" data-answer="volumemounts" data-stars="2"
-               data-chapter="11-volume" data-qid="q5"
-               data-explain="在 Pod 中通过 volumes 声明卷，在容器中通过 volumeMounts 指定挂载路径，两者通过 name 字段关联。">
-            <div class="quiz-question">5. 在 Kubernetes Pod 中，声明 Volume 使用 <code>volumes</code> 字段，而在容器内指定挂载路径使用的字段是 <code>______</code>（填空，小写）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><input type="text" placeholder="输入你的答案" /></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="A" data-stars="3"
-               data-chapter="11-volume" data-qid="q6"
-               data-explain="Volume 是 Pod 级别的概念，同一个 Pod 内的多个容器可以共享同一个 Volume（通过相同的 name 挂载）。">
-            <div class="quiz-question">6. 关于 Kubernetes Volume 的作用范围，下列说法正确的是？<span class="star-badge">⭐3</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q6" value="A" /> A. Volume 是 Pod 级别的，同一 Pod 内多个容器可以共享</label></li>
-              <li><label><input type="radio" name="q6" value="B" /> B. Volume 是容器级别的，每个容器只能有自己的卷</label></li>
-              <li><label><input type="radio" name="q6" value="C" /> C. Volume 是集群级别的，所有 Pod 共享同一个卷</label></li>
-              <li><label><input type="radio" name="q6" value="D" /> D. Volume 是 Node 级别的，只在当前节点有效</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
         </section>
 
         <div class="page-nav" id="page-nav"></div>
@@ -288,6 +208,7 @@ spec:
 
   <script src="../assets/js/game.js"></script>
   <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
   <script src="../assets/js/quiz.js"></script>
 </body>
 </html>
