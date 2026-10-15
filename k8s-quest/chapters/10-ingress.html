@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第10章 Ingress路由 | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="10-ingress">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>Ingress 路由</h1>
+        <p>Service 解决了集群内部的服务发现问题，但对外暴露服务时，NodePort 端口杂乱、LoadBalancer 成本高昂，且都工作在四层（TCP/UDP）。Ingress 则提供了七层（HTTP/HTTPS）的路由能力，可以基于域名和路径将外部流量转发到不同的 Service，还能统一管理 TLS 证书。本章我们学习 Ingress 的工作原理和配置方法。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Ingress 的作用：七层 HTTP/HTTPS 路由</li>
+          <li>了解 Ingress Controller 的概念和常见实现（Nginx、Traefik 等）</li>
+          <li>掌握基于域名和路径的路由规则配置</li>
+          <li>学会配置 TLS/HTTPS</li>
+          <li>理解 Ingress 与 Service 的关系</li>
+        </ul>
+
+        <h2>1. Ingress 是什么</h2>
+        <div class="term-card">
+          <div class="term-name">🚪 Ingress</div>
+          <p>
+            Ingress 是 K8s 中的一种 API 对象，用于管理<strong>从集群外部访问集群内部服务的 HTTP/HTTPS 路由</strong>。
+            它工作在<strong>七层（OSI 应用层）</strong>，可以根据域名和 URL 路径将请求转发到不同的 Service。
+          </p>
+        </div>
+
+        <p>
+          简单来说，Ingress 就是集群的"反向代理"或"网关"。它把外部 HTTP 请求根据规则路由到内部 Service，
+          相当于在集群入口处放了一个统一的 Nginx。
+        </p>
+
+        <div class="callout">
+          <div class="callout-title">🔄 Ingress vs Service</div>
+          <p>
+            • <strong>Service</strong>：四层负载均衡（TCP/UDP），按端口转发，不感知 HTTP 内容<br />
+            • <strong>Ingress</strong>：七层路由（HTTP/HTTPS），能按域名和路径转发，支持 TLS、重写、限流等<br />
+            Ingress 本身不直接暴露服务，它通过一个 LoadBalancer 或 NodePort 类型的 Service 对外暴露入口。
+          </p>
+        </div>
+
+        <h2>2. Ingress Controller</h2>
+        <p>
+          Ingress 对象本身只是一组路由规则，要让这些规则生效，必须有一个
+          <strong>Ingress Controller</strong> 来读取规则并实际处理流量。
+        </p>
+
+        <div class="term-card">
+          <div class="term-name">⚙️ Ingress Controller</div>
+          <p>
+            Ingress Controller 是实际运行的反向代理程序（通常以 Pod 形式部署），
+            它持续监听 Ingress 资源的变化，并将路由规则转化为自身的配置。
+            K8s 官方不内置 Ingress Controller，需要你自行部署。
+          </p>
+        </div>
+
+        <div class="callout tip">
+          <div class="callout-title">🌟 常见的 Ingress Controller</div>
+          <p>
+            • <strong>Nginx Ingress</strong>：官方维护，基于 Nginx，功能强大、生态成熟，最常用<br />
+            • <strong>Traefik</strong>：云原生设计，自动服务发现，配置简单，支持动态配置<br />
+            • <strong>HAProxy</strong>：性能优秀，适合高并发场景<br />
+            • <strong>Istio Gateway</strong>：服务网格方案，功能最丰富但较重
+          </p>
+        </div>
+
+<pre><code># 安装 Nginx Ingress Controller（以 Helm 为例）
+helm install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx --create-namespace
+
+# 查看 Controller 状态
+kubectl get pods -n ingress-nginx</code></pre>
+
+        <h2>3. 基于域名和路径的路由</h2>
+        <p>Ingress 最核心的能力就是根据<strong>域名（Host）</strong>和<strong>路径（Path）</strong>来路由请求。</p>
+
+<pre><code>apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: api-svc
+            port:
+              number: 80
+      - path: /web
+        pathType: Prefix
+        backend:
+          service:
+            name: web-svc
+            port:
+              number: 80</code></pre>
+
+        <p>上面的规则含义是：</p>
+        <ul>
+          <li>访问 <code>app.example.com/api/*</code> → 转发到 <code>api-svc</code> 服务</li>
+          <li>访问 <code>app.example.com/web/*</code> → 转发到 <code>web-svc</code> 服务</li>
+        </ul>
+
+        <div class="callout">
+          <div class="callout-title">🌐 基于域名的虚拟主机</div>
+          <p>
+            可以为不同域名配置不同的后端 Service：<br />
+            • <code>api.example.com</code> → api-svc<br />
+            • <code>www.example.com</code> → web-svc<br />
+            这样只需要一个公网 IP 和一个 Ingress Controller，就能托管多个域名的服务。
+          </p>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ pathType 的三种取值</div>
+          <p>
+            • <code>Exact</code>：精确匹配路径<br />
+            • <code>Prefix</code>：前缀匹配（最常用）<br />
+            • <code>ImplementationSpecific</code>：由 Controller 自行解释<br />
+            生产环境建议明确指定 pathType，避免匹配歧义。
+          </p>
+        </div>
+
+        <h2>4. TLS / HTTPS 配置</h2>
+        <p>
+          Ingress 支持为域名配置 TLS 证书，实现 HTTPS 加密访问。
+          证书以 Secret 资源存储，Ingress 通过 <code>tls</code> 字段引用。
+        </p>
+
+<pre><code># 先创建包含 TLS 证书的 Secret
+kubectl create secret tls example-tls \
+  --cert=tls.crt \
+  --key=tls.key
+
+# Ingress 中引用该 Secret
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: secure-ingress
+spec:
+  tls:
+  - hosts:
+    - app.example.com
+    secretName: example-tls
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web-svc
+            port:
+              number: 80</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">🔐 自动证书管理：cert-manager</div>
+          <p>
+            生产环境推荐使用 <strong>cert-manager</strong> 配合 Let's Encrypt 自动签发和续期免费的 TLS 证书，
+            无需手动管理证书。只需在 Ingress 上添加 annotation，cert-manager 会自动完成证书申请和更新。
+          </p>
+        </div>
+
+        <h2>5. Ingress 与 Service 的关系</h2>
+        <p>Ingress 和 Service 不是替代关系，而是协作关系：</p>
+
+        <div class="callout">
+          <div class="callout-title">🔗 请求流转路径</div>
+          <p>
+            外部用户 → DNS → Ingress Controller（LoadBalancer Service 暴露）→ 按 Ingress 规则路由 → 后端 Service → 负载均衡到 Pod
+          </p>
+        </div>
+
+        <ul>
+          <li><strong>Ingress Controller</strong> 通过一个 LoadBalancer（或 NodePort）类型的 Service 对外暴露入口</li>
+          <li><strong>Ingress 规则</strong>定义了域名/路径到内部 Service 的映射</li>
+          <li><strong>Service</strong> 负责将流量负载均衡到后端的 Pod</li>
+          <li>Ingress 不直接连接 Pod，它的后端始终是 Service</li>
+        </ul>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 为什么需要 Ingress</div>
+          <p>
+            如果没有 Ingress，每个对外服务都要创建一个 LoadBalancer Service，
+            既浪费公网 IP，又难以统一管理。有了 Ingress，只需一个公网入口，
+            就能通过域名和路径把流量分发到数十个内部 Service，还能统一管理 TLS、限流、重写等策略。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Ingress 提供七层 HTTP/HTTPS 路由，基于域名和路径转发请求</li>
+          <li>Ingress 只是规则，需要 Ingress Controller（Nginx、Traefik 等）来实际执行</li>
+          <li>路由规则支持基于域名的虚拟主机和基于路径的前缀匹配</li>
+          <li>TLS 证书通过 Secret 存储，Ingress 引用 Secret 实现 HTTPS</li>
+          <li>Ingress 后端是 Service，由 Service 再负载均衡到 Pod，二者协作而非替代</li>
+        </ul>
+
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 10 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

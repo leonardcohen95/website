@@ -133,75 +133,9 @@
           <li>港口类比：Master=调度中心，Node=货船</li>
         </ul>
 
-        <!-- 测试题 -->
-        <section class="quiz-section">
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
           <h2>🎯 本章测试（答对赚星星！）</h2>
-
-          <div class="quiz" data-type="choice" data-answer="A" data-stars="1"
-               data-chapter="02-arch" data-qid="q1"
-               data-explain="kube-apiserver 是集群的唯一入口，所有操作都要经过它。">
-            <div class="quiz-question">1. Kubernetes 集群中，所有操作的统一入口是哪个组件？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q1" value="A" /> A. kube-apiserver</label></li>
-              <li><label><input type="radio" name="q1" value="B" /> B. etcd</label></li>
-              <li><label><input type="radio" name="q1" value="C" /> C. kubelet</label></li>
-              <li><label><input type="radio" name="q1" value="D" /> D. kube-proxy</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="B" data-stars="1"
-               data-chapter="02-arch" data-qid="q2"
-               data-explain="etcd 是集群的分布式键值存储，保存整个集群的状态数据。">
-            <div class="quiz-question">2. 以下哪个组件负责存储整个集群的状态数据？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q2" value="A" /> A. kube-scheduler</label></li>
-              <li><label><input type="radio" name="q2" value="B" /> B. etcd</label></li>
-              <li><label><input type="radio" name="q2" value="C" /> C. kube-controller-manager</label></li>
-              <li><label><input type="radio" name="q2" value="D" /> D. kube-apiserver</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="multi" data-answer="A|C" data-stars="2"
-               data-chapter="02-arch" data-qid="q3"
-               data-explain="kube-scheduler 负责把 Pod 调度到合适的节点上运行。kubelet 负责在节点上运行容器。etcd 是存储，kube-apiserver 是入口。">
-            <div class="quiz-question">3. 关于 Pod 的调度与运行，以下哪些说法正确？（多选）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="checkbox" name="q3" value="A" /> A. kube-scheduler 决定 Pod 运行在哪个 Node 上</label></li>
-              <li><label><input type="checkbox" name="q3" value="B" /> B. etcd 直接负责运行容器</label></li>
-              <li><label><input type="checkbox" name="q3" value="C" /> C. kubelet 负责在 Node 上实际运行容器</label></li>
-              <li><label><input type="checkbox" name="q3" value="D" /> D. kube-apiserver 负责存储 Pod 数据</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="judge" data-answer="T" data-stars="1"
-               data-chapter="02-arch" data-qid="q4"
-               data-explain="控制平面（Master）做决策，数据平面（Node）执行决策，这是 K8s 的基本架构分工。">
-            <div class="quiz-question">4. 控制平面负责集群决策，数据平面负责实际运行容器。<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q4" value="T" /> 正确</label></li>
-              <li><label><input type="radio" name="q4" value="F" /> 错误</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="text" data-answer="kubelet" data-stars="1"
-               data-chapter="02-arch" data-qid="q5"
-               data-explain="kubelet 是每个 Node 上的管家，负责接收 API Server 的指令并确保容器正常运行。">
-            <div class="quiz-question">5. 每个 Node 节点上，负责接收 Master 指令并管理本地容器运行的组件叫什么？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><input type="text" placeholder="输入你的答案" /></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
         </section>
 
         <div class="page-nav" id="page-nav"></div>
@@ -215,6 +149,7 @@
 
   <script src="../assets/js/game.js"></script>
   <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
   <script src="../assets/js/quiz.js"></script>
 </body>
 </html>

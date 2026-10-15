@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第18章 Helm包管理 | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="18-helm">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>Helm 包管理</h1>
+        <p>在生产环境中部署一个完整的应用，往往涉及 Deployment、Service、ConfigMap、Ingress 等十几个 YAML 文件，手动管理非常繁琐。<strong>Helm</strong> 是 Kubernetes 的包管理器，它把这些资源打包成一个 <strong>Chart</strong>，通过模板化和参数化，实现"一键部署、一键升级、一键回滚"，是 K8s 生态中不可或缺的工具。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Helm、Chart、Release、Repository 四个核心概念</li>
+          <li>掌握 helm install / upgrade / rollback / uninstall / list 等常用命令</li>
+          <li>理解 values.yaml 的作用与自定义配置方式</li>
+          <li>了解 Helm 模板语法 <code>{{ .Values.xxx }}</code></li>
+          <li>了解如何在生产环境使用 Helm 管理复杂应用</li>
+        </ul>
+
+        <h2>1. 核心概念</h2>
+        <p>Helm 中有四个核心概念，理解它们是使用 Helm 的基础：</p>
+
+        <div class="term-card">
+          <div class="term-name">📦 Helm</div>
+          <p>
+            Kubernetes 的包管理器，类似于 Linux 的 apt/yum 或 Node.js 的 npm。
+            它简化了 K8s 应用的部署、升级和管理。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">📄 Chart</div>
+          <p>
+            Helm 的应用打包格式，是一个包含一组 K8s 资源模板的目录。
+            一个 Chart 描述了一个应用所需的所有 K8s 资源（Deployment、Service 等）。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🚀 Release</div>
+          <p>
+            Chart 的一个运行实例。同一个 Chart 可以被安装多次，每次安装就是一个独立的 Release，
+            每个 Release 有自己的名字和配置。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🗄️ Repository</div>
+          <p>
+            Chart 的仓库，用于存储和共享 Chart。
+            官方仓库（Artifact Hub）上有成千上万的开源 Chart 可供使用。
+          </p>
+        </div>
+
+        <h2>2. Chart 的目录结构</h2>
+        <p>一个标准的 Helm Chart 目录结构如下：</p>
+
+<pre><code>mychart/
+├── Chart.yaml          # Chart 的元信息（名称、版本、描述）
+├── values.yaml         # 默认配置值
+├── templates/          # K8s 资源模板目录
+│   ├── deployment.yaml
+│   ├── service.yaml
+│   └── ingress.yaml
+└── charts/             # 依赖的子 Chart（可选）</code></pre>
+
+        <h2>3. values.yaml 与模板语法</h2>
+        <p><code>values.yaml</code> 是 Chart 的默认配置文件，模板文件通过 <code>{{ .Values.xxx }}</code> 语法引用其中的值，从而实现参数化部署。</p>
+
+        <p>values.yaml 示例：</p>
+<pre><code>replicaCount: 3
+image:
+  repository: nginx
+  tag: "1.25"
+service:
+  type: ClusterIP
+  port: 80</code></pre>
+
+        <p>templates/deployment.yaml 中的引用：</p>
+<pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-nginx
+spec:
+  replicas: {{ .Values.replicaCount }}
+  template:
+    spec:
+      containers:
+      - name: nginx
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 覆盖默认值</div>
+          <p>
+            安装时可以通过 <code>--set key=value</code> 或 <code>-f custom-values.yaml</code> 来覆盖 values.yaml 中的默认值，
+            实现同一份 Chart 部署出不同配置的应用。
+          </p>
+        </div>
+
+        <h2>4. 常用 Helm 命令</h2>
+
+<pre><code># 添加 Chart 仓库
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
+
+# 搜索 Chart
+helm search repo nginx
+helm search hub wordpress
+
+# 安装 Chart（创建一个 Release）
+helm install my-release bitnami/nginx
+
+# 安装时自定义配置
+helm install my-release bitnami/nginx --set service.type=NodePort
+helm install my-release bitnami/nginx -f my-values.yaml
+
+# 查看已安装的 Release
+helm list
+helm list --all-namespaces
+
+# 升级 Release
+helm upgrade my-release bitnami/nginx --set replicaCount=5
+
+# 回滚到上一个版本
+helm rollback my-release
+
+# 卸载 Release
+helm uninstall my-release
+
+# 查看 Release 历史
+helm history my-release</code></pre>
+
+        <h2>5. 生产环境使用 Helm</h2>
+        <p>在生产环境中，Helm 被广泛用于管理复杂应用（如数据库、中间件、监控系统等）。最佳实践包括：</p>
+        <ul>
+          <li><strong>版本固定</strong>：使用特定版本的 Chart，避免意外升级</li>
+          <li><strong>values 分层</strong>：将环境特定的配置（values-prod.yaml、values-staging.yaml）与 Chart 分离</li>
+          <li><strong>使用 helm lint / helm template</strong>：部署前先校验和渲染模板</li>
+          <li><strong>CI/CD 集成</strong>：将 Helm 部署纳入流水线，实现声明式发布</li>
+        </ul>
+
+<pre><code># 部署前渲染模板，检查生成的 YAML 是否正确
+helm template my-release ./mychart -f values-prod.yaml
+
+# 检查 Chart 是否有语法或规范问题
+helm lint ./mychart
+
+# 干运行（模拟安装，不实际部署）
+helm install my-release ./mychart --dry-run --debug</code></pre>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Helm 是 K8s 的包管理器，Chart 是应用打包格式，Release 是 Chart 的运行实例，Repository 是 Chart 仓库</li>
+          <li>常用命令：install 安装、upgrade 升级、rollback 回滚、uninstall 卸载、list 查看</li>
+          <li>values.yaml 存放默认配置，模板通过 <code>{{ .Values.xxx }}</code> 引用</li>
+          <li>安装时可用 <code>--set</code> 或 <code>-f</code> 覆盖默认值</li>
+          <li>生产环境应固定版本、分层 values、用 lint/template/dry-run 做预检查</li>
+        </ul>
+
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 18 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

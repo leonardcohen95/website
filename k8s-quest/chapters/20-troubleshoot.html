@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第20章 故障排查实战 | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="20-troubleshoot">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>故障排查实战</h1>
+        <p>集群出问题了怎么办？Pod 起不来、服务访问不了、节点 NotReady…… 面对这些"线上事故"，慌乱是大忌，关键是要有章法。本章我们会建立一套系统化的排查思路，从 Pod 状态入手，结合事件、日志、资源四个维度，快速定位并解决常见故障。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>掌握"看状态 → 看事件 → 看日志 → 看资源"的排查口诀</li>
+          <li>识别 CrashLoopBackOff、ImagePullBackOff、Pending、OOMKilled 等常见状态</li>
+          <li>熟练使用 kubectl describe / logs / exec 排查问题</li>
+          <li>了解网络、存储、资源、节点各类问题的排查方向</li>
+        </ul>
+
+        <h2>1. 排查思路：四步口诀</h2>
+        <p>遇到问题时，按照以下顺序逐步排查，由浅入深，快速定位：</p>
+
+        <div class="callout tip">
+          <div class="callout-title">🔍 排查口诀</div>
+          <p>
+            <strong>看状态 → 看事件 → 看日志 → 看资源</strong><br /><br />
+            1. 看状态：<code>kubectl get pods</code>，Pod 处于什么状态？<br />
+            2. 看事件：<code>kubectl describe pod</code>，发生了什么事件？<br />
+            3. 看日志：<code>kubectl logs</code>，容器内部输出了什么？<br />
+            4. 看资源：<code>kubectl top</code> / 节点资源，是否资源不足？
+          </p>
+        </div>
+
+        <h2>2. 常见 Pod 状态解读</h2>
+
+        <div class="term-card">
+          <div class="term-name">💥 CrashLoopBackOff</div>
+          <p>
+            容器启动后不断崩溃退出，K8s 在反复重启。常见原因：应用启动失败、配置错误、依赖服务不可达。
+            排查：<code>kubectl logs --previous</code> 查看上一次崩溃前的日志。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🖼️ ImagePullBackOff / ErrImagePull</div>
+          <p>
+            镜像拉取失败。常见原因：镜像名/标签错误、私有仓库认证失败、网络不可达。
+            排查：检查镜像名是否正确、Secret 是否配置、节点能否访问镜像仓库。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">⏳ Pending</div>
+          <p>
+            Pod 还没有被调度到任何节点。常见原因：资源不足（CPU/内存）、节点选择器无匹配节点、
+            污点无容忍、持久卷不可用。排查：<code>kubectl describe pod</code> 看 Events 中的 FailedScheduling。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🧨 OOMKilled</div>
+          <p>
+            容器因内存超限被内核杀死。常见原因：内存 limits 设置过小，或应用存在内存泄漏。
+            排查：调整 limits，或优化应用内存使用。
+          </p>
+        </div>
+
+        <h2>3. 核心排查命令</h2>
+
+        <h3>kubectl describe pod —— 查看事件</h3>
+        <p><code>describe</code> 是排查的利器，它会显示 Pod 的详细信息，特别是底部的 <strong>Events</strong> 部分，记录了调度、拉镜像、启动容器等各个阶段发生的事件。</p>
+
+<pre><code># 查看 Pod 详情和事件
+kubectl describe pod my-pod
+
+# 重点关注底部 Events 部分，例如：
+# Warning  FailedScheduling  0/3 nodes are available: Insufficient memory.
+# Warning  Failed            Error: ImagePullBackOff</code></pre>
+
+        <h3>kubectl logs —— 查看容器日志</h3>
+        <p>如果容器启动了但运行异常，日志是最直接的线索。</p>
+
+<pre><code># 查看 Pod 日志
+kubectl logs my-pod
+
+# 查看上一个崩溃容器的日志（CrashLoopBackOff 时非常有用）
+kubectl logs my-pod --previous
+
+# 多容器 Pod 指定容器名
+kubectl logs my-pod -c container-name
+
+# 持续跟踪日志（类似 tail -f）
+kubectl logs -f my-pod</code></pre>
+
+        <h3>kubectl exec —— 进入容器排查</h3>
+        <p>如果容器在运行但行为异常，可以进入容器内部排查环境、配置、网络连通性等。</p>
+
+<pre><code># 以交互式方式进入容器
+kubectl exec -it my-pod -- /bin/sh
+
+# 在容器内执行命令
+kubectl exec my-pod -- cat /etc/resolv.conf
+kubectl exec my-pod -- nslookup my-service.default.svc.cluster.local</code></pre>
+
+        <h2>4. 网络问题排查</h2>
+        <p>服务访问不了、DNS 解析失败、跨 Pod 通信不通，都属于网络问题。排查方向：</p>
+        <ul>
+          <li><strong>Service</strong>：检查 Service 的 selector 是否匹配 Pod 的 labels，端口是否正确</li>
+          <li><strong>DNS</strong>：用 <code>nslookup</code> 验证 Service DNS 解析，检查 CoreDNS 是否正常</li>
+          <li><strong>NetworkPolicy</strong>：是否有网络策略阻止了流量</li>
+          <li><strong>网络插件</strong>：确认 CNI 插件（如 Calico、Flannel）运行正常</li>
+        </ul>
+
+<pre><code># 检查 Service 的 endpoint 是否有后端 Pod
+kubectl get endpoints my-service
+
+# 如果 endpoints 为空，说明 selector 没有匹配到任何 Pod</code></pre>
+
+        <h2>5. 存储问题排查</h2>
+        <p>Pod 挂载不上数据卷，常见排查方向：</p>
+        <ul>
+          <li><strong>PV/PVC 绑定</strong>：PVC 是否 Bound？是否有匹配的 PV？</li>
+          <li><strong>StorageClass</strong>：动态供应是否正常，provisioner 是否运行</li>
+          <li><strong>挂载失败</strong>：节点上的存储驱动是否正常，权限是否正确</li>
+        </ul>
+
+<pre><code># 查看 PVC 状态
+kubectl get pvc
+# 查看 PV 状态
+kubectl get pv
+# 查看 PVC 详情和事件
+kubectl describe pvc my-pvc</code></pre>
+
+        <h2>6. 资源问题排查</h2>
+        <p>Pod 处于 Pending 或节点压力大，往往是资源问题：</p>
+        <ul>
+          <li><strong>CPU/内存不足</strong>：<code>kubectl top nodes</code> 查看节点资源使用</li>
+          <li><strong>调度失败</strong>：<code>describe pod</code> 看 FailedScheduling 事件，确认是资源不足还是亲和性不匹配</li>
+          <li><strong>资源 limits</strong>：检查 Pod 的 requests/limits 设置是否合理</li>
+        </ul>
+
+        <h2>7. 节点问题排查</h2>
+        <p>节点 NotReady 是运维中常见的严重问题，意味着该节点上的 Pod 无法正常工作。</p>
+
+<pre><code># 查看节点状态
+kubectl get nodes
+
+# 查看节点详情（关注 Conditions 和 Events）
+kubectl describe node node-1</code></pre>
+
+        <p>常见节点问题：</p>
+        <ul>
+          <li><strong>NotReady</strong>：kubelet 停止响应，可能是节点宕机、kubelet 崩溃或网络分区</li>
+          <li><strong>DiskPressure</strong>：节点磁盘空间不足，kubelet 会驱逐 Pod</li>
+          <li><strong>MemoryPressure</strong>：节点内存压力大</li>
+          <li><strong>PIDPressure</strong>：进程数过多</li>
+        </ul>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>排查口诀：看状态 → 看事件 → 看日志 → 看资源</li>
+          <li>常见状态：CrashLoopBackOff（反复崩溃）、ImagePullBackOff（镜像拉取失败）、Pending（未调度）、OOMKilled（内存超限）</li>
+          <li>kubectl describe pod 看事件，kubectl logs 看日志（--previous 看崩溃前），kubectl exec 进容器排查</li>
+          <li>网络问题检查 Service selector、DNS、NetworkPolicy</li>
+          <li>存储问题检查 PV/PVC 绑定和 StorageClass</li>
+          <li>资源问题看 kubectl top 和 FailedScheduling 事件</li>
+          <li>节点问题看 NotReady 和各种 Pressure 状态</li>
+        </ul>
+
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 20 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

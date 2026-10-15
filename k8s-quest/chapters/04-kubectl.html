@@ -199,91 +199,9 @@ kubectl apply -f nginx.yaml -n dev
           <li>namespace 用于逻辑隔离资源，用 <code>-n</code> 指定</li>
         </ul>
 
-        <!-- 测试题 -->
-        <section class="quiz-section">
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
           <h2>🎯 本章测试（答对赚星星！）</h2>
-
-          <div class="quiz" data-type="choice" data-answer="B" data-stars="1"
-               data-chapter="04-kubectl" data-qid="q1"
-               data-explain="get 用于列出资源，是查看资源列表最常用的命令。">
-            <div class="quiz-question">1. 要列出集群中所有的 Pod，应使用哪个命令？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q1" value="A" /> A. kubectl list pods</label></li>
-              <li><label><input type="radio" name="q1" value="B" /> B. kubectl get pods</label></li>
-              <li><label><input type="radio" name="q1" value="C" /> C. kubectl show pods</label></li>
-              <li><label><input type="radio" name="q1" value="D" /> D. kubectl view pods</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="C" data-stars="1"
-               data-chapter="04-kubectl" data-qid="q2"
-               data-explain="describe 用于查看资源的详细信息和事件，是排查问题的利器。">
-            <div class="quiz-question">2. 要查看某个 Pod 的详细信息和事件日志，应使用哪个命令？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q2" value="A" /> A. kubectl get pod my-pod</label></li>
-              <li><label><input type="radio" name="q2" value="B" /> B. kubectl info pod my-pod</label></li>
-              <li><label><input type="radio" name="q2" value="C" /> C. kubectl describe pod my-pod</label></li>
-              <li><label><input type="radio" name="q2" value="D" /> D. kubectl detail pod my-pod</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="A" data-stars="1"
-               data-chapter="04-kubectl" data-qid="q3"
-               data-explain="apply 是声明式命令，可创建也可更新资源，且幂等，是生产环境的推荐做法。">
-            <div class="quiz-question">3. 以下关于 create 和 apply 的说法，哪个正确？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q3" value="A" /> A. apply 既可创建也可更新资源，是声明式的</label></li>
-              <li><label><input type="radio" name="q3" value="B" /> B. create 可以更新已存在的资源</label></li>
-              <li><label><input type="radio" name="q3" value="C" /> C. create 和 apply 完全相同</label></li>
-              <li><label><input type="radio" name="q3" value="D" /> D. apply 只能创建不能更新</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="choice" data-answer="D" data-stars="1"
-               data-chapter="04-kubectl" data-qid="q4"
-               data-explain="进入 Pod 的交互式 shell 需要使用 exec -it 命令，并在 -- 后指定要执行的 shell。">
-            <div class="quiz-question">4. 要进入一个运行中的 Pod 内部进行交互式调试，应使用哪个命令？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="radio" name="q4" value="A" /> A. kubectl ssh my-pod</label></li>
-              <li><label><input type="radio" name="q4" value="B" /> B. kubectl login my-pod</label></li>
-              <li><label><input type="radio" name="q4" value="C" /> C. kubectl enter my-pod</label></li>
-              <li><label><input type="radio" name="q4" value="D" /> D. kubectl exec -it my-pod -- /bin/sh</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="multi" data-answer="A|C|D" data-stars="2"
-               data-chapter="04-kubectl" data-qid="q5"
-               data-explain="pod、svc、cm 都是常用缩写，分别对应 pods、services、configmaps。img 不是 K8s 资源类型。">
-            <div class="quiz-question">5. 以下哪些是 kubectl 中合法的资源类型缩写？（多选）<span class="star-badge">⭐2</span></div>
-            <ul class="quiz-options">
-              <li><label><input type="checkbox" name="q5" value="A" /> A. pod</label></li>
-              <li><label><input type="checkbox" name="q5" value="B" /> B. img</label></li>
-              <li><label><input type="checkbox" name="q5" value="C" /> C. svc</label></li>
-              <li><label><input type="checkbox" name="q5" value="D" /> D. cm</label></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
-          <div class="quiz" data-type="text" data-answer="namespace|namespaces|ns" data-stars="1"
-               data-chapter="04-kubectl" data-qid="q6"
-               data-explain="Namespace 是 K8s 中用于逻辑隔离资源的分组机制，常用缩写为 ns。">
-            <div class="quiz-question">6. Kubernetes 中用于逻辑隔离资源（如区分开发/生产环境）的对象叫什么？<span class="star-badge">⭐1</span></div>
-            <ul class="quiz-options">
-              <li><input type="text" placeholder="输入你的答案" /></li>
-            </ul>
-            <button class="quiz-btn">提交答案</button>
-            <div class="quiz-feedback"><div class="feedback-title"></div><div class="feedback-msg"></div></div>
-          </div>
-
         </section>
 
         <div class="page-nav" id="page-nav"></div>
@@ -297,6 +215,7 @@ kubectl apply -f nginx.yaml -n dev
 
   <script src="../assets/js/game.js"></script>
   <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
   <script src="../assets/js/quiz.js"></script>
 </body>
 </html>

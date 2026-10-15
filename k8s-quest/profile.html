@@ -59,6 +59,10 @@
     <h2 style="margin: 32px 0 16px;">👑 头衔收集</h2>
     <div class="titles-grid" id="titles-grid"></div>
 
+    <!-- 成就徽章 -->
+    <h2 style="margin: 32px 0 16px;">🏅 成就徽章</h2>
+    <div class="titles-grid" id="achievements-grid"></div>
+
   </div>
 
   <footer class="site-footer">
@@ -68,11 +72,11 @@
   <script src="assets/js/game.js"></script>
   <script src="assets/js/nav.js"></script>
   <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      const data = GameSystem.load();
+    document.addEventListener("DOMContentLoaded", async function () {
+      const data = await GameSystem.load();
       const cur = GameSystem.getCurrentTitle(data.stars);
 
-      document.getElementById("profile-name").textContent = data.userName;
+      document.getElementById("profile-name").textContent = data.nickname || '学员';
       document.getElementById("profile-title").textContent = cur.emoji + " " + cur.name;
       document.getElementById("profile-avatar").textContent = cur.emoji;
       document.getElementById("profile-stars").textContent = data.stars + " ⭐";
@@ -114,6 +118,20 @@
           <div style="flex:1;">
             <div class="title-name">${t.name}</div>
             <div class="title-req">${unlocked ? "✅ 已解锁" : "需要 ⭐ " + t.stars + " 解锁"}</div>
+          </div>
+        </div>`;
+      }).join("");
+
+      // 成就徽章
+      const achievements = data.achievements || [];
+      const achGrid = document.getElementById("achievements-grid");
+      achGrid.innerHTML = GameSystem.ACHIEVEMENTS.map(a => {
+        const unlocked = achievements.includes(a.id);
+        return `<div class="title-card ${unlocked ? "unlocked" : "locked"}">
+          <div class="title-emoji">${a.emoji}</div>
+          <div style="flex:1;">
+            <div class="title-name">${a.name}</div>
+            <div class="title-req">${a.desc}</div>
           </div>
         </div>`;
       }).join("");

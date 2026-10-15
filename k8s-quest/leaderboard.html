@@ -26,8 +26,8 @@
 
       <div style="text-align:center; margin-top: 32px; padding: 20px; background: var(--color-surface); border-radius: var(--radius-md); border: 1px dashed var(--color-border);">
         <p style="color: var(--color-text-light); font-size: 0.9rem;">
-          💡 当前为本地排行榜（MVP 阶段）<br/>
-          后端上线后将展示全球学习者的真实排名
+          🏆 这是实时服务器排行榜，所有注册用户的答题成绩都会显示在这里！<br/>
+          登录后答题，冲上榜单吧！
         </p>
         <a href="index.html" style="display:inline-block; margin-top:12px; padding:10px 24px; background:var(--color-primary); color:#fff; border-radius:var(--radius-sm); font-weight:600;">🚀 去答题赚星星</a>
       </div>
@@ -41,42 +41,52 @@
   <script src="assets/js/game.js"></script>
   <script src="assets/js/nav.js"></script>
   <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      const data = GameSystem.load();
-      const myStars = data.stars;
-      const myTitle = GameSystem.getCurrentTitle(myStars);
-
-      // 模拟其他玩家数据（MVP 阶段）
-      const mockPlayers = [
-        { name: "云原生老王", stars: 380, title: "K8s 架构师" },
-        { name: "DevOps小李", stars: 320, title: "包管理专家" },
-        { name: "容器达人", stars: 280, title: "调度大师" },
-        { name: "运维阿强", stars: 220, title: "安全卫士" },
-        { name: "K8s新手村", stars: 180, title: "存储管理员" },
-        { name: "微服务玩家", stars: 140, title: "网络工程师" },
-        { name: "Pod驾驶员", stars: 90, title: "部署工程师" },
-        { name: "容器学徒007", stars: 50, title: "Pod 驾驶员" },
-        { name: "学习中ing", stars: 20, title: "容器学徒" },
-      ];
-
-      // 把当前用户加入排行榜
-      const allPlayers = [
-        ...mockPlayers,
-        { name: data.userName + "（我）", stars: myStars, title: myTitle.name, isMe: true }
-      ];
-
-      // 按星星排序
-      allPlayers.sort((a, b) => b.stars - a.stars);
-
+    document.addEventListener("DOMContentLoaded", async function () {
       const list = document.getElementById("leaderboard-list");
-      list.innerHTML = allPlayers.map((p, i) => {
+      list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--color-text-light);">加载中...</div>';
+
+      let players = [];
+      // 尝试从后端获取
+      try {
+        const res = await fetch('/api/leaderboard?limit=50');
+        if (res.ok) {
+          players = await res.json();
+        }
+      } catch {}
+
+      // 如果后端没有数据，用模拟数据
+      if (players.length === 0) {
+        const mockPlayers = [
+          { nickname: "云原生老王", stars: 380 },
+          { nickname: "DevOps小李", stars: 320 },
+          { nickname: "容器达人", stars: 280 },
+          { nickname: "运维阿强", stars: 220 },
+          { nickname: "K8s新手村", stars: 180 },
+          { nickname: "微服务玩家", stars: 140 },
+          { nickname: "Pod驾驶员", stars: 90 },
+          { nickname: "容器学徒007", stars: 50 },
+          { nickname: "学习中ing", stars: 20 },
+        ];
+        // 加入当前用户
+        const data = await GameSystem.load();
+        players = [...mockPlayers, { nickname: (data.nickname || '我') + '（我）', stars: data.stars, isMe: true }];
+        players.sort((a, b) => b.stars - a.stars);
+      } else {
+        // 后端数据，标记当前用户
+        const auth = GameSystem.getAuth();
+        if (auth) {
+          const myData = await GameSystem.load();
+          players = players.map(p => ({ ...p, isMe: p.user_id === auth.userId }));
+        }
+      }
+
+      list.innerHTML = players.map((p, i) => {
         const rankClass = i < 3 ? `rank-${i + 1}` : "";
         const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : (i + 1);
         return `<div class="rank-item ${rankClass}">
           <div class="rank-num">${medal}</div>
           <div class="rank-info">
-            <div class="rank-name">${p.name}${p.isMe ? ' 👈' : ''}</div>
-            <div class="rank-title">${p.title}</div>
+            <div class="rank-name">${p.nickname}${p.isMe ? ' 👈' : ''}</div>
           </div>
           <div class="rank-stars">⭐ ${p.stars}</div>
         </div>`;

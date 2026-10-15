@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第11章 Volume数据卷 | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="11-volume">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>Volume 数据卷</h1>
+        <p>容器天生是"无状态"的——一旦容器被删除或重启，容器内部文件系统上写入的数据就会随之消失。这在很多场景下是不可接受的：数据库需要持久化数据、多个容器需要共享文件、日志需要落盘保存……Kubernetes 通过 Volume（数据卷）机制来解决这些问题。本章我们就来学习 Volume 的核心概念和常用类型。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解容器数据丢失的问题以及 Volume 的作用</li>
+          <li>掌握 Volume 的声明方式：volumes 与 volumeMounts</li>
+          <li>理解 emptyDir 的生命周期与适用场景</li>
+          <li>理解 hostPath 的作用与安全风险</li>
+          <li>了解其他常用 Volume 类型（nfs、configMap、secret 等）</li>
+        </ul>
+
+        <h2>1. 容器数据问题</h2>
+        <p>容器的文件系统是分层的，由镜像层（只读）和可写层（容器运行时可写）组成。当容器被删除时，它的可写层也会被一并清除，容器内写入的所有数据都会丢失。即使容器只是重启，挂载在容器内的数据也可能因为容器重建而无法保留。</p>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ 数据丢失风险</div>
+          <p>
+            如果你的应用需要持久化数据（如数据库、用户上传文件、日志等），
+            绝对不能把数据写在容器的可写层里，必须使用 Volume。
+          </p>
+        </div>
+
+        <h2>2. Volume：Pod 级别的数据持久化</h2>
+        <p>Kubernetes 的 Volume 是 <strong>Pod 级别</strong>的概念，而不是容器级别的。一个 Volume 可以被同一个 Pod 内的多个容器共享挂载。Volume 的生命周期与 Pod 绑定：只要 Pod 存在，Volume 就存在（具体取决于 Volume 类型）。</p>
+
+        <p>在 Pod 中使用 Volume 分为两步：</p>
+        <ol>
+          <li>在 <code>volumes</code> 字段中声明 Volume 及其类型</li>
+          <li>在容器的 <code>volumeMounts</code> 字段中指定挂载路径</li>
+        </ol>
+
+        <pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: volume-demo
+spec:
+  containers:
+  - name: app
+    image: nginx
+    volumeMounts:
+    - name: shared-data      # 引用下方 volumes 中声明的 name
+      mountPath: /usr/share/nginx/html   # 容器内挂载路径
+  volumes:                    # 声明 Volume 列表
+  - name: shared-data
+    emptyDir: {}              # Volume 类型为 emptyDir</code></pre>
+
+        <div class="term-card">
+          <div class="term-name">🔗 volumes + volumeMounts</div>
+          <p>
+            <code>volumes</code> 在 Pod 级别声明有哪些卷，<code>volumeMounts</code> 在容器级别声明把哪个卷挂到哪个路径。
+            两者通过 <code>name</code> 字段关联。
+          </p>
+        </div>
+
+        <h2>3. 常用 Volume 类型</h2>
+        <p>Kubernetes 支持几十种 Volume 类型，这里介绍最常用的几种：</p>
+
+        <div class="term-card">
+          <div class="term-name">📦 emptyDir</div>
+          <p>
+            临时存储卷。Pod 创建时自动创建一个空目录，Pod 删除时随之删除。
+            常用于容器间共享临时数据、缓存、日志等。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🖥️ hostPath</div>
+          <p>
+            将宿主机（Node）上的文件或目录挂载到 Pod 中。
+            适合需要访问宿主机文件的场景（如 kube-proxy 访问 /var/run/docker.sock），
+            但有安全风险，生产环境应谨慎使用。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🌐 nfs</div>
+          <p>
+            挂载 NFS（网络文件系统）到 Pod 中。NFS 支持多节点读写，
+            可以实现跨 Pod 的数据共享与持久化。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">📝 configMap / secret</div>
+          <p>
+            把 ConfigMap 或 Secret 中的数据以文件形式挂载到容器内，
+            用于注入配置文件或敏感信息。
+          </p>
+        </div>
+
+        <h2>4. emptyDir：临时共享存储</h2>
+        <p><code>emptyDir</code> 是最简单的 Volume 类型。当 Pod 被调度到某个 Node 上时，Kubernetes 会在该 Node 上创建一个空目录。Pod 内所有容器都可以读写这个目录。</p>
+
+        <pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: emptydir-demo
+spec:
+  containers:
+  - name: writer
+    image: busybox
+    command: ["sh", "-c", "echo hello > /data/msg.txt; sleep 3600"]
+    volumeMounts:
+    - name: cache
+      mountPath: /data
+  - name: reader
+    image: busybox
+    command: ["sh", "-c", "cat /data/msg.txt; sleep 3600"]
+    volumeMounts:
+    - name: cache
+      mountPath: /data
+  volumes:
+  - name: cache
+    emptyDir: {}</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 emptyDir 的生命周期</div>
+          <p>
+            emptyDir 的数据只在 Pod 存活期间存在。<br />
+            ✅ Pod 内容器重启 → 数据保留<br />
+            ❌ Pod 被删除 → 数据丢失<br />
+            因此 emptyDir 适合临时数据，不适合持久化存储。
+          </p>
+        </div>
+
+        <h2>5. hostPath：挂载宿主机目录</h2>
+        <p><code>hostPath</code> 会把 Node 上的某个目录或文件挂载到 Pod 中。这意味着 Pod 可以直接读写宿主机的文件系统。</p>
+
+        <pre><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: hostpath-demo
+spec:
+  containers:
+  - name: app
+    image: nginx
+    volumeMounts:
+    - name: host-logs
+      mountPath: /host-logs
+  volumes:
+  - name: host-logs
+    hostPath:
+      path: /var/log      # 宿主机上的目录
+      type: Directory     # 类型：Directory / File / DirectoryOrCreate 等</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ hostPath 的安全风险</div>
+          <p>
+            hostPath 让 Pod 能够访问宿主机文件系统，如果挂载了敏感目录（如 /etc、/var/run/docker.sock），
+            容器逃逸将变得非常容易。生产环境应通过 PodSecurityPolicy / SecurityContext 限制 hostPath 的使用，
+            普通业务 Pod 不应使用 hostPath。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>容器可写层的数据会随容器删除而丢失，需要 Volume 持久化数据</li>
+          <li>Volume 是 Pod 级别的资源，通过 <code>volumes</code> 声明、<code>volumeMounts</code> 挂载</li>
+          <li><code>emptyDir</code> 是临时卷，Pod 生命周期内有效，Pod 删除则删除</li>
+          <li><code>hostPath</code> 挂载宿主机目录，方便但有安全风险</li>
+          <li>其他常用类型：nfs（网络共享）、configMap / secret（注入配置）</li>
+        </ul>
+
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 11 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第8章 其他工作负载 | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="08-workload">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>其他工作负载</h1>
+        <p>Deployment 适合无状态应用，但现实中的应用类型多种多样：有需要稳定身份的有状态应用、需要在每个节点运行的守护进程、只执行一次的任务、还有定时运行的任务。K8s 为这些场景分别提供了 StatefulSet、DaemonSet、Job 和 CronJob。本章带你认识这些工作负载并学会选择。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 StatefulSet 的特点：稳定网络标识和持久化存储</li>
+          <li>掌握 DaemonSet 的用途：每个节点运行一个 Pod</li>
+          <li>学会使用 Job 执行一次性任务</li>
+          <li>掌握 CronJob 的定时任务配置</li>
+          <li>能够根据场景选择合适的工作负载类型</li>
+        </ul>
+
+        <h2>1. StatefulSet —— 有状态应用</h2>
+        <div class="term-card">
+          <div class="term-name">🏛️ StatefulSet</div>
+          <p>
+            StatefulSet 用于管理<strong>有状态应用</strong>，为每个 Pod 提供<strong>稳定的网络标识</strong>
+            （固定的 DNS 名称和顺序编号）和<strong>稳定的持久化存储</strong>。
+            与 Deployment 不同，StatefulSet 的 Pod 是<strong>有序创建和删除</strong>的。
+          </p>
+        </div>
+
+        <p>StatefulSet 的 Pod 名称是固定的，格式为 <code>{statefulset-name}-{序号}</code>，例如 <code>mysql-0</code>、<code>mysql-1</code>、<code>mysql-2</code>。</p>
+
+        <div class="callout">
+          <div class="callout-title">🔑 StatefulSet 的三大特性</div>
+          <p>
+            1. <strong>稳定的网络标识</strong>：每个 Pod 有固定的 DNS 名称（需配合 Headless Service）<br />
+            2. <strong>稳定的持久化存储</strong>：每个 Pod 绑定独立的 PVC，Pod 重建后数据不丢失<br />
+            3. <strong>有序部署和伸缩</strong>：Pod 按序号顺序创建，删除时逆序进行
+          </p>
+        </div>
+
+<pre><code>apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  serviceName: mysql-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 典型应用</div>
+          <p>
+            数据库（MySQL、PostgreSQL）、分布式存储（Elasticsearch、Kafka、ZooKeeper）、
+            主从复制集群等需要稳定身份和存储的应用。
+          </p>
+        </div>
+
+        <h2>2. DaemonSet —— 每个节点一个 Pod</h2>
+        <div class="term-card">
+          <div class="term-name">🛡️ DaemonSet</div>
+          <p>
+            DaemonSet 确保<strong>每个节点上都运行一个 Pod 副本</strong>。
+            当有新节点加入集群时，DaemonSet 会自动在该节点上创建 Pod；
+            节点离开时，对应的 Pod 会被回收。
+          </p>
+        </div>
+
+        <p>DaemonSet 不需要指定 replicas 数量，Pod 数量等于节点数量（受节点选择器和污点容忍影响）。</p>
+
+<pre><code>apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluentd
+spec:
+  selector:
+    matchLabels:
+      app: fluentd
+  template:
+    metadata:
+      labels:
+        app: fluentd
+    spec:
+      containers:
+      - name: fluentd
+        image: fluentd:latest
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 典型应用</div>
+          <p>
+            日志收集 Agent（Fluentd、Filebeat）、节点监控 Agent（Prometheus Node Exporter）、
+            网络插件（Calico、Flannel）、存储插件等需要在每个节点运行的组件。
+          </p>
+        </div>
+
+        <h2>3. Job —— 一次性任务</h2>
+        <div class="term-card">
+          <div class="term-name">📋 Job</div>
+          <p>
+            Job 用于执行<strong>一次性任务</strong>，确保一个或多个 Pod 成功完成任务后退出。
+            任务完成后，Pod 进入 Completed 状态，不会被重启。
+          </p>
+        </div>
+
+        <p>Job 支持配置完成数（<code>completions</code>）和并行度（<code>parallelism</code>），适合批处理任务。</p>
+
+<pre><code>apiVersion: batch/v1
+kind: Job
+metadata:
+  name: data-migration
+spec:
+  completions: 1
+  parallelism: 1
+  backoffLimit: 3
+  template:
+    spec:
+      containers:
+      - name: migrate
+        image: myapp:migrate
+        command: ['python', 'migrate.py']
+      restartPolicy: OnFailure</code></pre>
+
+        <div class="callout">
+          <div class="callout-title">🔑 Job 的关键参数</div>
+          <p>
+            • <code>completions</code>：需要成功完成的 Pod 数量<br />
+            • <code>parallelism</code>：同时运行的 Pod 数量<br />
+            • <code>backoffLimit</code>：失败重试次数上限<br />
+            • <code>restartPolicy</code>：必须为 OnFailure 或 Never（不能是 Always）
+          </p>
+        </div>
+
+        <h2>4. CronJob —— 定时任务</h2>
+        <div class="term-card">
+          <div class="term-name">⏰ CronJob</div>
+          <p>
+            CronJob 基于时间调度 Job，类似 Linux 的 <strong>crontab</strong>。
+            你可以设置定时规则，让 K8s 按计划自动创建和运行 Job。
+          </p>
+        </div>
+
+        <p>CronJob 使用标准的 5 段 cron 表达式来定义调度时间：</p>
+
+<pre><code>apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup
+spec:
+  schedule: "0 2 * * *"      # 每天凌晨 2 点
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backup
+            image: backup:latest
+            command: ['sh', '-c', 'backup.sh']
+          restartPolicy: OnFailure</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">🕐 Cron 表达式速查</div>
+          <p>
+            <code>分 时 日 月 周</code>，例如：<br />
+            • <code>0 2 * * *</code>：每天凌晨 2 点<br />
+            • <code>*/5 * * * *</code>：每 5 分钟<br />
+            • <code>0 0 1 * *</code>：每月 1 号凌晨<br />
+            • <code>0 9 * * 1-5</code>：工作日每天 9 点
+          </p>
+        </div>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ CronJob 的注意点</div>
+          <p>
+            • 默认时区为 UTC，需注意时区差异<br />
+            • <code>concurrencyPolicy</code> 控制是否允许任务并发执行（Allow / Forbid / Replace）<br />
+            • 建议设置 <code>startingDeadlineSeconds</code> 防止任务延迟堆积
+          </p>
+        </div>
+
+        <h2>5. 工作负载选型对比</h2>
+        <p>面对不同的应用场景，如何选择合适的工作负载？下表可以帮你快速决策：</p>
+
+        <div class="callout">
+          <div class="callout-title">📊 四种工作负载对比</div>
+          <p>
+            <strong>Deployment</strong>：无状态应用，需要滚动更新和回滚（Web 服务、API 服务）<br /><br />
+            <strong>StatefulSet</strong>：有状态应用，需要稳定网络标识和存储（数据库、Kafka）<br /><br />
+            <strong>DaemonSet</strong>：每个节点运行一个 Pod（日志收集、监控 Agent、网络插件）<br /><br />
+            <strong>Job</strong>：一次性任务，完成后退出（数据迁移、批处理、计算任务）<br /><br />
+            <strong>CronJob</strong>：定时任务，按计划运行（定时备份、报表生成、清理任务）
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>StatefulSet 适合有状态应用，提供稳定网络标识和持久化存储，Pod 有序创建和删除</li>
+          <li>DaemonSet 确保每个节点运行一个 Pod，常用于日志、监控、网络插件</li>
+          <li>Job 执行一次性任务，完成后退出，支持 completions 和 parallelism</li>
+          <li>CronJob 按 cron 表达式定时运行 Job，类似 crontab</li>
+          <li>选型口诀：无状态 Deployment，有状态 StatefulSet，每节点 DaemonSet，一次性 Job，定时 CronJob</li>
+        </ul>
+
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 8 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>

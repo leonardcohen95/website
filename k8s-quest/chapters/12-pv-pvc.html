@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第12章 PV与PVC | K8s Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css" />
+</head>
+<body data-page="chapter" data-chapter="12-pv-pvc">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">☸️</span><span>K8s Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>PV 与 PVC</h1>
+        <p>上一章我们学习了 Volume，但直接在 Pod 里使用 Volume（如 hostPath、nfs）意味着开发者需要了解底层存储的细节，这显然不合理。Kubernetes 通过 PV（PersistentVolume）和 PVC（PersistentVolumeClaim）实现了存储的"供应"与"消费"解耦：管理员负责提供存储资源，开发者只需要声明自己需要多大的存储、什么访问模式，剩下的由系统自动匹配。本章我们就来学习这套持久化存储体系。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 PV 与 PVC 的概念及其解耦思想</li>
+          <li>掌握 PV 的访问模式与回收策略</li>
+          <li>理解 PVC 如何匹配并绑定 PV</li>
+          <li>了解 StorageClass 与动态存储供给</li>
+          <li>能够编写 PV、PVC 的 YAML 并在 Pod 中使用</li>
+        </ul>
+
+        <h2>1. PV 与 PVC：存储的供应与消费</h2>
+        <p>类比现实生活：PV 就像是超市里已经上架的商品（存储资源），PVC 就像是顾客的购物清单（存储需求）。顾客（开发者）不需要知道商品是从哪个仓库运来的，只需要在清单上写清楚要什么，超市（系统）就会自动匹配。</p>
+
+        <div class="term-card">
+          <div class="term-name">🗄️ PV（PersistentVolume）</div>
+          <p>
+            集群级别的存储资源，由管理员预先创建。PV 描述了存储的容量、访问模式、回收策略等属性，
+            不隶属于任何命名空间。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🛒 PVC（PersistentVolumeClaim）</div>
+          <p>
+            用户对存储的请求（声明），隶属于某个命名空间。PVC 声明所需的存储大小、访问模式等，
+            系统会为其匹配一个合适的 PV 并绑定。
+          </p>
+        </div>
+
+        <h2>2. 访问模式（AccessModes）</h2>
+        <p>PV 和 PVC 都需要指定访问模式，决定了存储可以被几个节点以什么方式挂载：</p>
+
+        <ul>
+          <li><strong>ReadWriteOnce（RWO）</strong>：只能被一个节点以读写方式挂载。大多数块存储（如云盘）只支持这种模式。</li>
+          <li><strong>ReadOnlyMany（ROX）</strong>：可以被多个节点以只读方式挂载。</li>
+          <li><strong>ReadWriteMany（RWX）</strong>：可以被多个节点同时读写。NFS、CephFS 等文件存储支持。</li>
+        </ul>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 注意</div>
+          <p>
+            访问模式针对的是"节点"而非"Pod"。即使是 ReadWriteOnce，
+            同一个节点上的多个 Pod 仍然可以同时挂载该卷。
+          </p>
+        </div>
+
+        <h2>3. 回收策略（ReclaimPolicy）</h2>
+        <p>当 PVC 被删除后，与之绑定的 PV 该如何处理？由 PV 的回收策略决定：</p>
+
+        <div class="term-card">
+          <div class="term-name">♻️ Retain（保留）</div>
+          <p>
+            PVC 删除后，PV 保留，数据也保留，但 PV 状态变为 Released，不能直接被新的 PVC 绑定。
+            需要管理员手动清理后才能重新使用。适合需要保留数据的场景。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🗑️ Delete（删除）</div>
+          <p>
+            PVC 删除后，PV 及其底层存储会被自动删除，数据一并清除。
+            这是动态供给 PV 的默认策略，适合临时数据。
+          </p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🔄 Recycle（回收）</div>
+          <p>
+            PVC 删除后，PV 上的数据会被清空（rm -rf），然后 PV 可以重新被绑定。
+            该策略已被废弃，建议使用动态供给替代。
+          </p>
+        </div>
+
+        <h2>4. 静态供给：手动创建 PV 与 PVC</h2>
+        <p>静态供给是指管理员手动创建 PV，然后用户创建 PVC 来申请使用。下面是一个基于 NFS 的示例：</p>
+
+        <pre><code># PV 定义（管理员创建）
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-nfs-001
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: 192.168.1.100
+    path: /data/k8s/pv001</code></pre>
+
+        <pre><code># PVC 定义（用户创建）
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-demo
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 3Gi</code></pre>
+
+        <p>系统会自动将 PVC 与满足条件的 PV 绑定（容量 >= 请求容量、访问模式匹配等）。绑定后 Pod 就可以通过 PVC 使用存储：</p>
+
+        <pre><code># Pod 中使用 PVC
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-with-pvc
+spec:
+  containers:
+  - name: app
+    image: nginx
+    volumeMounts:
+    - name: data
+      mountPath: /usr/share/nginx/html
+  volumes:
+  - name: data
+    persistentVolumeClaim:
+      claimName: pvc-demo   # 引用上面的 PVC 名称</code></pre>
+
+        <h2>5. 动态供给：StorageClass</h2>
+        <p>静态供给需要管理员预先创建好所有 PV，当集群规模变大时这显然不现实。<strong>StorageClass</strong> 提供了动态供给能力：用户创建 PVC 时，如果指定了 StorageClass，系统会自动调用对应的存储插件（provisioner）创建一个 PV 并绑定。</p>
+
+        <pre><code># StorageClass 定义
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+provisioner: kubernetes.io/aws-ebs   # 存储插件
+parameters:
+  type: gp2                           # 存储参数
+reclaimPolicy: Delete                 # 回收策略
+volumeBindingMode: Immediate          # 绑定模式</code></pre>
+
+        <pre><code># PVC 使用 StorageClass 动态创建 PV
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-dynamic
+spec:
+  storageClassName: fast-ssd          # 指定 StorageClass
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 动态供给的优势</div>
+          <p>
+            管理员只需定义好 StorageClass，用户创建 PVC 时系统自动按需创建 PV，
+            免去了手动管理大量 PV 的麻烦。这是生产环境推荐的方式。
+          </p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>PV 是集群级存储资源，PVC 是用户对存储的请求，两者实现存储供应与消费解耦</li>
+          <li>访问模式：ReadWriteOnce、ReadOnlyMany、ReadWriteMany</li>
+          <li>回收策略：Retain（保留数据）、Delete（删除数据）、Recycle（已废弃）</li>
+          <li>静态供给：管理员手动创建 PV，PVC 自动匹配绑定</li>
+          <li>动态供给：通过 StorageClass + provisioner 自动创建 PV，是生产推荐方式</li>
+        </ul>
+
+                <!-- 测试题 -->
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>K8s Quest · 第 12 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js"></script>
+  <script src="../assets/js/nav.js"></script>
+  <script src="../assets/js/question-bank.js"></script>
+  <script src="../assets/js/quiz.js"></script>
+</body>
+</html>
