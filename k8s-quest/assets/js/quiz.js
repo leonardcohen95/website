@@ -10,14 +10,23 @@
   function initQuiz() {
     const section = document.getElementById("quiz-section");
     if (!section) return;
+    section.innerHTML = "";
+
+    // 必须登录后才能答题
+    const auth = typeof GameSystem !== "undefined" && GameSystem.getAuth ? GameSystem.getAuth() : null;
+    if (!auth || !auth.token) {
+      renderLocked(section);
+      return;
+    }
+
     const chapterId = document.body.getAttribute("data-chapter");
     const bank = (window.QUESTION_BANK && window.QUESTION_BANK[chapterId]) || [];
     if (bank.length === 0) return;
 
-    // 更新章节标题
-    const totalStars = bank.reduce((s, q) => s + (q.variants[0].stars || 1), 0);
-    const h2 = section.querySelector("h2");
-    if (h2) h2.innerHTML = `🎯 本章测试（共 ${bank.length} 题，答对赚星星！答错可消耗 1 ⭐ 换一题）`;
+    // 章节标题
+    const h2 = document.createElement("h2");
+    h2.innerHTML = `🎯 本章测试（共 ${bank.length} 题，答对赚星星！答错可消耗 1 ⭐ 换一题）`;
+    section.appendChild(h2);
 
     // 渲染每道题
     bank.forEach((slot, idx) => {
@@ -31,6 +40,30 @@
       section.appendChild(quizEl);
       renderVariant(quizEl, slot, 0);
     });
+  }
+
+  // 未登录时的锁定提示
+  function renderLocked(section) {
+    const h2 = document.createElement("h2");
+    h2.textContent = "🎯 本章测试";
+    section.appendChild(h2);
+
+    const lock = document.createElement("div");
+    lock.className = "quiz-locked";
+    lock.innerHTML = `
+      <div class="quiz-locked-icon">🔒</div>
+      <div class="quiz-locked-title">登录后即可答题</div>
+      <div class="quiz-locked-desc">答题会累计星星、解锁成就并计入排行榜，请先注册或登录账号。</div>
+      <button class="quiz-login-btn" type="button">注册 / 登录</button>
+    `;
+    section.appendChild(lock);
+
+    const btn = lock.querySelector(".quiz-login-btn");
+    if (btn) {
+      btn.addEventListener("click", () => {
+        if (typeof GameSystem !== "undefined" && GameSystem.showLoginModal) GameSystem.showLoginModal();
+      });
+    }
   }
 
   // 渲染某道题的指定变体
@@ -194,4 +227,6 @@
   }
 
   document.addEventListener("DOMContentLoaded", initQuiz);
+  // 登录/注册成功后自动解锁并渲染题目
+  window.addEventListener("k8squest:auth", initQuiz);
 })();

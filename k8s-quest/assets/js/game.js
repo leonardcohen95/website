@@ -6,6 +6,7 @@
 const GameSystem = (function () {
   const STORAGE_KEY = "k8s-quest-progress";
   const AUTH_KEY = "k8s-quest-auth";
+  const ACCOUNTS_KEY = "k8s-quest-accounts";
 
   // 头衔定义
   const TITLES = [
@@ -61,6 +62,12 @@ const GameSystem = (function () {
     return !!authToken;
   }
 
+  // 页面加载时从 localStorage 恢复登录态
+  function restoreAuth() {
+    const auth = getAuth();
+    if (auth) setAuth(auth);
+  }
+
   async function checkBackend() {
     try {
       const res = await fetch('/api/leaderboard?limit=1');
@@ -70,36 +77,80 @@ const GameSystem = (function () {
     return false;
   }
 
+  // 本地账号（无后端时使用，存于 localStorage）
+  function getAccounts() {
+    try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY)) || {}; }
+    catch { return {}; }
+  }
+  function saveAccounts(accounts) {
+    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+  }
+  function notifyAuth() {
+    try { window.dispatchEvent(new CustomEvent("k8squest:auth")); } catch {}
+  }
+  function localRegister(username, password, nickname) {
+    const accounts = getAccounts();
+    if (accounts[username]) return { success: false, error: "用户名已存在" };
+    accounts[username] = { password, nickname: nickname || username };
+    saveAccounts(accounts);
+    setAuth({ token: `local:${username}`, userId: username, nickname: nickname || username });
+    notifyAuth();
+    return { success: true };
+  }
+  function localLogin(username, password) {
+    const accounts = getAccounts();
+    const user = accounts[username];
+    if (!user || user.password !== password) return { success: false, error: "用户名或密码错误" };
+    setAuth({ token: `local:${username}`, userId: username, nickname: user.nickname });
+    notifyAuth();
+    return { success: true };
+  }
+
   async function login(username, password) {
-    const res = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    const data = await res.json();
-    if (data.success) {
-      setAuth({ token: data.token, userId: data.userId, nickname: data.nickname });
-      return { success: true };
+    if (!username || !password) return { success: false, error: "请输入用户名和密码" };
+    if (backendAvailable) {
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setAuth({ token: data.token, userId: data.userId, nickname: data.nickname });
+          notifyAuth();
+          return { success: true };
+        }
+        return { success: false, error: data.error };
+      } catch {}
     }
-    return { success: false, error: data.error };
+    return localLogin(username, password);
   }
 
   async function register(username, password, nickname) {
-    const res = await fetch('/api/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, nickname })
-    });
-    const data = await res.json();
-    if (data.success) {
-      setAuth({ token: data.token, userId: data.userId, nickname: nickname || username });
-      return { success: true };
+    if (!username || !password) return { success: false, error: "请输入用户名和密码" };
+    if (backendAvailable) {
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, nickname })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setAuth({ token: data.token, userId: data.userId, nickname: nickname || username });
+          notifyAuth();
+          return { success: true };
+        }
+        return { success: false, error: data.error };
+      } catch {}
     }
-    return { success: false, error: data.error };
+    return localRegister(username, password, nickname);
   }
 
   function logout() {
     setAuth(null);
+    notifyAuth();
   }
 
   // 加载进度（后端优先）
@@ -341,7 +392,7 @@ const GameSystem = (function () {
       const p = document.getElementById('auth-password').value;
       const err = document.getElementById('auth-error');
       const r = await login(u, p);
-      if (r.success) { modal.remove(); renderStarDisplay(); alert('登录成功！进度已同步。'); }
+      if (r.success) { modal.remove(); renderStarDisplay(); alert('登录成功！'); }
       else { err.textContent = r.error; err.style.display = 'block'; }
     };
     document.getElementById('btn-register').onclick = async () => {
@@ -362,15 +413,14 @@ const GameSystem = (function () {
     addStars, spendStars, isChapterCompleted, getChapterStars, isQuestionDone,
     flyStars, showAchievementPopup,
     renderStarDisplay, renderTitleBar,
-    showLoginModal, login, register, logout, isLoggedIn, getAuth,
+    showLoginModal, login, register, logout, isLoggedIn, getAuth, restoreAuth,
     checkBackend, backendAvailable: () => backendAvailable
   };
 })();
 
 // 初始化
 document.addEventListener('DOMContentLoaded', async function () {
-  const auth = JSON.parse(localStorage.getItem('k8s-quest-auth') || 'null');
-  if (auth) { GameSystem.login = () => {}; Object.assign(GameSystem, { authToken: auth.token }); }
+  GameSystem.restoreAuth();
   await GameSystem.checkBackend();
   GameSystem.renderStarDisplay();
 });
