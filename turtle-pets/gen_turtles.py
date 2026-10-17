@@ -224,14 +224,13 @@ def write_png(path, grid, scale=8, bg=None):
             if c is None:
                 px = bg if bg is not None else (0, 0, 0)
                 a = 255 if bg is not None else 0
-                row += bytes((px[0], px[1], px[2], a))
+                pixel = bytes((px[0], px[1], px[2], a))
             else:
-                row += bytes((c[0], c[1], c[2], 255))
-        big = bytearray()
+                pixel = bytes((c[0], c[1], c[2], 255))
+            for _ in range(scale):
+                row += pixel
         for _ in range(scale):
-            big += row
-        for _ in range(scale):
-            rows.append(bytes(big))
+            rows.append(bytes(row))
     raw = b"".join(b"\x00" + r for r in rows)
     w = W * scale
     h = H * scale
