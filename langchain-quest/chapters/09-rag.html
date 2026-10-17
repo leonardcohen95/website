@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第9章 RAG 检索增强生成 | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="09-rag">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>RAG 检索增强生成</h1>
+        <p>RAG（Retrieval-Augmented Generation，检索增强生成）是 LLM 应用中最重要的技术之一。它通过检索外部知识来增强 LLM 的回答，解决知识过时和幻觉问题，无需微调即可让 LLM 基于私有数据回答。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 RAG 的核心思想和流程</li>
+          <li>掌握构建 RAG 系统的步骤</li>
+          <li>使用 RetrievalQA 链实现问答</li>
+          <li>理解不同的 chain_type（stuff、map_reduce、refine）</li>
+        </ul>
+
+        <h2>1. RAG 是什么</h2>
+        <p>RAG 的核心思想：<strong>先检索，再生成</strong>。用户提问时，先从知识库中检索相关文档，然后将文档内容和问题一起传给 LLM，让 LLM 基于检索结果生成回答。</p>
+
+        <h2>2. RAG 的完整流程</h2>
+        <p><strong>离线（构建知识库）：</strong></p>
+        <ol>
+          <li>加载文档（Document Loader）</li>
+          <li>切分文档（Text Splitter）</li>
+          <li>向量化（Embeddings）</li>
+          <li>存入向量数据库（VectorStore）</li>
+        </ol>
+        <p><strong>在线（回答问题）：</strong></p>
+        <ol>
+          <li>用户提问</li>
+          <li>将问题向量化，从向量库检索相关文档</li>
+          <li>将检索结果 + 问题拼入 prompt</li>
+          <li>LLM 生成回答</li>
+        </ol>
+
+        <h2>3. 用 LangChain 实现 RAG</h2>
+        <pre><code>from langchain.chains import RetrievalQA
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
+
+# 1. 构建向量库（离线）
+vectorstore = Chroma.from_documents(chunks, OpenAIEmbeddings())
+
+# 2. 创建检索器
+retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+
+# 3. 创建 RAG 链
+qa_chain = RetrievalQA.from_chain_type(
+    llm=ChatOpenAI(),
+    chain_type="stuff",
+    retriever=retriever,
+    return_source_documents=True
+)
+
+# 4. 提问
+result = qa_chain.invoke("如何申请退款？")
+print(result["result"])
+print("来源：", [doc.metadata for doc in result["source_documents"]])</code></pre>
+
+        <h2>4. chain_type 详解</h2>
+
+        <div class="term-card">
+          <div class="term-name">📦 stuff</div>
+          <p>将所有检索文档塞入一个 prompt。简单快速，但文档多时会超出上下文窗口。适合文档少的场景。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🗺️ map_reduce</div>
+          <p>先对每个文档单独生成回答（map），再汇总所有回答（reduce）。适合文档多的场景，但调用 LLM 次数多。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">✨ refine</div>
+          <p>逐个文档处理，每次用前一个的回答和当前文档一起 refine 答案。质量高但慢，适合需要精确综合的场景。</p>
+        </div>
+
+        <h2>5. RAG 的优势</h2>
+        <ul>
+          <li><strong>无需微调</strong>：更新知识库即可，不用重新训练</li>
+          <li><strong>知识实时更新</strong>：文档更新后重新向量化即可</li>
+          <li><strong>减少幻觉</strong>：基于检索到的事实回答</li>
+          <li><strong>可溯源</strong>：回答可以附带来源文档</li>
+        </ul>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ 注意</div>
+          <p>RAG 能显著减少幻觉，但不能完全消除。应在 prompt 中要求 LLM "只基于提供的文档回答，如果文档中没有相关信息就说不知道"。</p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>RAG = 检索 + 生成，先检索相关文档再让 LLM 回答</li>
+          <li>流程：加载→切分→向量化→存储→检索→生成</li>
+          <li>RetrievalQA 是 RAG 的核心链</li>
+          <li>chain_type：stuff（全塞入）、map_reduce（分批汇总）、refine（逐次优化）</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 9 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

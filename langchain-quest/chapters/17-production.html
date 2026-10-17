@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第17章 生产部署 | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="17-production">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>生产部署</h1>
+        <p>从原型到生产，需要关注异步并发、缓存、限流、部署等工程问题。本章学习如何将 LangChain 应用稳定、高效地部署上线。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>使用异步调用提升并发性能</li>
+          <li>理解缓存机制减少重复调用</li>
+          <li>掌握限流和降级策略</li>
+          <li>用 LangServe 将链部署为 API</li>
+        </ul>
+
+        <h2>1. 异步调用</h2>
+        <p>LLM API 调用通常较慢（几秒），同步调用会阻塞线程。用异步方法可大幅提升并发：</p>
+        <pre><code>import asyncio
+
+async def main():
+    result = await chain.ainvoke({"topic": "RAG"})
+    print(result)
+
+asyncio.run(main())</code></pre>
+        <p>所有 Runnable 都支持异步版本：<code>ainvoke</code>、<code>astream</code>、<code>abatch</code>。</p>
+
+        <h2>2. 批量处理</h2>
+        <p>用 <code>batch</code> 一次处理多个输入，减少网络开销：</p>
+        <pre><code>results = chain.batch([
+    {"topic": "RAG"},
+    {"topic": "Agent"},
+    {"topic": "Memory"},
+])</code></pre>
+
+        <h2>3. 缓存</h2>
+        <p>对相同输入缓存 LLM 输出，避免重复调用，降低费用和延迟：</p>
+        <pre><code>from langchain.cache import InMemoryCache
+from langchain.globals import set_llm_cache
+
+set_llm_cache(InMemoryCache())
+
+# 第二次相同输入会从缓存读取
+result1 = chain.invoke({"topic": "RAG"})
+result2 = chain.invoke({"topic": "RAG"})  # 命中缓存，不调用 API</code></pre>
+        <p>生产环境可用 Redis 缓存（<code>RedisCache</code>），支持多实例共享。</p>
+
+        <h2>4. 限流与降级</h2>
+        <ul>
+          <li><strong>限流（Rate Limiting）</strong>：控制请求速率，防止超出 API 配额或触发封禁</li>
+          <li><strong>重试（Retry）</strong>：网络抖动或 429 错误时自动重试，<code>with_retry</code></li>
+          <li><strong>降级（Fallback）</strong>：主模型不可用时切换到备用模型，<code>with_fallback</code></li>
+        </ul>
+        <pre><code>chain = prompt | llm.with_retry(stop_after_attempt=3).with_fallback(fallback_llm)</code></pre>
+
+        <h2>5. LangServe 部署为 API</h2>
+        <p>LangServe 可将 LangChain 链快速部署为 REST API，支持流式输出：</p>
+        <pre><code>from langserve import add_routes
+from fastapi import FastAPI
+
+app = FastAPI()
+add_routes(app, chain, path="/chat")
+
+# uvicorn server:app --host 0.0.0.0 --port 8000</code></pre>
+        <p>客户端调用：<code>POST /chat/invoke</code> 或 <code>POST /chat/stream</code>。</p>
+
+        <h2>6. 容器化部署</h2>
+        <p>用 Docker 打包应用，便于部署和扩展：</p>
+        <pre><code>FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre>
+
+        <h2>7. 生产环境检查清单</h2>
+        <ul>
+          <li>✅ 异步调用和批量处理，提升并发</li>
+          <li>✅ 缓存重复请求，降低成本</li>
+          <li>✅ 限流、重试、降级，保障稳定性</li>
+          <li>✅ LangSmith 监控，追踪错误和性能</li>
+          <li>✅ 容器化部署，便于扩展</li>
+          <li>✅ 密钥管理（不用硬编码 API Key）</li>
+        </ul>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>异步调用（ainvoke/astream）提升并发性能</li>
+          <li>缓存减少重复 LLM 调用，降低成本</li>
+          <li>限流、重试、降级保障服务稳定</li>
+          <li>LangServe 一键将链部署为 REST API</li>
+          <li>容器化部署便于扩展和运维</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 17 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第6章 记忆系统 Memory | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="06-memory">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>记忆系统 Memory</h1>
+        <p>LLM 本身是无状态的——每次调用都是独立的。要让 LLM 应用具备"记忆"，在多轮对话中理解上下文，就需要 Memory 系统。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Memory 的作用和分类</li>
+          <li>掌握 ConversationBufferMemory、WindowMemory、SummaryMemory</li>
+          <li>了解 EntityMemory 和 KnowledgeGraphMemory</li>
+          <li>用 RunnableWithMessageHistory 为 LCEL 链添加记忆</li>
+        </ul>
+
+        <h2>1. 为什么需要 Memory</h2>
+        <p>没有记忆时，每次对话都是全新的，LLM 不知道之前聊过什么。Memory 将历史对话注入下一次调用的 prompt，让 LLM 理解指代和省略。</p>
+
+        <h2>2. ConversationBufferMemory</h2>
+        <p>最简单的记忆，存储完整对话历史：</p>
+        <pre><code>from langchain.memory import ConversationBufferMemory
+
+memory = ConversationBufferMemory()
+memory.save_context({"input": "你好"}, {"output": "你好！有什么可以帮你的？"})
+print(memory.load_memory_variables({}))</code></pre>
+        <p>优点：简单直接，信息完整。缺点：对话越长，token 消耗越大，可能超出上下文窗口。</p>
+
+        <h2>3. ConversationBufferWindowMemory</h2>
+        <p>只保留最近 K 轮对话，控制 token 消耗：</p>
+        <pre><code>from langchain.memory import ConversationBufferWindowMemory
+
+memory = ConversationBufferWindowMemory(k=5)  # 只保留最近 5 轮</code></pre>
+
+        <h2>4. ConversationSummaryMemory</h2>
+        <p>用 LLM 对历史对话生成摘要，用摘要代替原始历史，大幅减少 token：</p>
+        <pre><code>from langchain.memory import ConversationSummaryMemory
+
+memory = ConversationSummaryMemory(llm=llm)</code></pre>
+        <p>优点：token 消耗低，适合长对话。缺点：可能丢失细节，且摘要本身需要调用 LLM 增加费用。</p>
+
+        <h2>5. ConversationEntityMemory</h2>
+        <p>提取对话中提到的实体（人名、地名、组织等）及其关系，结构化存储：</p>
+        <pre><code>from langchain.memory import ConversationEntityMemory
+
+memory = ConversationEntityMemory(llm=llm)</code></pre>
+
+        <h2>6. LCEL 中的记忆</h2>
+        <p>新版推荐用 <code>RunnableWithMessageHistory</code> 包装链：</p>
+        <pre><code>from langchain_core.chat_history import InMemoryChatMessageHistory
+from langchain_core.runnables.history import RunnableWithMessageHistory
+
+store = {}
+def get_session_history(session_id):
+    if session_id not in store:
+        store[session_id] = InMemoryChatMessageHistory()
+    return store[session_id]
+
+chain_with_history = RunnableWithMessageHistory(
+    chain,
+    get_session_history,
+    input_messages_key="question",
+    history_messages_key="history",
+)
+result = chain_with_history.invoke(
+    {"question": "我叫小明"},
+    config={"configurable": {"session_id": "user_001"}}
+)</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 记忆策略选择</div>
+          <p>短对话 → BufferMemory<br/>
+          中等对话 → WindowMemory（k=5~10）<br/>
+          长对话 → SummaryMemory 或 SummaryBufferMemory<br/>
+          需要实体追踪 → EntityMemory</p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Memory 让 LLM 在多轮对话中保持上下文</li>
+          <li>BufferMemory 存完整历史，WindowMemory 只存最近 K 轮，SummaryMemory 存摘要</li>
+          <li>EntityMemory 提取并存储实体信息</li>
+          <li>LCEL 推荐用 RunnableWithMessageHistory 管理消息历史</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 6 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

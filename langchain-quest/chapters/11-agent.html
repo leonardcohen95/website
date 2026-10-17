@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第11章 Agent 智能体 | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="11-agent">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>Agent 智能体</h1>
+        <p>Chain 是固定的执行流程，而 Agent 能自主决策：它根据任务，自己决定调用哪些工具、以什么顺序执行、观察结果后再决定下一步。这让 LLM 应用能完成复杂的多步任务。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Agent 的核心思想和 ReAct 模式</li>
+          <li>使用 AgentExecutor 运行 Agent</li>
+          <li>了解常见的 Agent 类型</li>
+          <li>认识 LangGraph 用于复杂 Agent 工作流</li>
+        </ul>
+
+        <h2>1. Agent 是什么</h2>
+        <p>Agent = LLM（大脑）+ Tools（手脚）。LLM 负责思考和决策，Tools 负责执行具体操作。Agent 会循环执行"思考→行动→观察"直到完成任务。</p>
+
+        <h2>2. ReAct 模式</h2>
+        <p>ReAct = Reasoning（推理）+ Acting（行动）。Agent 的典型循环：</p>
+        <ol>
+          <li><strong>Thought</strong>：思考当前该做什么</li>
+          <li><strong>Action</strong>：选择并调用一个工具</li>
+          <li><strong>Observation</strong>：获取工具返回结果</li>
+          <li>重复以上步骤，直到给出最终答案</li>
+        </ol>
+
+        <h2>3. 创建 Agent</h2>
+        <pre><code>from langchain.agents import AgentExecutor, create_react_agent
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_community.tools import SerpAPIWrapper
+
+# 定义工具
+search = SerpAPIWrapper()
+tools = [search]
+
+# 创建 Agent
+prompt = ChatPromptTemplate.from_template("""Answer the following questions as best you can.
+You have access to the following tools:
+{tools}
+Use the following format:
+Question: {input}
+Thought: you should always think about what to do
+Action: the action to take, should be one of [{tool_names}]
+Action Input: the input to the action
+Observation: the result of the action
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer
+Final Answer: the final answer to the original input question
+Begin!
+{agent_scratchpad}""")
+
+agent = create_react_agent(llm, tools, prompt)
+executor = AgentExecutor(agent=agent, tools=tools, verbose=True, max_iterations=5)
+result = executor.invoke({"input": "今天北京天气怎么样？"})</code></pre>
+
+        <h2>4. 常见 Agent 类型</h2>
+
+        <div class="term-card">
+          <div class="term-name">⚡ zero-shot-react-description</div>
+          <p>不需要示例，直接根据工具描述决定如何使用。最常用。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">📋 react-docstore</div>
+          <p>结合文档存储的 Agent，适合需要查阅大量文档的任务。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">❓ self-ask-with-search</div>
+          <p>Agent 自己拆解问题，逐个搜索子问题的答案。</p>
+        </div>
+
+        <h2>5. 关键参数</h2>
+        <ul>
+          <li><code>max_iterations</code>：最大思考-行动循环次数，防止无限循环</li>
+          <li><code>early_stopping_method</code>：达到最大迭代时的处理方式（generate 让 LLM 生成最终答案）</li>
+          <li><code>handle_parsing_errors</code>：解析错误时让 LLM 自行修正</li>
+        </ul>
+
+        <h2>6. LangGraph</h2>
+        <p>对于更复杂的、有状态的多 Agent 协作场景，推荐使用 <strong>LangGraph</strong>。它用图（Graph）的方式定义工作流，支持循环、条件分支、多 Agent 协作，比传统 AgentExecutor 更灵活可控。</p>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 何时用 Agent</div>
+          <p>用 Agent：任务步骤不固定、需要动态决策、需要调用多个工具<br/>
+          用 Chain：任务流程固定、可预测</p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Agent = LLM + Tools，自主规划并执行多步任务</li>
+          <li>ReAct 模式：Thought → Action → Observation 循环</li>
+          <li>AgentExecutor 驱动 Agent 执行循环</li>
+          <li>常见类型：zero-shot-react、react-docstore、self-ask-with-search</li>
+          <li>LangGraph 适合复杂有状态的多 Agent 工作流</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 11 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第10章 检索器 Retriever | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="10-retriever">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>检索器 Retriever</h1>
+        <p>检索质量直接决定 RAG 系统的上限。本章学习各种高级检索策略，提升检索的精准度和召回率。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Retriever 接口和基础用法</li>
+          <li>掌握 MMR、MultiQuery 等高级检索策略</li>
+          <li>了解重排序（Rerank）和混合检索</li>
+          <li>使用 ContextualCompressionRetriever 压缩结果</li>
+        </ul>
+
+        <h2>1. Retriever 基础</h2>
+        <p>Retriever 的核心方法是 <code>get_relevant_documents(query)</code>，返回相关的 Document 列表。最常用的是从 VectorStore 创建：</p>
+        <pre><code>retriever = vectorstore.as_retriever(
+    search_type="similarity",  # 或 "mmr"
+    search_kwargs={"k": 4}
+)
+docs = retriever.invoke("用户问题")</code></pre>
+
+        <h2>2. MMR 检索</h2>
+        <p>MMR（Maximal Marginal Relevance）在相关性和多样性之间平衡，避免返回内容高度重复的文档：</p>
+        <pre><code>retriever = vectorstore.as_retriever(
+    search_type="mmr",
+    search_kwargs={"k": 4, "fetch_k": 20, "lambda_mult": 0.5}
+)</code></pre>
+        <p><code>lambda_mult</code> 越小越注重多样性，越大越注重相关性。</p>
+
+        <h2>3. MultiQueryRetriever</h2>
+        <p>用 LLM 从不同角度生成多个查询，分别检索后合并，提升召回率：</p>
+        <pre><code>from langchain.retrievers import MultiQueryRetriever
+
+retriever = MultiQueryRetriever.from_llm(
+    retriever=vectorstore.as_retriever(),
+    llm=llm
+)</code></pre>
+
+        <h2>4. 重排序（Rerank）</h2>
+        <p>先用向量检索召回较多候选文档，再用更强的模型（如 Cohere Rerank、bge-reranker）重新打分排序，提升精度：</p>
+        <pre><code>from langchain.retrievers import ContextualCompressionRetriever
+from langchain.retrievers.document_compressors import CohereRerank
+
+compressor = CohereRerank(top_n=3)
+retriever = ContextualCompressionRetriever(
+    base_compressor=compressor,
+    base_retriever=vectorstore.as_retriever(search_kwargs={"k": 20})
+)</code></pre>
+
+        <h2>5. ContextualCompressionRetriever</h2>
+        <p>用 LLM 或 embedding 对检索结果进行压缩，只保留与查询最相关的片段，减少噪声和 token 消耗。</p>
+
+        <h2>6. EnsembleRetriever 混合检索</h2>
+        <p>结合关键词检索（BM25）和向量检索，取长补短：</p>
+        <pre><code>from langchain.retrievers import EnsembleRetriever
+from langchain_community.retrievers import BM25Retriever
+
+bm25_retriever = BM25Retriever.from_documents(chunks)
+vector_retriever = vectorstore.as_retriever()
+
+ensemble = EnsembleRetriever(
+    retrievers=[bm25_retriever, vector_retriever],
+    weights=[0.5, 0.5]
+)</code></pre>
+
+        <h2>7. ParentDocumentRetriever</h2>
+        <p>将文档切成小 chunk 用于精确检索，但返回该 chunk 所属的完整父文档，兼顾检索精度和上下文完整性。</p>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 检索优化策略</div>
+          <p>1. 调整 chunk_size 和 k 值<br/>
+          2. 使用 MMR 增加多样性<br/>
+          3. MultiQuery 提升召回<br/>
+          4. Rerank 提升精度<br/>
+          5. 混合检索兼顾关键词和语义<br/>
+          6. ParentDocument 兼顾精度和上下文</p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Retriever 通过 get_relevant_documents 检索相关文档</li>
+          <li>MMR 平衡相关性和多样性，MultiQuery 从多角度检索</li>
+          <li>Rerank 用强模型重新排序提升精度</li>
+          <li>EnsembleRetriever 混合关键词和向量检索</li>
+          <li>ParentDocumentRetriever 检索小块但返回完整父文档</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 10 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

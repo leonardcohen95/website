@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第4章 Prompt 工程 | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="04-prompt">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>Prompt 工程</h1>
+        <p>Prompt 是人与 LLM 沟通的桥梁。好的 Prompt 能让 LLM 输出高质量、结构化的结果；差的 Prompt 则会得到模糊、无用的回答。本章学习 LangChain 中 Prompt 的管理与解析。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>使用 PromptTemplate 创建可复用的提示模板</li>
+          <li>使用 FewShotPromptTemplate 提供示例</li>
+          <li>使用 OutputParser 将输出解析为结构化数据</li>
+          <li>掌握 ChatPromptTemplate 构建对话模板</li>
+        </ul>
+
+        <h2>1. PromptTemplate</h2>
+        <p>PromptTemplate 用 <code>{variable}</code> 语法定义带变量的模板，调用时传入具体值：</p>
+        <pre><code>from langchain_core.prompts import PromptTemplate
+
+template = PromptTemplate.from_template(
+    "你是一个{role}。请用{style}的风格解释{concept}。"
+)
+prompt = template.format(role="编程导师", style="简洁", concept="RAG")
+print(prompt)</code></pre>
+        <p>输出：<code>你是一个编程导师。请用简洁的风格解释RAG。</code></p>
+
+        <h2>2. FewShotPromptTemplate</h2>
+        <p>给模型提供几个示例（few-shot），引导它按期望的格式输出：</p>
+        <pre><code>from langchain_core.prompts import FewShotPromptTemplate, PromptTemplate
+
+examples = [
+    {"input": "开心", "output": "😊"},
+    {"input": "难过", "output": "😢"},
+]
+example_prompt = PromptTemplate.from_template("输入：{input}\n输出：{output}")
+
+few_shot = FewShotPromptTemplate(
+    examples=examples,
+    example_prompt=example_prompt,
+    suffix="输入：{emotion}\n输出：",
+    input_variables=["emotion"]
+)
+print(few_shot.format(emotion="愤怒"))</code></pre>
+
+        <h2>3. OutputParser</h2>
+        <p>LLM 输出是文本，OutputParser 将其解析为结构化数据：</p>
+
+        <div class="term-card">
+          <div class="term-name">📋 CommaSeparatedListOutputParser</div>
+          <p>将输出解析为逗号分隔的列表。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">📐 PydanticOutputParser</div>
+          <p>基于 Pydantic 模型解析为强类型对象，支持嵌套结构，是最强大的 Parser。</p>
+        </div>
+
+        <pre><code>from langchain_core.output_parsers import PydanticOutputParser
+from pydantic import BaseModel, Field
+
+class Movie(BaseModel):
+    title: str = Field(description="电影名")
+    year: int = Field(description="上映年份")
+    genre: list[str] = Field(description="类型列表")
+
+parser = PydanticOutputParser(pydantic_object=Movie)
+prompt = PromptTemplate.from_template(
+    "推荐一部电影。\n{format_instructions}\n电影：{query}"
+)
+chain = prompt | llm | parser
+result = chain.invoke({"query": "科幻片", "format_instructions": parser.get_format_instructions()})
+print(result.title, result.year, result.genre)</code></pre>
+
+        <h2>4. ChatPromptTemplate</h2>
+        <p>用于构建聊天消息列表，支持消息占位符：</p>
+        <pre><code>from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "你是一个{role}。"),
+    MessagesPlaceholder(variable_name="history"),
+    ("human", "{question}")
+])</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 Prompt 编写原则</div>
+          <p>1. 明确角色设定（SystemMessage）<br/>
+          2. 清楚描述任务和要求<br/>
+          3. 给出期望的输出格式<br/>
+          4. 提供示例（few-shot）效果更好<br/>
+          5. 避免模糊和歧义的表达</p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>PromptTemplate 用 {variable} 创建可复用模板</li>
+          <li>FewShotPromptTemplate 通过示例引导输出格式</li>
+          <li>OutputParser 将文本输出解析为结构化数据（PydanticOutputParser 最强）</li>
+          <li>ChatPromptTemplate 构建对话消息模板，MessagesPlaceholder 占位历史消息</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 4 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

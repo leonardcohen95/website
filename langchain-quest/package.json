@@ -1,0 +1,1 @@
+{"name": "langchain-quest", "version": "1.0.0", "description": "LangChain Quest - 交互式 LangChain 学习中心", "main": "server.js", "scripts": {"start": "node server.js"}, "keywords": ["langchain", "learning", "quest"], "license": "MIT"}

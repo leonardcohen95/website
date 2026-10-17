@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第20章 面试与就业准备 | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="20-interview">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>面试与就业准备</h1>
+        <p>学完前面的内容，你已具备 LangChain 应用开发的核心能力。本章总结常见面试题、简历要点和求职策略，帮助你顺利拿到 LLM 应用开发岗位。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>掌握 LangChain 常见面试题</li>
+          <li>了解 LLM 应用开发岗位的技能要求</li>
+          <li>学会简历中突出 LLM 项目经验</li>
+          <li>准备求职策略和学习路径</li>
+        </ul>
+
+        <h2>1. 核心概念面试题</h2>
+
+        <div class="term-card">
+          <div class="term-name">Q：LangChain 的核心组件有哪些？</div>
+          <p>答：Prompt（提示）、LLM（模型）、Chain（链）、Memory（记忆）、Tool（工具）、Agent（智能体）、Retriever（检索器）、VectorStore（向量存储）。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Q：RAG 的完整流程是什么？</div>
+          <p>答：离线阶段：加载文档→切分→向量化→存入向量库。在线阶段：用户提问→检索相关文档→拼接 prompt→LLM 生成回答。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Q：Chain 和 Agent 的区别？</div>
+          <p>答：Chain 是固定的执行流程，步骤预先定义好；Agent 由 LLM 自主决策调用哪些工具、以什么顺序执行，适合动态、多步的复杂任务。</p>
+        </div>
+
+        <h2>2. 技术深度面试题</h2>
+
+        <div class="term-card">
+          <div class="term-name">Q：如何优化 RAG 的检索效果？</div>
+          <p>答：1. 调整 chunk_size 和 overlap；2. 使用 MMR 增加多样性；3. MultiQuery 从多角度检索；4. 混合检索（BM25 + 向量）；5. 重排序（Rerank）；6. ParentDocumentRetriever 兼顾精度和上下文。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Q：如何处理长对话的上下文溢出？</div>
+          <p>答：1. 滑动窗口只保留最近 K 轮；2. 用 LLM 对旧对话生成摘要；3. 将历史对话向量化，检索相关历史而非全部传入；4. 结合以上多种策略。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Q：如何减少 LLM 的幻觉？</div>
+          <p>答：1. 使用 RAG 让模型基于检索到的事实回答；2. 在 prompt 中明确要求"只基于提供的文档回答，不知道就说不知道"；3. 降低 Temperature；4. 对输出进行事实校验；5. 提供引用来源让用户验证。</p>
+        </div>
+
+        <h2>3. LCEL 相关面试题</h2>
+
+        <div class="term-card">
+          <div class="term-name">Q：LCEL 相比传统 Chain 的优势？</div>
+          <p>答：1. 原生支持流式输出（stream）和异步（ainvoke）；2. 支持并行、分支、重试、降级；3. 自动集成 LangSmith 追踪；4. 组合灵活，代码更简洁直观。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">Q：RunnablePassthrough 的作用？</div>
+          <p>答：将输入原样传递，常用于保留原始输入供后续步骤使用。例如在 RAG 中同时传递原始问题和检索到的上下文。</p>
+        </div>
+
+        <h2>4. 简历要点</h2>
+        <ul>
+          <li><strong>项目经历</strong>：重点描述 RAG、Agent、对话系统等 LLM 应用项目，说明技术选型和解决的问题</li>
+          <li><strong>量化成果</strong>：用数据说话，如"检索准确率提升 30%"、"支持日均 10 万次问答"</li>
+          <li><strong>技术栈</strong>：LangChain、LangGraph、向量数据库（Chroma/FAISS/Pinecone）、Embedding 模型、Prompt 工程</li>
+          <li><strong>GitHub</strong>：放上学习项目和实战项目的代码仓库</li>
+        </ul>
+
+        <h2>5. 岗位技能要求</h2>
+        <ul>
+          <li>✅ Python 编程基础扎实</li>
+          <li>✅ 熟悉 LangChain / LlamaIndex 等 LLM 框架</li>
+          <li>✅ 理解 RAG、Agent、Prompt 工程等核心概念</li>
+          <li>✅ 熟悉向量数据库和 Embedding</li>
+          <li>✅ 了解 LLM API 调用和成本优化</li>
+          <li>✅ 加分项：LangGraph、LangSmith、LangServe 生产部署经验</li>
+        </ul>
+
+        <h2>6. 后续学习路径</h2>
+        <ul>
+          <li><strong>深入 LangGraph</strong>：复杂多 Agent 工作流编排</li>
+          <li><strong>学习 LlamaIndex</strong>：另一个主流 LLM 数据框架</li>
+          <li><strong>研究模型微调</strong>：LoRA、QLoRA 等高效微调</li>
+          <li><strong>关注前沿</strong>：多模态、Agent 协作、AI 编程等方向</li>
+          <li><strong>持续实战</strong>：在 GitHub 上做项目，参加黑客松</li>
+        </ul>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 求职策略</div>
+          <p>1. 先做出 2-3 个完整项目（如本课程的客服和知识库）<br/>
+          2. 写技术博客分享学习心得，建立个人品牌<br/>
+          3. 投递 LLM 应用开发、AI 工程师、RAG 工程师等岗位<br/>
+          4. 面试时多讲项目细节和技术决策<br/>
+          5. 保持对 LLM 新技术的关注和学习</p>
+        </div>
+
+        <h2>🎉 恭喜完成 LangChain Quest！</h2>
+        <p>你已经从零开始，系统学习了 LangChain 的核心概念、组件、实战项目和求职准备。继续保持学习和实践，相信你能在 LLM 应用开发领域找到理想的工作！</p>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>掌握 RAG、Agent、Memory、LCEL 等核心概念面试题</li>
+          <li>简历重点突出 LLM 项目经历和量化成果</li>
+          <li>岗位要求：Python + LangChain + 向量数据库 + RAG/Agent</li>
+          <li>持续学习 LangGraph、LlamaIndex、模型微调等进阶方向</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 20 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

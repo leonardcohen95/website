@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第12章 工具与函数调用 | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="12-tools">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>工具与函数调用</h1>
+        <p>工具（Tool）是 Agent 与外部世界交互的接口。本章学习如何定义、使用工具，以及 Function Calling 的原理。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>使用 @tool 装饰器和 Tool 类定义工具</li>
+          <li>使用 StructuredTool 处理多参数输入</li>
+          <li>理解 Function Calling 的工作原理</li>
+          <li>了解常用内置工具</li>
+        </ul>
+
+        <h2>1. 定义工具</h2>
+        <p>用 <code>@tool</code> 装饰器最简单，函数名成为工具名，docstring 成为描述：</p>
+        <pre><code>from langchain_core.tools import tool
+
+@tool
+def calculator(expression: str) -> str:
+    """计算数学表达式并返回结果。expression 是一个合法的 Python 数学表达式字符串。"""
+    try:
+        return str(eval(expression))
+    except:
+        return "计算错误"
+
+print(calculator.name)      # calculator
+print(calculator.description)  # docstring</code></pre>
+
+        <h2>2. StructuredTool：多参数输入</h2>
+        <p>当工具需要多个结构化参数时，用 StructuredTool + Pydantic：</p>
+        <pre><code>from langchain_core.tools import StructuredTool
+from pydantic import BaseModel
+
+class WeatherInput(BaseModel):
+    city: str
+    unit: str = "celsius"
+
+def get_weather(city: str, unit: str = "celsius") -> str:
+    return f"{city}今天天气晴，25度{unit}"
+
+weather_tool = StructuredTool.from_function(
+    func=get_weather,
+    name="get_weather",
+    description="获取指定城市的天气",
+    args_schema=WeatherInput
+)</code></pre>
+
+        <h2>3. Function Calling 原理</h2>
+        <p>Function Calling 不是让 LLM 直接执行函数，而是：</p>
+        <ol>
+          <li>程序将函数名、参数描述、函数说明传给 LLM</li>
+          <li>LLM 判断需要调用哪个函数，并输出结构化的函数名和参数</li>
+          <li>程序接收后实际执行函数</li>
+          <li>将执行结果返回 LLM，LLM 继续生成最终回答</li>
+        </ol>
+        <p>LangChain 的 Agent 内部就封装了这个流程。</p>
+
+        <h2>4. 常用内置工具</h2>
+        <ul>
+          <li><strong>SerpAPI / TavilySearch</strong>：网络搜索</li>
+          <li><strong>PythonREPL</strong>：执行 Python 代码（计算、数据处理）</li>
+          <li><strong>SQLDatabase</strong>：查询 SQL 数据库</li>
+          <li><strong>Retriever</strong>：作为工具封装的文档检索</li>
+          <li><strong>requests</strong>：发送 HTTP 请求</li>
+        </ul>
+
+        <h2>5. 工具使用最佳实践</h2>
+        <ul>
+          <li>description 要清晰准确，帮助 LLM 正确选择工具</li>
+          <li>参数用 Pydantic 模型定义，带 description 说明每个字段</li>
+          <li>做好错误处理，工具失败时返回有意义的错误信息</li>
+          <li><code>return_direct=True</code> 可让工具结果直接返回用户，不经 LLM 再处理</li>
+        </ul>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>@tool 装饰器快速定义工具，docstring 作为描述</li>
+          <li>StructuredTool 支持多参数结构化输入</li>
+          <li>Function Calling：LLM 输出函数名和参数，程序执行后返回结果</li>
+          <li>常用工具：搜索、PythonREPL、SQLDatabase、Retriever</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 12 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

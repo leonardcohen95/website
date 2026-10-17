@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第2章 环境搭建与首个调用 | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="02-setup">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>环境搭建与首个调用</h1>
+        <p>本章我们动手搭建 LangChain 开发环境，并完成第一次 LLM 调用。工欲善其事，必先利其器，一个干净、可复用的环境是高效开发的基础。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>搭建 Python 虚拟环境并安装 LangChain</li>
+          <li>配置 LLM API Key</li>
+          <li>完成第一次 LLM 调用</li>
+          <li>理解新版 LangChain 的包结构</li>
+        </ul>
+
+        <h2>1. 环境准备</h2>
+        <p>推荐使用 Python 3.10+（LangChain 0.2+ 支持 3.8.1+，但生产建议 3.10/3.11）。创建虚拟环境可以隔离项目依赖，避免污染系统 Python。</p>
+
+        <pre><code># 创建虚拟环境
+python -m venv venv
+
+# 激活虚拟环境
+# macOS / Linux:
+source venv/bin/activate
+# Windows:
+venv\Scripts\activate
+
+# 升级 pip
+pip install --upgrade pip</code></pre>
+
+        <h2>2. 安装 LangChain</h2>
+        <p>新版 LangChain（0.2+）将核心和第三方集成拆分到不同的包中，结构更清晰：</p>
+
+        <pre><code># 核心包（包含 Chains、Agents、Memory 等）
+pip install langchain
+
+# OpenAI 集成
+pip install langchain-openai
+
+# 社区集成（包含大量第三方工具、向量库等）
+pip install langchain-community
+
+# 核心抽象（通常作为依赖自动安装）
+pip install langchain-core</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 包结构说明</div>
+          <p><code>langchain-core</code>：核心抽象（Runnable、BaseLLM 等）<br/>
+          <code>langchain</code>：核心功能（Chains、Agents、Memory）<br/>
+          <code>langchain-community</code>：社区贡献的第三方集成<br/>
+          <code>langchain-openai</code>、<code>langchain-anthropic</code> 等：各模型厂商的独立集成包</p>
+        </div>
+
+        <h2>3. 配置 API Key</h2>
+        <p>LLM 服务需要 API Key 才能调用。推荐用 <code>.env</code> 文件管理密钥，避免硬编码。</p>
+
+        <pre><code># 安装 python-dotenv
+pip install python-dotenv</code></pre>
+
+        <p>在项目根目录创建 <code>.env</code> 文件：</p>
+
+        <pre><code># .env 文件内容
+OPENAI_API_KEY=sk-your-api-key-here</code></pre>
+
+        <div class="callout warn">
+          <div class="callout-title">⚠️ 安全提醒</div>
+          <p>绝不要把 API Key 硬编码在代码中，也不要提交到 Git 仓库。务必将 <code>.env</code> 加入 <code>.gitignore</code>。</p>
+        </div>
+
+        <h2>4. 第一次 LLM 调用</h2>
+        <p>一切就绪，让我们写第一个 LangChain 程序：</p>
+
+        <pre><code>from dotenv import load_dotenv
+load_dotenv()  # 加载 .env 中的环境变量
+
+from langchain_openai import ChatOpenAI
+
+# 初始化聊天模型
+llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7)
+
+# 调用模型
+response = llm.invoke("用一句话解释什么是 LangChain")
+print(response.content)</code></pre>
+
+        <p>运行后你会看到类似输出：</p>
+        <pre><code>LangChain 是一个用于构建基于大语言模型应用的开发框架，它提供了链式调用、记忆、检索等组件，帮助开发者快速搭建复杂的 LLM 应用。</code></pre>
+
+        <h2>5. 使用消息格式调用</h2>
+        <p>实际开发中，我们通常用消息列表（SystemMessage、HumanMessage、AIMessage）来组织对话：</p>
+
+        <pre><code>from langchain_core.messages import SystemMessage, HumanMessage
+
+messages = [
+    SystemMessage(content="你是一个专业的编程导师，回答要简洁准确。"),
+    HumanMessage(content="什么是 LangChain？")
+]
+
+response = llm.invoke(messages)
+print(response.content)</code></pre>
+
+        <h2>6. 验证安装</h2>
+        <pre><code>python -c "import langchain; print(langchain.__version__)"</code></pre>
+        <p>能正常输出版本号说明安装成功。</p>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>使用虚拟环境隔离依赖，安装 langchain、langchain-openai、langchain-community</li>
+          <li>用 .env 文件管理 API Key，配合 python-dotenv 加载</li>
+          <li>ChatOpenAI 是新版推荐的聊天模型类，通过 .invoke() 调用</li>
+          <li>用 SystemMessage/HumanMessage/AIMessage 组织对话消息</li>
+        </ul>
+
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 2 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

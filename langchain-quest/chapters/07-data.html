@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第7章 数据连接 | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="07-data">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>数据连接</h1>
+        <p>LLM 应用往往需要处理外部数据：PDF 文档、网页、数据库、CSV 文件……LangChain 提供了 Document Loader 和 Text Splitter 来加载和处理这些数据，为后续的向量化和检索做准备。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>使用 Document Loader 加载各种数据源</li>
+          <li>理解 Document 对象的结构</li>
+          <li>使用 Text Splitter 切分长文档</li>
+          <li>掌握 chunk_size 和 chunk_overlap 的调优</li>
+        </ul>
+
+        <h2>1. Document 对象</h2>
+        <p>LangChain 用 <code>Document</code> 对象表示一段文本，包含两个核心字段：</p>
+        <ul>
+          <li><code>page_content</code>：文本内容</li>
+          <li><code>metadata</code>：元数据字典（来源、页码、创建时间等）</li>
+        </ul>
+
+        <h2>2. 常用 Document Loader</h2>
+
+        <div class="term-card">
+          <div class="term-name">📄 TextLoader</div>
+          <p>加载纯文本文件（.txt）。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">📕 PyPDFLoader</div>
+          <p>加载 PDF 文件，每页转为一个 Document，metadata 包含页码。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🌐 WebBaseLoader / BSHTMLLoader</div>
+          <p>加载网页 HTML 并提取文本。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">📊 CSVLoader</div>
+          <p>加载 CSV 文件，每行或每列转为 Document。</p>
+        </div>
+
+        <pre><code>from langchain_community.document_loaders import PyPDFLoader, TextLoader, WebBaseLoader
+
+# 加载 PDF
+loader = PyPDFLoader("docs/产品手册.pdf")
+docs = loader.load()
+
+# 加载网页
+loader = WebBaseLoader("https://example.com/docs")
+docs = loader.load()</code></pre>
+
+        <h2>3. Text Splitter</h2>
+        <p>长文档需要切分为较小的 chunk，才能向量化和检索。最常用的是 <code>RecursiveCharacterTextSplitter</code>：</p>
+
+        <pre><code>from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,        # 每个 chunk 的最大字符数
+    chunk_overlap=50,      # 相邻 chunk 的重叠字符数
+    separators=["\n\n", "\n", "。", "！", "？", " ", ""]
+)
+chunks = splitter.split_documents(docs)</code></pre>
+
+        <p>它按分隔符列表递归尝试，尽量在段落、句子边界切分，保持语义完整。</p>
+
+        <h2>4. chunk_size 与 chunk_overlap</h2>
+        <ul>
+          <li><strong>chunk_size</strong>：每个文本块的大小。太小会丢失上下文，太大会引入噪声。常见取值 200-1000 字符。</li>
+          <li><strong>chunk_overlap</strong>：相邻块的重叠部分，避免关键信息被切断。通常取 chunk_size 的 10%-20%。</li>
+        </ul>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 调优建议</div>
+          <p>FAQ 类文档：chunk 小一些（200-400），精确匹配<br/>
+          长文/报告：chunk 大一些（500-1000），保留上下文<br/>
+          overlap 建议 50-100 字符，确保语义连续</p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Document Loader 加载各种数据源为 Document 对象</li>
+          <li>Document 含 page_content（文本）和 metadata（元数据）</li>
+          <li>RecursiveCharacterTextSplitter 按语义边界切分文档</li>
+          <li>chunk_size 和 chunk_overlap 需要根据文档类型调优</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 7 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

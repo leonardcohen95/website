@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第1章 LangChain 是什么 | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="01-intro">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>LangChain 是什么</h1>
+        <p>大语言模型（LLM）的爆发让 AI 应用开发进入了新纪元。但直接调用 LLM API 只能完成最简单的对话，要构建真正有用的应用——比如智能客服、知识库问答、数据分析助手——你需要把 LLM 和外部数据、工具、记忆系统组合起来。<strong>LangChain</strong> 就是为此而生的开发框架，它提供了一套标准化的组件，帮你快速搭建复杂的 LLM 应用。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 LangChain 的定位和核心价值</li>
+          <li>了解 LangChain 的核心模块</li>
+          <li>知道 LangChain 能做什么、不能做什么</li>
+          <li>了解 LangChain 生态（LangSmith、LangGraph、LangServe）</li>
+        </ul>
+
+        <h2>1. 为什么需要 LangChain</h2>
+        <p>直接调用 LLM API（如 OpenAI 的 chat.completions）只能做到"一问一答"。但现实中的 LLM 应用需要更多能力：</p>
+        <ul>
+          <li><strong>连接外部知识</strong>：让 LLM 基于你的私有文档回答，而不是只靠训练数据</li>
+          <li><strong>使用工具</strong>：让 LLM 调用搜索、计算器、数据库等外部功能</li>
+          <li><strong>保持记忆</strong>：在多轮对话中记住之前说过的话</li>
+          <li><strong>链式编排</strong>：把多个步骤组合成一个完整的工作流</li>
+        </ul>
+        <p>LangChain 把这些能力封装成标准化的组件，让开发者像搭积木一样构建 LLM 应用，而不必从零实现每个环节。</p>
+
+        <h2>2. LangChain 的核心模块</h2>
+
+        <div class="term-card">
+          <div class="term-name">📝 Models（模型）</div>
+          <p>封装各种 LLM 的调用接口，支持 OpenAI、Anthropic、HuggingFace 等，屏蔽不同 API 的差异。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">✍️ Prompts（提示词）</div>
+          <p>提供 PromptTemplate、FewShotPrompt、OutputParser 等，管理和复用提示词，将输出解析为结构化数据。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">⛓️ Chains（链）</div>
+          <p>将 Prompt、LLM、Parser 等组件串联起来，形成可复用的处理流程，是 LangChain 的核心编排单元。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🧠 Memory（记忆）</div>
+          <p>在多次调用间保持上下文，支持 Buffer、Summary、Entity 等多种记忆策略。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🔍 Retrievers（检索器）</div>
+          <p>从向量数据库等数据源中检索相关文档，是 RAG（检索增强生成）的关键组件。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🤖 Agents（智能体）</div>
+          <p>让 LLM 自主决策调用哪些工具、以什么顺序执行，完成复杂的多步任务。</p>
+        </div>
+
+        <h2>3. LangChain 生态</h2>
+        <p>LangChain 不只是一个框架，而是一个完整的生态：</p>
+
+        <div class="term-card">
+          <div class="term-name">🔎 LangSmith</div>
+          <p>可观测性平台，用于调试、监控和评估 LLM 应用，记录每次调用的输入输出。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🕸️ LangGraph</div>
+          <p>用于构建有状态的、多 Agent 协作的复杂工作流，支持循环和条件分支。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🚀 LangServe</div>
+          <p>将 LangChain 链快速部署为 REST API，支持流式输出。</p>
+        </div>
+
+        <h2>4. 谁在使用 LangChain</h2>
+        <p>LangChain 被广泛用于：</p>
+        <ul>
+          <li>企业内部知识库问答系统</li>
+          <li>智能客服与对话机器人</li>
+          <li>代码辅助开发工具</li>
+          <li>数据分析与报告生成</li>
+          <li>文档摘要与信息提取</li>
+          <li>自动化 Agent（研究、写作、运营）</li>
+        </ul>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 给初学者的话</div>
+          <p>不要把 LangChain 想得太复杂。它本质上就是一套"LLM 应用的乐高积木"：你用 Prompt 告诉 LLM 做什么，用 Chain 把步骤连起来，用 Memory 记住上下文，用 Retriever 接上外部知识，用 Agent 让它自己干活。跟着本课程一章一章学，你就能从零搭建出能上线的 LLM 应用。</p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>LangChain 是构建 LLM 应用的开发框架，核心价值是"链式编排 + 组件复用"</li>
+          <li>核心模块：Models、Prompts、Chains、Memory、Retrievers、Agents</li>
+          <li>生态：LangSmith（监控）、LangGraph（多Agent）、LangServe（部署）</li>
+          <li>应用场景：知识库问答、智能客服、代码辅助、数据分析等</li>
+        </ul>
+
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 1 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

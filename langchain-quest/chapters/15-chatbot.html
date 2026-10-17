@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第15章 对话系统构建 | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="15-chatbot">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>对话系统构建</h1>
+        <p>对话系统（Chatbot）是 LLM 应用最常见的形态。本章学习如何用 LangChain 构建一个具备多轮对话能力的聊天机器人。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>用 ConversationChain 构建基础对话</li>
+          <li>用 RunnableWithMessageHistory 管理会话历史</li>
+          <li>处理长对话的上下文溢出</li>
+          <li>结合 RAG 实现带知识库的对话</li>
+        </ul>
+
+        <h2>1. 基础对话链</h2>
+        <pre><code>from langchain.chains import ConversationChain
+from langchain.memory import ConversationBufferMemory
+
+conversation = ConversationChain(
+    llm=llm,
+    memory=ConversationBufferMemory(),
+    verbose=True
+)
+conversation.invoke("你好，我叫小明")
+conversation.invoke("我叫什么名字？")  # 会记住"小明"</code></pre>
+
+        <h2>2. 用 LCEL 构建对话系统</h2>
+        <pre><code>from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.chat_history import InMemoryChatMessageHistory
+from langchain_core.runnables.history import RunnableWithMessageHistory
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "你是一个友好的客服机器人，用中文回答用户问题。"),
+    MessagesPlaceholder(variable_name="history"),
+    ("human", "{question}")
+])
+chain = prompt | llm
+
+store = {}
+def get_history(session_id):
+    if session_id not in store:
+        store[session_id] = InMemoryChatMessageHistory()
+    return store[session_id]
+
+chain_with_history = RunnableWithMessageHistory(
+    chain,
+    get_history,
+    input_messages_key="question",
+    history_messages_key="history",
+)
+
+chain_with_history.invoke(
+    {"question": "你好"},
+    config={"configurable": {"session_id": "user123"}}
+)</code></pre>
+
+        <h2>3. 处理长对话</h2>
+        <p>对话历史过长会超出上下文窗口，常用策略：</p>
+        <ul>
+          <li><strong>滑动窗口</strong>：只保留最近 K 轮</li>
+          <li><strong>摘要压缩</strong>：用 LLM 将旧对话压缩为摘要</li>
+          <li><strong>检索历史</strong>：将历史对话向量化，检索相关历史而非全部传入</li>
+        </ul>
+
+        <h2>4. 对话 + RAG</h2>
+        <p>结合知识库的对话系统，让 AI 既能记住对话，又能基于知识库回答：</p>
+        <pre><code>prompt = ChatPromptTemplate.from_messages([
+    ("system", "基于以下上下文回答用户问题。如果上下文没有相关信息，就说不知道。\n上下文：{context}"),
+    MessagesPlaceholder(variable_name="history"),
+    ("human", "{question}")
+])
+
+def format_docs(docs):
+    return "\n".join(doc.page_content for doc in docs)
+
+chain = (
+    {
+        "context": itemgetter("question") | retriever | format_docs,
+        "question": itemgetter("question"),
+        "history": itemgetter("history"),
+    }
+    | prompt | llm | parser
+)</code></pre>
+
+        <h2>5. 生产环境的会话存储</h2>
+        <p>生产环境不要用内存存储历史，应用 Redis、数据库等持久化存储，支持多实例共享：</p>
+        <ul>
+          <li><strong>Redis</strong>：高性能，适合会话缓存</li>
+          <li><strong>PostgreSQL / MongoDB</strong>：持久化存储</li>
+          <li><strong>LangChain 的 RedisChatMessageHistory</strong>：开箱即用</li>
+        </ul>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>ConversationChain 快速构建带记忆的对话</li>
+          <li>RunnableWithMessageHistory 为 LCEL 链添加会话管理</li>
+          <li>长对话用滑动窗口、摘要、检索历史等策略控制长度</li>
+          <li>对话 + RAG 实现基于知识库的智能客服</li>
+          <li>生产环境用 Redis 等持久化存储会话</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 15 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

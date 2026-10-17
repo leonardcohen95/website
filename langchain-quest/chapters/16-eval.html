@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第16章 评估与监控 | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="16-eval">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>评估与监控</h1>
+        <p>LLM 应用的输出灵活多变，传统单元测试难以覆盖。本章学习如何用 LangSmith 监控、调试和评估 LLM 应用，建立质量保障体系。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 LLM 应用评估的挑战</li>
+          <li>使用 LangSmith 进行追踪和调试</li>
+          <li>掌握 LLM-as-judge 评估方法</li>
+          <li>了解常见评估指标（正确率、相关性、MRR 等）</li>
+        </ul>
+
+        <h2>1. LLM 应用评估的挑战</h2>
+        <p>与传统软件不同，LLM 应用的输出没有唯一标准答案，同一个输入可能产生多种合理输出。这使得"断言"式测试失效，需要专门的评估方法：</p>
+        <ul>
+          <li><strong>LLM-as-judge</strong>：用一个更强的 LLM 作为评判者，对输出打分</li>
+          <li><strong>人工评估</strong>：人工标注标准答案，对照评估</li>
+          <li><strong>自动化评估器</strong>：基于规则或统计的评估器</li>
+        </ul>
+
+        <h2>2. LangSmith 可观测性平台</h2>
+        <p>LangSmith 是 LangChain 官方的可观测性平台，提供追踪、调试、评估能力：</p>
+        <pre><code># 设置环境变量开启追踪
+import os
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = "你的 API Key"
+os.environ["LANGCHAIN_PROJECT"] = "my-project"</code></pre>
+        <p>开启后，每次链的执行（输入、输出、每一步的中间结果、token 消耗、耗时）都会自动记录到 LangSmith，可在 Web 界面查看和调试。</p>
+
+        <h2>3. LLM-as-judge 评估</h2>
+        <p>用 LLM 作为评判者，评估输出的正确性、相关性、有害性等：</p>
+        <pre><code>from langchain.evaluation import load_evaluator
+from langchain_openai import ChatOpenAI
+
+evaluator = load_evaluator("qa", llm=ChatOpenAI())
+result = evaluator.evaluate_strings(
+    prediction="RAG 是检索增强生成",
+    reference="RAG（Retrieval-Augmented Generation）通过检索外部知识增强 LLM 回答",
+    input="什么是 RAG？"
+)
+print(result["score"])</code></pre>
+
+        <h2>4. 常见评估维度</h2>
+
+        <div class="term-card">
+          <div class="term-name">✅ 正确性</div>
+          <p>回答是否事实正确、与标准答案一致。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🎯 相关性</div>
+          <p>回答是否切题，是否回答了用户的问题。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🛡️ 安全性</div>
+          <p>是否包含有害、偏见、违规内容。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">⚡ 性能指标</div>
+          <p>延迟、token 消耗、成本等工程指标。</p>
+        </div>
+
+        <h2>5. 检索质量评估</h2>
+        <p>对于 RAG 系统，检索质量直接决定回答上限，常用指标：</p>
+        <ul>
+          <li><strong>Hit Rate（命中率）</strong>：相关文档是否出现在 Top-K 结果中</li>
+          <li><strong>MRR（Mean Reciprocal Rank）</strong>：第一个相关文档的排名倒数的平均值</li>
+          <li><strong>NDCG</strong>：考虑排名位置的归一化折损累计增益</li>
+        </ul>
+
+        <h2>6. LangSmith Dataset 批量评估</h2>
+        <p>用 Dataset 存储评估样本，对链进行批量回归测试：</p>
+        <pre><code>from langsmith import Client
+
+client = Client()
+dataset = client.create_dataset("qa-eval")
+client.create_example(
+    inputs={"question": "如何退款？"},
+    outputs={"answer": "联系客服申请退款"},
+    dataset_id=dataset.id
+)</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 评估实践建议</div>
+          <p>1. 建立有代表性的评估数据集，覆盖典型场景<br/>
+          2. 每次代码变更后跑回归评估，防止质量退化<br/>
+          3. 结合 LLM-as-judge 和人工抽样评估<br/>
+          4. 关注成本和延迟，不仅是正确率</p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>LLM 输出无固定答案，需专门评估方法</li>
+          <li>LangSmith 提供追踪、调试、评估一站式能力</li>
+          <li>LLM-as-judge 用强模型评估输出质量</li>
+          <li>评估维度：正确性、相关性、安全性、性能</li>
+          <li>检索质量用 Hit Rate、MRR、NDCG 等指标</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 16 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

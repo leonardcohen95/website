@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LangChain Quest · 像玩游戏一样学 LLM 应用开发</title>
+  <meta name="description" content="LangChain 闯关学习平台：从 Prompt 到 RAG、Agent，20 章从入门到就业，答题赚星星，升级头衔，冲上排行榜！" />
+  <link rel="stylesheet" href="assets/css/style.css?v=2" />
+</head>
+<body data-page="home">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-badges">
+      <span class="badge">🎮 游戏化学习</span>
+      <span class="badge">⭐ 答题赚星星</span>
+      <span class="badge">👑 升级头衔</span>
+      <span class="badge">🏆 排行榜 PK</span>
+    </div>
+    <h1>像玩游戏一样学 LangChain</h1>
+    <p>20 章从入门到就业，覆盖 Prompt、Chain、RAG、Agent 到生产部署。每章配有测试题，答对赚星星，解锁头衔，和全国学习者一起冲榜！</p>
+    <a href="chapters/01-intro.html" class="btn-primary">🚀 开始闯关</a>
+  </section>
+
+  <div class="container" style="max-width: 900px; margin-top: -20px; position: relative; z-index: 2;">
+    <div id="title-bar" class="title-bar"></div>
+  </div>
+
+  <!-- 章节目录 -->
+  <section class="section">
+    <h2 class="section-title">🗺️ 闯关地图</h2>
+    <p class="section-sub">共 20 章，从基础概念到项目实战，逐章解锁，学完达到 LLM 应用开发就业水平</p>
+    <div class="chapter-grid" id="chapter-grid"></div>
+  </section>
+
+  <!-- 特色 -->
+  <section class="section" style="background: var(--color-surface);">
+    <div class="container" style="max-width: 900px;">
+      <div style="display:grid; grid-template-columns: 1fr; gap: 16px;">
+        <div style="background: linear-gradient(135deg,#d9f4f9,#ede9fe); padding:24px; border-radius:var(--radius-lg);">
+          <h3 style="margin-bottom:8px;">⭐ 答题赚星星</h3>
+          <p style="color:var(--color-text-light); margin-bottom:0;">每章有 10 道测试题（单选、多选、判断、填空），答对获得对应星星。单选/判断 1 星，多选 2 星，填空 2 星，通关额外 +5 星。</p>
+        </div>
+        <div style="background: linear-gradient(135deg,#fef3c7,#fce7f3); padding:24px; border-radius:var(--radius-lg);">
+          <h3 style="margin-bottom:8px;">👑 升级头衔</h3>
+          <p style="color:var(--color-text-light); margin-bottom:0;">从 LLM 新手到 LLM 应用架构师，10 个头衔等你解锁。星星越多，头衔越酷，求职简历越有料！</p>
+        </div>
+        <div style="background: linear-gradient(135deg,#dcfce7,#d9f4f9); padding:24px; border-radius:var(--radius-lg);">
+          <h3 style="margin-bottom:8px;">🏆 排行榜 PK</h3>
+          <p style="color:var(--color-text-light); margin-bottom:0;">和其他学习者一较高下，登上总榜。坚持闯关，你也能成为 LangChain 达人！</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 用游戏化方式征服 LLM 应用开发</p>
+    <p style="margin-top:6px;">坚持学习，你也能成为 LLM 应用架构师 👑</p>
+  </footer>
+
+  <script src="assets/js/game.js?v=2"></script>
+  <script src="assets/js/nav.js?v=2"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      GameSystem.renderTitleBar();
+      const grid = document.getElementById("chapter-grid");
+      if (!grid) return;
+      const chapters = window.QUEST_CONFIG.chapters;
+      grid.innerHTML = chapters.map((c, i) => {
+        const done = GameSystem.isChapterCompleted(c.id);
+        const myStars = GameSystem.getChapterStars(c.id);
+        const diffText = c.difficulty === "easy" ? "简单" : c.difficulty === "medium" ? "中等" : "困难";
+        return `<a href="${c.file}" class="chapter-card ${done ? "completed" : ""}">
+          <div class="chapter-card-head">
+            <span class="num">${done ? "✓" : (i + 1)}</span>
+            <h3>${c.title}</h3>
+          </div>
+          <p>${c.desc}</p>
+          <div class="meta">
+            <span class="stars">⭐ ${myStars} / ${c.stars}</span>
+            <span class="difficulty ${c.difficulty}">${diffText}</span>
+          </div>
+        </a>`;
+      }).join("");
+    });
+  </script>
+</body>
+</html>

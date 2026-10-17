@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第13章 LCEL 表达式语言 | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="13-lcel">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>LCEL 表达式语言</h1>
+        <p>LCEL（LangChain Expression Language）是 LangChain 的声明式组合语言，用管道符 <code>|</code> 将组件组合成链。它是新版 LangChain 的推荐写法，原生支持流式、异步、并行、可观测性。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>用 | 操作符组合 Runnable 组件</li>
+          <li>理解 Runnable 接口（invoke、stream、batch）</li>
+          <li>使用 RunnableLambda、RunnablePassthrough、RunnableParallel</li>
+          <li>掌握 bind、with_config、with_fallback 等方法</li>
+        </ul>
+
+        <h2>1. 基础组合</h2>
+        <pre><code>from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+
+prompt = ChatPromptTemplate.from_template("用{style}的风格解释{topic}")
+llm = ChatOpenAI()
+parser = StrOutputParser()
+
+chain = prompt | llm | parser
+result = chain.invoke({"style": "简洁", "topic": "RAG"})
+print(result)</code></pre>
+
+        <h2>2. Runnable 接口方法</h2>
+        <ul>
+          <li><code>invoke(input)</code>：同步执行，返回结果</li>
+          <li><code>stream(input)</code>：流式输出，返回迭代器</li>
+          <li><code>batch(inputs)</code>：批量执行多个输入</li>
+          <li><code>ainvoke / astream / abatch</code>：异步版本</li>
+        </ul>
+
+        <h2>3. RunnableLambda</h2>
+        <p>将普通函数包装为 Runnable：</p>
+        <pre><code>from langchain_core.runnables import RunnableLambda
+
+def upper_case(text):
+    return text.upper()
+
+runnable = RunnableLambda(upper_case)
+chain = prompt | llm | parser | runnable</code></pre>
+
+        <h2>4. RunnablePassthrough</h2>
+        <p>将输入原样传递，常用于保留原始输入：</p>
+        <pre><code>from langchain_core.runnables import RunnablePassthrough
+
+chain = {
+    "question": RunnablePassthrough(),
+    "context": retriever,
+} | prompt | llm | parser</code></pre>
+
+        <h2>5. 并行执行</h2>
+        <p>用字典语法实现并行：</p>
+        <pre><code>parallel = {
+    "translation": translate_chain,
+    "summary": summary_chain,
+}
+result = parallel.invoke("你好世界")
+# result = {"translation": "...", "summary": "..."}</code></pre>
+
+        <h2>6. 实用方法</h2>
+        <ul>
+          <li><code>.bind(stop=["\n"])</code>：绑定额外参数（如停止词、tools）</li>
+          <li><code>.with_config(tags=["debug"])</code>：配置 tags、metadata 等</li>
+          <li><code>.with_fallback(fallback_chain)</code>：主链失败时切换到备用链</li>
+          <li><code>.with_retry(stop_after_attempt=3)</code>：失败重试</li>
+        </ul>
+
+        <pre><code>from langchain_core.runnables import RunnableBranch
+
+branch = RunnableBranch(
+    (lambda x: "数学" in x["topic"], math_chain),
+    (lambda x: "物理" in x["topic"], physics_chain),
+    general_chain  # 默认分支
+)</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 为什么用 LCEL</div>
+          <p>1. 原生支持流式输出和异步<br/>
+          2. 自动集成 LangSmith 追踪<br/>
+          3. 支持并行、分支、重试、降级<br/>
+          4. 组合灵活，代码更简洁</p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>LCEL 用 | 组合 Runnable，是新版推荐写法</li>
+          <li>Runnable 支持 invoke、stream、batch 及异步版本</li>
+          <li>RunnableLambda 包装函数，RunnablePassthrough 透传输入</li>
+          <li>字典语法实现并行，RunnableBranch 实现条件分支</li>
+          <li>bind、with_config、with_fallback、with_retry 提供高级控制</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 13 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

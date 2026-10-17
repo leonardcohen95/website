@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第18章 实战：智能客服 | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="18-project-cs">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>实战：智能客服机器人</h1>
+        <p>本章综合运用前面所学，从零构建一个具备多轮对话和知识库问答能力的智能客服机器人。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>整合 RAG + Memory 构建客服系统</li>
+          <li>实现意图识别和多轮对话</li>
+          <li>添加工具调用（查询订单、转人工）</li>
+          <li>用 LangServe 部署客服 API</li>
+        </ul>
+
+        <h2>1. 项目架构</h2>
+        <p>智能客服核心能力：</p>
+        <ul>
+          <li><strong>FAQ 问答</strong>：基于知识库回答常见问题</li>
+          <li><strong>多轮对话</strong>：记住上下文，理解指代</li>
+          <li><strong>意图识别</strong>：区分咨询、投诉、查订单等意图</li>
+          <li><strong>工具调用</strong>：查询订单、转人工客服等操作</li>
+        </ul>
+
+        <h2>2. 构建知识库</h2>
+        <pre><code>from langchain_community.document_loaders import TextLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import Chroma
+from langchain_openai import OpenAIEmbeddings
+
+loader = TextLoader("faq.txt")
+docs = loader.load()
+splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+chunks = splitter.split_documents(docs)
+vectorstore = Chroma.from_documents(chunks, OpenAIEmbeddings(), persist_directory="./cs_db")
+retriever = vectorstore.as_retriever(search_kwargs={"k": 3})</code></pre>
+
+        <h2>3. 定义工具</h2>
+        <pre><code>from langchain_core.tools import tool
+
+@tool
+def query_order(order_id: str) -> str:
+    """根据订单号查询订单状态。order_id 是订单编号。"""
+    # 实际项目中查数据库
+    return f"订单 {order_id} 状态：已发货，预计明天送达"
+
+@tool
+def transfer_to_human(reason: str) -> str:
+    """转接人工客服。reason 是转接原因。"""
+    return f"已为您转接人工客服，原因：{reason}，请稍候..."
+
+tools = [query_order, transfer_to_human]</code></pre>
+
+        <h2>4. 组装客服 Agent</h2>
+        <pre><code>from langchain.agents import AgentExecutor, create_openai_tools_agent
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.chat_history import InMemoryChatMessageHistory
+from langchain_core.runnables.history import RunnableWithMessageHistory
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "你是一个专业的电商客服。用中文回答，语气友好。
+"
+               "如果用户问常见问题，请基于知识库回答。
+"
+               "如果用户要查订单，使用 query_order 工具。
+"
+               "如果用户要求人工或问题无法解决，使用 transfer_to_human。"),
+    MessagesPlaceholder(variable_name="history"),
+    ("human", "{input}"),
+    MessagesPlaceholder(variable_name="agent_scratchpad"),
+])
+
+agent = create_openai_tools_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+
+store = {}
+def get_history(session_id):
+    if session_id not in store:
+        store[session_id] = InMemoryChatMessageHistory()
+    return store[session_id]
+
+agent_with_history = RunnableWithMessageHistory(
+    agent_executor,
+    get_history,
+    input_messages_key="input",
+    history_messages_key="history",
+)</code></pre>
+
+        <h2>5. 整合 RAG 知识</h2>
+        <p>将检索器作为工具加入 Agent，让 Agent 自主决定是否查询知识库：</p>
+        <pre><code>from langchain.tools.retriever import create_retriever_tool
+
+retriever_tool = create_retriever_tool(
+    retriever,
+    name="faq_search",
+    description="搜索常见问题知识库，回答用户咨询"
+)
+tools.append(retriever_tool)</code></pre>
+
+        <h2>6. 部署为 API</h2>
+        <pre><code>from langserve import add_routes
+from fastapi import FastAPI
+
+app = FastAPI(title="智能客服")
+add_routes(app, agent_with_history, path="/customer-service")
+
+# uvicorn app:app --port 8000</code></pre>
+
+        <h2>7. 测试对话</h2>
+        <pre><code>response = agent_with_history.invoke(
+    {"input": "我买的东西什么时候到？订单号 A123"},
+    config={"configurable": {"session_id": "user_001"}}
+)
+print(response["output"])
+
+# 第二轮对话，Agent 能记住上下文
+response = agent_with_history.invoke(
+    {"input": "那如果我想退款呢？"},
+    config={"configurable": {"session_id": "user_001"}}
+)</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 客服系统优化方向</div>
+          <p>1. 增加满意度评价反馈<br/>
+          2. 用 LangSmith 监控对话质量<br/>
+          3. 敏感词过滤和安全审核<br/>
+          4. 多轮对话的摘要压缩<br/>
+          5. A/B 测试不同 prompt 效果</p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>智能客服 = RAG 知识库 + Memory 多轮对话 + Tools 工具调用</li>
+          <li>用 Agent 统一协调检索、查订单、转人工等能力</li>
+          <li>create_retriever_tool 将检索器封装为工具</li>
+          <li>LangServe 部署为 API，供前端调用</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 18 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

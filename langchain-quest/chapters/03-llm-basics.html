@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第3章 LLM 基础概念 | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="03-llm-basics">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>LLM 基础概念</h1>
+        <p>在深入 LangChain 之前，我们需要理解大语言模型（LLM）的基本概念。Token、Temperature、上下文窗口、消息格式……这些是用好 LangChain 的基础。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Token 及其对费用和长度的影响</li>
+          <li>掌握 Temperature、max_tokens、top_p 等生成参数</li>
+          <li>理解上下文窗口的概念</li>
+          <li>熟悉 SystemMessage、HumanMessage、AIMessage 消息类型</li>
+        </ul>
+
+        <h2>1. Token：LLM 的基本单位</h2>
+        <p>LLM 不是按字符或单词处理文本，而是按 <strong>Token</strong>。Token 可以是一个完整的单词、词的一部分、标点符号或单个字符。</p>
+        <ul>
+          <li>英文：约 4 个字符 ≈ 1 个 token，100 个 token ≈ 75 个单词</li>
+          <li>中文：通常 1 个汉字 ≈ 1-2 个 token</li>
+        </ul>
+        <p>Token 数量直接影响<strong>费用</strong>（API 按 token 计费）和<strong>速度</strong>（token 越多生成越慢）。</p>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 估算 token</div>
+          <p>可以用 OpenAI 的 tiktoken 库精确计算 token 数：<code>import tiktoken; enc = tiktoken.encoding_for_model("gpt-3.5-turbo"); len(enc.encode("你好世界"))</code></p>
+        </div>
+
+        <h2>2. 生成参数</h2>
+
+        <div class="term-card">
+          <div class="term-name">🌡️ Temperature（温度）</div>
+          <p>控制生成的随机性。0 = 最确定（适合事实问答），1 = 最随机（适合创意写作），默认约 0.7。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">📏 max_tokens（最大生成 token 数）</div>
+          <p>限制模型输出的最大长度，避免回复过长或超出上下文窗口。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🎯 top_p（核采样）</div>
+          <p>只从累积概率达到 p 的 token 中采样，控制输出多样性。p=0.1 只选概率最高的，p=1 考虑所有 token。</p>
+        </div>
+
+        <h2>3. 上下文窗口</h2>
+        <p>每个 LLM 都有<strong>上下文窗口</strong>限制（如 gpt-3.5-turbo 为 16K，gpt-4 为 128K）。输入和输出的 token 总和不能超过该限制，否则会报错。</p>
+        <p>这就是为什么长对话需要 Memory 管理（摘要、截断），长文档需要 RAG 检索——都要把内容控制在上下文窗口内。</p>
+
+        <h2>4. 消息类型</h2>
+        <p>LangChain 用不同的消息类表示对话中的不同角色：</p>
+        <ul>
+          <li><strong>SystemMessage</strong>：系统消息，设定 AI 的角色、语气、行为规则</li>
+          <li><strong>HumanMessage</strong>：用户输入的消息</li>
+          <li><strong>AIMessage</strong>：AI 回复的消息</li>
+          <li><strong>FunctionMessage / ToolMessage</strong>：工具调用的返回结果</li>
+        </ul>
+
+        <pre><code>from langchain_core.messages import SystemMessage, HumanMessage
+
+messages = [
+    SystemMessage(content="你是一个耐心的编程导师，用中文回答问题。"),
+    HumanMessage(content="什么是 Token？")
+]
+response = llm.invoke(messages)</code></pre>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Token 是 LLM 处理文本的基本单位，影响费用和速度</li>
+          <li>Temperature 控制随机性，max_tokens 控制输出长度，top_p 控制多样性</li>
+          <li>上下文窗口限制输入+输出的总 token 数</li>
+          <li>消息类型：SystemMessage（角色设定）、HumanMessage（用户）、AIMessage（AI）</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 3 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

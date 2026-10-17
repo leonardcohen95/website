@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第8章 向量数据库与 Embeddings | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="08-embeddings">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>向量数据库与 Embeddings</h1>
+        <p>要实现语义搜索和 RAG，核心是将文本转换为向量（Embedding），并存入向量数据库进行相似度检索。本章学习 Embedding 原理和常见向量数据库。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>理解 Embedding 的原理和作用</li>
+          <li>使用 OpenAIEmbeddings 生成向量</li>
+          <li>掌握常见向量数据库（Chroma、FAISS、Pinecone）</li>
+          <li>实现向量存储和相似度搜索</li>
+        </ul>
+
+        <h2>1. Embedding 是什么</h2>
+        <p>Embedding 将文本转换为高维向量（如 1536 维）。<strong>语义相近的文本，在向量空间中的距离也相近</strong>。这使得"语义搜索"成为可能——不依赖关键词匹配，而是理解文本含义。</p>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 重要原则</div>
+          <p>查询文本和文档必须用<strong>同一个 embedding 模型</strong>生成向量，才能在同一向量空间中比较相似度。</p>
+        </div>
+
+        <h2>2. 使用 OpenAIEmbeddings</h2>
+        <pre><code>from langchain_openai import OpenAIEmbeddings
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+
+# 生成文本向量
+vectors = embeddings.embed_documents(["你好", "世界和平", "机器学习"])
+query_vec = embeddings.embed_query("人工智能")</code></pre>
+        <p><code>text-embedding-3-small</code> 输出 1536 维向量，也可用 <code>dimensions</code> 参数降维。</p>
+
+        <h2>3. 常见向量数据库</h2>
+
+        <div class="term-card">
+          <div class="term-name">🟢 Chroma</div>
+          <p>轻量级本地向量数据库，易于集成，适合开发和原型。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🔍 FAISS</div>
+          <p>Facebook 开源的向量相似度搜索库，本地高效检索，适合大规模数据。</p>
+        </div>
+
+        <div class="term-card">
+          <div class="term-name">🌲 Pinecone</div>
+          <p>托管式云向量数据库服务，支持大规模、高可用，生产环境常用。</p>
+        </div>
+
+        <h2>4. 存入向量数据库并检索</h2>
+        <pre><code>from langchain_community.vectorstores import Chroma
+from langchain_openai import OpenAIEmbeddings
+
+# 从文档创建向量库
+vectorstore = Chroma.from_documents(
+    documents=chunks,
+    embedding=OpenAIEmbeddings(),
+    persist_directory="./chroma_db"
+)
+
+# 相似度搜索
+results = vectorstore.similarity_search("如何申请退款", k=3)
+for doc in results:
+    print(doc.page_content)</code></pre>
+
+        <h2>5. 相似度度量</h2>
+        <ul>
+          <li><strong>余弦相似度（Cosine Similarity）</strong>：衡量向量方向的夹角，最常用，值越接近 1 越相似</li>
+          <li><strong>欧氏距离（L2 Distance）</strong>：向量间的直线距离</li>
+          <li><strong>内积（Dot Product）</strong>：向量点积</li>
+        </ul>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>Embedding 将文本转为高维向量，语义相近则向量相近</li>
+          <li>查询和文档必须用同一 embedding 模型</li>
+          <li>常见向量库：Chroma（本地轻量）、FAISS（本地高效）、Pinecone（云服务）</li>
+          <li>用 from_documents 创建向量库，similarity_search 检索</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 8 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>

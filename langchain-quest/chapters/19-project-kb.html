@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>第19章 实战：企业知识库问答系统 | LangChain Quest</title>
+  <link rel="stylesheet" href="../assets/css/style.css?v=2" />
+</head>
+<body data-page="chapter" data-chapter="19-project-kb">
+
+  <header class="site-header">
+    <div class="container">
+      <a href="../index.html" class="brand">
+        <span class="brand-logo">🦜</span><span>LangChain Quest</span>
+      </a>
+      <div class="nav-right" id="top-nav-right"></div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>闯关地图</h3>
+        <ul class="sidebar-list" id="sidebar-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-card">
+        <div class="chapter-meta" id="chapter-meta"></div>
+        <h1>实战：企业知识库问答系统</h1>
+        <p>本章构建一个企业级知识库问答系统，支持多格式文档导入、增量更新、权限控制和高效检索。</p>
+
+        <h2>学习目标</h2>
+        <ul>
+          <li>支持多格式文档（PDF、Word、网页）导入</li>
+          <li>实现增量更新和文档版本管理</li>
+          <li>优化检索策略（混合检索 + 重排序）</li>
+          <li>添加引用来源展示</li>
+        </ul>
+
+        <h2>1. 系统架构</h2>
+        <p>企业知识库系统的核心模块：</p>
+        <ul>
+          <li><strong>文档管理</strong>：上传、解析、切分、向量化</li>
+          <li><strong>检索引擎</strong>：混合检索 + 重排序</li>
+          <li><strong>问答生成</strong>：基于检索结果生成回答</li>
+          <li><strong>引用展示</strong>：回答附带来源文档</li>
+        </ul>
+
+        <h2>2. 多格式文档加载</h2>
+        <pre><code>from langchain_community.document_loaders import (
+    PyPDFLoader, Docx2txtLoader, WebBaseLoader, CSVLoader
+)
+
+def load_document(file_path):
+    if file_path.endswith(".pdf"):
+        return PyPDFLoader(file_path).load()
+    elif file_path.endswith(".docx"):
+        return Docx2txtLoader(file_path).load()
+    elif file_path.endswith(".csv"):
+        return CSVLoader(file_path).load()
+    elif file_path.startswith("http"):
+        return WebBaseLoader(file_path).load()
+    else:
+        from langchain_community.document_loaders import TextLoader
+        return TextLoader(file_path).load()</code></pre>
+
+        <h2>3. 文档切分与元数据</h2>
+        <pre><code>from langchain.text_splitter import RecursiveCharacterTextSplitter
+import hashlib
+
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=800,
+    chunk_overlap=100,
+    separators=["\n\n", "\n", "。", "！", "？", " ", ""]
+)
+
+def process_document(file_path, source_name):
+    docs = load_document(file_path)
+    chunks = splitter.split_documents(docs)
+    doc_id = hashlib.md5(file_path.encode()).hexdigest()[:8]
+    for chunk in chunks:
+        chunk.metadata["doc_id"] = doc_id
+        chunk.metadata["source"] = source_name
+    return chunks, doc_id</code></pre>
+
+        <h2>4. 向量库与增量更新</h2>
+        <pre><code>from langchain_community.vectorstores import Chroma
+from langchain_openai import OpenAIEmbeddings
+
+vectorstore = Chroma(
+    persist_directory="./kb_db",
+    embedding_function=OpenAIEmbeddings()
+)
+
+def add_documents(chunks):
+    vectorstore.add_documents(chunks)
+
+def delete_document(doc_id):
+    # 根据 metadata 中的 doc_id 删除
+    vectorstore._collection.delete(
+        where={"doc_id": doc_id}
+    )</code></pre>
+
+        <h2>5. 混合检索 + 重排序</h2>
+        <pre><code>from langchain.retrievers import EnsembleRetriever, ContextualCompressionRetriever
+from langchain_community.retrievers import BM25Retriever
+from langchain.retrievers.document_compressors import LLMChainExtractor
+
+bm25 = BM25Retriever.from_documents(all_chunks)
+bm25.k = 10
+vector_retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
+
+ensemble = EnsembleRetriever(
+    retrievers=[bm25, vector_retriever],
+    weights=[0.4, 0.6]
+)
+
+# 用 LLM 压缩，只保留相关片段
+compressor = LLMChainExtractor.from_llm(llm)
+retriever = ContextualCompressionRetriever(
+    base_compressor=compressor,
+    base_retriever=ensemble
+)</code></pre>
+
+        <h2>6. 问答链 + 引用来源</h2>
+        <pre><code>from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from operator import itemgetter
+
+prompt = ChatPromptTemplate.from_template("""
+基于以下上下文回答用户问题。
+如果上下文中没有答案，请回答"根据知识库无法回答该问题"。
+回答末尾请列出引用来源。
+
+上下文：
+{context}
+
+问题：{question}
+""")
+
+def format_with_sources(docs):
+    context = ""
+    sources = []
+    for i, doc in enumerate(docs, 1):
+        context += f"[{i}] {doc.page_content}\n"
+        sources.append(f"[{i}] {doc.metadata.get('source', '未知')}")
+    return context, sources
+
+chain = (
+    {
+        "context": itemgetter("question") | retriever,
+        "question": itemgetter("question"),
+    }
+    | prompt | llm | StrOutputParser()
+)
+
+def ask(question):
+    docs = retriever.invoke(question)
+    context, sources = format_with_sources(docs)
+    answer = chain.invoke({"question": question, "context": context})
+    return answer + "\n\n引用来源：\n" + "\n".join(sources)</code></pre>
+
+        <h2>7. 权限控制（简化版）</h2>
+        <p>企业知识库常需权限控制，可通过 metadata 过滤实现：</p>
+        <pre><code># 添加文档时设置权限
+chunk.metadata["department"] = "研发部"
+
+# 检索时按部门过滤
+retriever = vectorstore.as_retriever(
+    search_kwargs={
+        "k": 5,
+        "filter": {"department": "研发部"}
+    }
+)</code></pre>
+
+        <div class="callout tip">
+          <div class="callout-title">💡 企业知识库优化</div>
+          <p>1. 用 ParentDocumentRetriever 兼顾精度和上下文<br/>
+          2. 定期评估检索质量（Hit Rate、MRR）<br/>
+          3. 文档更新时用 doc_id 做增量替换<br/>
+          4. 缓存高频问题的回答<br/>
+          5. 用 LangSmith 监控和调试问答效果</p>
+        </div>
+
+        <h2>本章小结</h2>
+        <ul>
+          <li>企业知识库支持多格式文档加载和解析</li>
+          <li>用 doc_id 实现文档的增量更新和版本管理</li>
+          <li>混合检索（BM25 + 向量）+ 重排序提升精度</li>
+          <li>回答附带引用来源，增加可信度</li>
+          <li>通过 metadata 过滤实现权限控制</li>
+        </ul>
+        <section class="quiz-section" id="quiz-section">
+          <h2>🎯 本章测试（答对赚星星！）</h2>
+        </section>
+
+        <div class="page-nav" id="page-nav"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <p>LangChain Quest · 第 19 章</p>
+  </footer>
+
+  <script src="../assets/js/game.js?v=2"></script>
+  <script src="../assets/js/nav.js?v=2"></script>
+  <script src="../assets/js/question-bank.js?v=2"></script>
+  <script src="../assets/js/quiz.js?v=2"></script>
+</body>
+</html>
