@@ -1429,13 +1429,18 @@
       ctx.rotate(-Math.PI / 2);
       ctx.translate(-headX, 0);         // 抵消 drawHead 的前伸偏移，让头居中于颈上
       drawHead(r, s, 0, true);          // side=0 正视；外饰在这里自己摆正后绘制
-      // 外饰：头整体转了 -90°，帽子需要再转 +90° 才在正视下是正的，安在头顶
+      // 外饰：头整体转了 -90°，帽子需要再转 +90° 才在正视下是正的，安在头顶。
+      // 关键：帽子必须放在与头部完全相同的变换系（含 headX 平移 + headTurn 旋转），
+      // 否则乌龟转头时帽子会留在原位、与头脱节。
       var accs = r.isOpp ? (r.accessories || [])
                         : ((petState && petState.pet && petState.pet.accessories) || []);
       if (accs.indexOf('acc_santa') >= 0) {
         ctx.save();
-        // drawHat 的帽檐中心在其自身坐标 (4.6hs*s, -6.2hs*s)，旋转 +90° 后偏移为 (6.2hs, 4.6hs)。
-        // 头顶正中为 (5hs*s, -8hs*s)，故 translate 到此点减去旋转偏移，让帽檐正好落在头顶。
+        // 复刻 drawHead 内部的平移与旋转，让帽子与头共坐标系
+        ctx.translate(headX, 0);                    // headDrop 在 side=0 时为 0
+        ctx.rotate(r.headTurn * 0.35);
+        // drawHat 帽檐中心在自身坐标 (4.6hs*s, -6.2hs*s)，旋转 +90° 后偏移为 (6.2hs, 4.6hs)；
+        // 头顶正中为 (5hs*s, -8hs*s)，故 translate 到此点减去旋转偏移，帽檐正好落在头顶。
         ctx.translate(-1.2 * hs * s, -12.6 * hs * s);
         ctx.rotate(Math.PI / 2);
         drawHat(s);
