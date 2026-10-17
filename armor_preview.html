@@ -55,7 +55,7 @@
       </div>
       <div class="desc">
         <span class="tag">战阵红漆</span><span class="tag">金缘镶边</span>
-        <div><b>红漆胴甲</b>配鎏金缘饰，肩甲多层叠片；胸前金色圆徽，草摺红金相间。头后竖金月牙旗印，<b>头部完全外露</b>。</div>
+        <div><b>红漆胴甲</b>配鎏金缘饰，肩甲罩在肩头、护腕落在小臂；胸前金色圆徽，草摺红金相间。<b>不加任何头饰，头部完全留给宠物自身装备</b>。</div>
       </div>
     </div>
 
@@ -71,7 +71,7 @@
       </div>
       <div class="desc">
         <span class="tag">黑漆涂</span><span class="tag">金箔纹</span>
-        <div><b>乌黑漆涂</b>全身甲，细腻金箔勾勒菱格纹，低调华贵。头后金环背光，<b>不遮面部</b>。</div>
+        <div><b>乌黑漆涂</b>全身甲，细腻金箔勾勒菱格纹，低调华贵；肩甲、护腕各归其位。<b>头部清爽无遮挡，不覆盖宠物已有头饰</b>。</div>
       </div>
     </div>
 
@@ -86,8 +86,8 @@
         <span class="dot" style="background:#eef2f8"></span>
       </div>
       <div class="desc">
-        <span class="tag">绀蓝漆</span><span class="tag">银月前立</span>
-        <div><b>深绀蓝甲</b>配霜银缘饰，肩甲弧片温润；胸前银月徽记。头后银月前立，清冷凌厉，<b>头部清爽无遮挡</b>。</div>
+        <span class="tag">绀蓝漆</span><span class="tag">银缘饰</span>
+        <div><b>深绀蓝甲</b>配霜银缘饰，肩甲弧片温润；胸前银月徽记。清冷凌厉，<b>头部清爽无遮挡，不覆盖宠物已有头饰</b>。</div>
       </div>
     </div>
 
@@ -189,22 +189,24 @@
     ctx.fillStyle = hg; ctx.fill();
     ctx.lineWidth = 1.5 * s; ctx.strokeStyle = T.outline; ctx.stroke();
 
+    // 黄色面颊纹（左右对称）
     ctx.strokeStyle = T.stripe; ctx.lineWidth = 1.6 * s;
     [-1, 1].forEach(function (sgn) {
       ctx.beginPath();
-      ctx.moveTo(-1 * s, headY + sgn * 7.2 * s);
-      ctx.quadraticCurveTo(8 * s, headY + sgn * 6.2 * s, 12.5 * s, headY + sgn * 3 * s);
+      ctx.moveTo(sgn * 2 * s, headY + 5.6 * s);
+      ctx.quadraticCurveTo(sgn * 8 * s, headY + 6.4 * s, sgn * 12.5 * s, headY + 3.4 * s);
       ctx.stroke();
     });
 
+    // 双眼左右对称、同高（正视，头部端正不歪）
     [-1, 1].forEach(function (sgn) {
-      var ex = 7 * s, ey = headY + sgn * 5.8 * s, er = 2.7 * s;
+      var ex = sgn * 6 * s, ey = headY - 1 * s, er = 2.8 * s;
       ctx.beginPath(); ctx.ellipse(ex, ey, er * 1.05, er * 1.15, 0, 0, Math.PI * 2);
       ctx.fillStyle = '#fff'; ctx.fill();
       ctx.lineWidth = 0.8 * s; ctx.strokeStyle = T.outline; ctx.stroke();
-      ctx.beginPath(); ctx.arc(ex + 0.5 * s, ey, er * 0.8, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(ex + sgn * 0.5 * s, ey, er * 0.8, 0, Math.PI * 2);
       ctx.fillStyle = T.eye; ctx.fill();
-      ctx.beginPath(); ctx.arc(ex + 1.2 * s, ey - 0.8 * s, 0.75 * s, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(ex + sgn * 1.1 * s, ey - 0.8 * s, 0.75 * s, 0, Math.PI * 2);
       ctx.fillStyle = '#fff'; ctx.fill();
     });
   }
@@ -331,17 +333,6 @@
     ctx.lineWidth = 2.6 * s; ctx.strokeStyle = C.mid; ctx.stroke();
   }
 
-  function crestCrescent(ctx, s, C, yTop, R) {
-    ctx.save();
-    ctx.beginPath(); ctx.arc(0, yTop, R, 0, Math.PI * 2);
-    ctx.fillStyle = C.edgeLight || C.edge; ctx.fill();
-    ctx.lineWidth = 1 * s; ctx.strokeStyle = C.edgeDark; ctx.stroke();
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.beginPath(); ctx.arc(R * 0.42, yTop - R * 0.08, R * 0.85, 0, Math.PI * 2); ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.restore();
-  }
-
   // ================= 设计 A：赤备·金胴 =================
   function armorA(ctx, s) {
     var C = { dark:'#3a0d10', mid:'#a01f26', lite:'#c73a40',
@@ -354,8 +345,6 @@
       ctx.fillStyle = C.mid; ctx.fill();
     };
     drawBody(ctx, s, C);
-    // 头后金月牙前立（不遮头）
-    crestCrescent(ctx, s, C, -SHELL_RY - 26 * s, 9.5 * s);
   }
 
   // ================= 设计 B：黑漆·金箔 =================
@@ -384,17 +373,6 @@
       ctx.beginPath(); ctx.moveTo(-hT * 0.82, y0 + SHELL_RY * 0.16); ctx.lineTo(hT * 0.82, y0); ctx.stroke();
     }
     ctx.restore();
-    // 头后金环背光（不遮头）
-    var cy = -SHELL_RY - 22 * s;
-    ctx.beginPath(); ctx.arc(0, cy, 15 * s, 0, Math.PI * 2);
-    ctx.lineWidth = 2.4 * s; ctx.strokeStyle = C.edge; ctx.stroke();
-    ctx.beginPath(); ctx.arc(0, cy, 15 * s, 0, Math.PI * 2);
-    ctx.lineWidth = 0.9 * s; ctx.strokeStyle = C.edgeLight; ctx.stroke();
-    ctx.fillStyle = C.edge;
-    ctx.beginPath();
-    ctx.moveTo(0, cy - 9 * s); ctx.lineTo(2.8 * s, cy - 5 * s);
-    ctx.lineTo(0, cy - 1 * s); ctx.lineTo(-2.8 * s, cy - 5 * s);
-    ctx.closePath(); ctx.fill();
   }
 
   // ================= 设计 C：绀碧·银月 =================
@@ -411,8 +389,6 @@
       ctx.restore();
     };
     drawBody(ctx, s, C);
-    // 头后银月前立（不遮头）
-    crestCrescent(ctx, s, C, -SHELL_RY - 26 * s, 9.5 * s);
   }
 
   function render(canvasId, armorFn, S) {
