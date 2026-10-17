@@ -167,12 +167,17 @@ const GameSystem = (function () {
         });
         if (res.ok) {
           const data = await res.json();
+          // 容错：如果后端返回的 stars 与章节星星总和不一致（数据陈旧），
+          // 以章节星星总和为准，避免显示 0 的问题
+          const chapterSum = Object.values(data.chapters || {}).reduce((s, c) => s + (c?.stars || 0), 0);
+          const safeStars = Math.max(data.stars || 0, chapterSum);
           // 把后端进度缓存到本地，供 isChapterCompleted/getChapterStars 等同步函数使用
           const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
           const merged = {
-            stars: data.stars,
+            stars: safeStars,
             chapters: data.chapters,
             nickname: data.nickname,
+            spentStars: local.spentStars || 0,
             achievements: local.achievements || []
           };
           localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
@@ -183,7 +188,12 @@ const GameSystem = (function () {
     // 降级到本地
     try {
       const data = JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultProgress();
-      return { ...defaultProgress(), ...data };
+      const merged = { ...defaultProgress(), ...data };
+      // 本地模式：可用星星 = 总星星 - 已消耗星星
+      if (merged.spentStars) {
+        merged.stars = Math.max(0, (merged.stars || 0) - merged.spentStars);
+      }
+      return merged;
     } catch { return defaultProgress(); }
   }
 
@@ -252,6 +262,7 @@ const GameSystem = (function () {
     let chapterCompleted = false;
     if (!ch.completed && doneQ / totalQ >= 0.8) {
       ch.completed = true;
+      ch.stars += 5;
       data.stars += 5;
       chapterCompleted = true;
     }

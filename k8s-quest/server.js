@@ -15,14 +15,28 @@ const DATA_FILE = path.join(__dirname, 'data.json');
 function loadData() {
   try {
     if (!fs.existsSync(DATA_FILE)) {
-      const init = { users: {}, progress: {}, totalStars: {}, nextId: 1 };
+      const init = { users: {}, progress: {}, totalStars: {}, spentStars: {}, nextId: 1 };
       fs.writeFileSync(DATA_FILE, JSON.stringify(init, null, 2));
       return init;
     }
     return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
   } catch (e) {
-    return { users: {}, progress: {}, totalStars: {}, nextId: 1 };
+    return { users: {}, progress: {}, totalStars: {}, spentStars: {}, nextId: 1 };
   }
+}
+
+// 计算用户通过答题获得的总星星数（所有章节星星之和）
+// 这样可以避免 totalStars 字段与章节星星不一致导致的显示问题
+function calcEarnedStars(userId, data) {
+  const chapters = data.progress?.[userId] || {};
+  return Object.values(chapters).reduce((sum, ch) => sum + (ch?.stars || 0), 0);
+}
+
+// 获取用户当前可用星星数 = 已获得星星 - 已消耗星星
+function getUserStars(userId, data) {
+  const earned = calcEarnedStars(userId, data);
+  const spent = data.spentStars?.[userId] || 0;
+  return Math.max(0, earned - spent);
 }
 
 function saveData(data) {
@@ -122,6 +136,7 @@ function apiRegister(req, res, body) {
   const id = data.nextId++;
   data.users[id] = { id, username, password: hashPassword(password), nickname: nickname || username };
   data.totalStars[id] = 0;
+  data.spentStars[id] = 0;
   data.progress[id] = {};
   saveData(data);
 
@@ -152,7 +167,7 @@ function apiProgress(req, res) {
 
   sendJson(res, 200, {
     nickname: user.nickname,
-    stars: data.totalStars[userId] || 0,
+    stars: getUserStars(userId, data),
     chapters: data.progress[userId] || {}
   });
 }
@@ -173,7 +188,7 @@ function apiSubmit(req, res, body) {
   const questions = ch.questions;
 
   if (questions[questionId]) {
-    return sendJson(res, 200, { alreadyDone: true, stars: data.totalStars[userId] || 0 });
+    return sendJson(res, 200, { alreadyDone: true, stars: getUserStars(userId, data) });
   }
 
   questions[questionId] = true;
@@ -185,13 +200,15 @@ function apiSubmit(req, res, body) {
   if (!ch.completed && doneQ / totalQ >= 0.8) {
     ch.completed = true;
     bonus = 5;
+    ch.stars += bonus;
   }
 
   data.progress[userId][chapterId] = ch;
-  data.totalStars[userId] = (data.totalStars[userId] || 0) + starCount + bonus;
+  // totalStars 字段保留用于向后兼容，但实际星星数由章节星星计算得出
+  data.totalStars[userId] = calcEarnedStars(userId, data);
   saveData(data);
 
-  sendJson(res, 200, { alreadyDone: false, newStars: starCount + bonus, stars: data.totalStars[userId], chapterCompleted: ch.completed });
+  sendJson(res, 200, { alreadyDone: false, newStars: starCount + bonus, stars: getUserStars(userId, data), chapterCompleted: ch.completed });
 }
 
 // 消耗星星（重新答题）
@@ -201,26 +218,30 @@ function apiSpend(req, res, body) {
 
   const count = parseInt(body.count) || 1;
   const data = loadData();
-  const stars = data.totalStars[userId] || 0;
+  const stars = getUserStars(userId, data);
   if (stars < count) {
     return sendJson(res, 200, { success: false, reason: 'stars', stars });
   }
-  data.totalStars[userId] = stars - count;
+  if (!data.spentStars) data.spentStars = {};
+  data.spentStars[userId] = (data.spentStars[userId] || 0) + count;
   saveData(data);
-  sendJson(res, 200, { success: true, stars: data.totalStars[userId] });
+  sendJson(res, 200, { success: true, stars: getUserStars(userId, data) });
 }
 
 // 排行榜
 function apiLeaderboard(req, res, query) {
   const limit = parseInt(query.limit) || 50;
   const data = loadData();
-  const rows = Object.entries(data.totalStars)
-    .filter(([, stars]) => stars > 0)
-    .map(([uid, stars]) => ({
-      user_id: parseInt(uid),
-      nickname: (data.users[uid] && data.users[uid].nickname) || '匿名',
-      stars
-    }))
+  const rows = Object.keys(data.users)
+    .map(uid => {
+      const userId = parseInt(uid);
+      return {
+        user_id: userId,
+        nickname: data.users[uid].nickname || '匿名',
+        stars: getUserStars(userId, data)
+      };
+    })
+    .filter(row => row.stars > 0)
     .sort((a, b) => b.stars - a.stars)
     .slice(0, limit);
   sendJson(res, 200, rows);
@@ -232,8 +253,9 @@ function apiRank(req, res) {
   if (!userId) return sendJson(res, 401, { error: '未登录' });
 
   const data = loadData();
-  const myStars = data.totalStars[userId] || 0;
-  const rank = Object.values(data.totalStars).filter(s => s > myStars).length + 1;
+  const myStars = getUserStars(userId, data);
+  const rank = Object.keys(data.users)
+    .filter(uid => getUserStars(parseInt(uid), data) > myStars).length + 1;
   sendJson(res, 200, { rank, stars: myStars });
 }
 
