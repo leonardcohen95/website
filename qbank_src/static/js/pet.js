@@ -1439,9 +1439,11 @@
         // 复刻 drawHead 内部的平移与旋转，让帽子与头共坐标系
         ctx.translate(headX, 0);                    // headDrop 在 side=0 时为 0
         ctx.rotate(r.headTurn * 0.35);
-        // drawHat 帽檐中心在自身坐标 (4.6hs*s, -6.2hs*s)，旋转 +90° 后偏移为 (6.2hs, 4.6hs)；
-        // 头顶正中为 (5hs*s, -8hs*s)，故 translate 到此点减去旋转偏移，帽檐正好落在头顶。
-        ctx.translate(-1.2 * hs * s, -12.6 * hs * s);
+        // 让帽子以"帽檐正好搭在头顶"的方式佩戴（与爬行态 drawHat 的相对关系一致）：
+        // 原 drawHat 帽檐中心在自身坐标 (4.6hs, -6.2hs)，相对头顶 (5hs, -8hs) 的偏移为 (-0.4hs, 1.8hs)；
+        // 这里额外旋转 +90° 让帽子直立，偏移向量旋转后变为 (-1.8hs, -0.4hs)，
+        // 故 translate = 头顶 + 旋转后偏移 - 旋转后的帽檐坐标(6.2hs, 4.6hs)。
+        ctx.translate(-1.6 * hs * s, -14.4 * hs * s);
         ctx.rotate(Math.PI / 2);
         drawHat(s);
         ctx.restore();
