@@ -1400,8 +1400,8 @@
       var rx = col.rx * s;
       var ry = col.ry * s;
       var hs = col.hsize;
-      var rw = ry * s;                  // 直立躯干半宽（水平）
-      var rh = rx * s;                  // 直立躯干半高（垂直）
+      var rw = ry;                      // 直立躯干半宽（水平）= 壳竖径（rx/ry 已乘 s）
+      var rh = rx;                      // 直立躯干半高（垂直）= 壳横径
       ctx.save();
 
       // ---- 后腿（站立支撑）----
@@ -1424,15 +1424,19 @@
 
       // ---- 头（抬到躯干上方，正视：双眼左右对称 → 头不歪）----
       ctx.save();
-      ctx.translate(0, -rh * 0.86);
+      var headX = (col.rx * 0.86 + r.headExt * 7 + (r.headPeck || 0)) * s;
+      ctx.translate(0, -rh * 0.58);     // 头底部落在躯干上缘附近，脖子从领口伸出
       ctx.rotate(-Math.PI / 2);
+      ctx.translate(-headX, 0);         // 抵消 drawHead 的前伸偏移，让头居中于颈上
       drawHead(r, s, 0, true);          // side=0 正视；外饰在这里自己摆正后绘制
       // 外饰：头整体转了 -90°，帽子需要再转 +90° 才在正视下是正的，安在头顶
       var accs = r.isOpp ? (r.accessories || [])
                         : ((petState && petState.pet && petState.pet.accessories) || []);
       if (accs.indexOf('acc_santa') >= 0) {
         ctx.save();
-        ctx.translate(col.rx * 0.86 * s + 12.5 * hs * s, 0);
+        // drawHat 的帽檐中心在其自身坐标 (4.6hs*s, -6.2hs*s)，旋转 +90° 后偏移为 (6.2hs, 4.6hs)。
+        // 头顶正中为 (5hs*s, -8hs*s)，故 translate 到此点减去旋转偏移，让帽檐正好落在头顶。
+        ctx.translate(-1.2 * hs * s, -12.6 * hs * s);
         ctx.rotate(Math.PI / 2);
         drawHat(s);
         ctx.restore();
