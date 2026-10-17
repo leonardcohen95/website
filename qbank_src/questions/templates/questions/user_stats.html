@@ -1,0 +1,145 @@
+{% extends 'questions/base.html' %}
+
+{% block title %}用户答题统计 - 题库系统{% endblock %}
+
+{% block title_key %}user_stats{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- 页面标题 -->
+    <div class="mb-4">
+        <h1 class="fw-bold text-primary" data-i18n="us.title">用户答题统计</h1>
+        <p class="text-muted"><span data-i18n="us.sub_pre">查看用户 </span>{{ viewed_user.username }}<span data-i18n="us.sub_post"> 的答题情况</span></p>
+    </div>
+    
+    <!-- 返回按钮 -->
+    <div class="mb-4">
+        <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-2"></i><span data-i18n="us.back_admin">返回管理员面板</span>
+        </a>
+    </div>
+    
+    <!-- 用户基本信息卡片 -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h3 class="card-title mb-0" data-i18n="dash.user_info">用户信息</h3>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-primary rounded-circle p-3 me-3">
+                            <i class="bi bi-person-fill text-white fs-2"></i>
+                        </div>
+                        <div>
+                            <h4 class="mb-0">{{ viewed_user.username }}</h4>
+                            <p class="text-muted mb-0"><span data-i18n="dash.joined">账号创建时间：</span>{{ viewed_user.date_joined|date:"Y-m-d H:i:s" }}</p>
+                            <p class="text-muted mb-0"><span data-i18n="us.last_login">上次登录：</span>{% if viewed_user.last_login %}{{ viewed_user.last_login|date:"Y-m-d H:i:s" }}{% else %}<span data-i18n="us.never">从未登录</span>{% endif %}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="row g-3 mt-3 mt-md-0">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="fw-bold fs-4 text-primary">{{ total_mc_questions }}</div>
+                                <div class="text-muted small" data-i18n="dash.total_mc">总选择题数</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="fw-bold fs-4 text-success">{{ answered_mc_count }}</div>
+                                <div class="text-muted small" data-i18n="dash.answered">已做题目数</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="fw-bold fs-4 text-warning">{{ unanswered_mc_count }}</div>
+                                <div class="text-muted small" data-i18n="dash.unanswered">未做题目数</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="fw-bold fs-4 text-info">{{ accuracy }}%</div>
+                                <div class="text-muted small" data-i18n="dash.accuracy">准确率</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 答题统计卡片 -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-success text-white">
+            <h3 class="card-title mb-0" data-i18n="us.answer_detail">答题详情</h3>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <!-- 进度条：已完成题目的比例 -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="fw-medium" data-i18n="dash.completion">题目完成度</span>
+                            <span class="text-success fw-medium">{{ answered_mc_count }}/{{ total_mc_questions }}</span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-success" role="progressbar" 
+                                 style="width: {{ completion_rate }}%" 
+                                 aria-valuenow="{{ completion_rate }}" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                                {{ completion_rate_int }}%
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 准确率显示 -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="fw-medium" data-i18n="dash.answer_accuracy">答题准确率</span>
+                            <span class="text-info fw-medium">{{ accuracy }}%</span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-info" role="progressbar" 
+                                 style="width: {{ accuracy }}%" 
+                                 aria-valuenow="{{ accuracy }}" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                                {{ accuracy }}%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <!-- 答题情况图表 -->
+                    <div class="text-center">
+                        <div class="mb-3">
+                            <div class="d-inline-block bg-light rounded-circle p-4">
+                                <i class="bi bi-pie-chart-fill text-primary fs-3"></i>
+                            </div>
+                        </div>
+                        <h5 class="mb-3" data-i18n="dash.answer_status">答题情况</h5>
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <div class="bg-success text-white rounded p-3">
+                                    <div class="fw-bold fs-3">{{ correct_count }}</div>
+                                    <div class="small" data-i18n="dash.correct">答对</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="bg-danger text-white rounded p-3">
+                                    <div class="fw-bold fs-3">{{ incorrect_count }}</div>
+                                    <div class="small" data-i18n="dash.wrong">答错</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

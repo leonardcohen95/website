@@ -1,0 +1,85 @@
+{% extends 'questions/base.html' %}
+
+{% block title_key %}login{% endblock %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow-lg rounded-4 overflow-hidden">
+                <!-- 卡片头部 -->
+                <div class="card-header bg-gradient-primary text-white text-center py-4">
+                    <i class="bi bi-person-lock display-3 mb-3"></i>
+                    <h1 class="card-title mb-0" data-i18n="auth.login_title">用户登录</h1>
+                </div>
+                
+                <!-- 卡片主体 -->
+                <div class="card-body p-5">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} mb-4">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                    
+                    <form action="{% url 'login' %}" method="POST">
+                        {% csrf_token %}
+                        
+                        <div class="mb-4">
+                            <label for="username" class="form-label" data-i18n="auth.username">用户名</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light">
+                                    <i class="bi bi-person"></i>
+                                </span>
+                                {{ form.username }}
+                            </div>
+                            {% if form.username.errors %}
+                                <div class="text-danger mt-1">
+                                    {{ form.username.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-5">
+                            <label for="password" class="form-label" data-i18n="auth.password">密码</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light">
+                                    <i class="bi bi-lock"></i>
+                                </span>
+                                {{ form.password }}
+                            </div>
+                            {% if form.password.errors %}
+                                <div class="text-danger mt-1">
+                                    {{ form.password.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary btn-lg w-100 py-2 rounded-pill shadow">
+                            <i class="bi bi-box-arrow-in-right me-2"></i><span data-i18n="auth.login_btn">登录</span>
+                        </button>
+                    </form>
+                    
+                    <!-- 注册链接 -->
+                    <div class="text-center mt-4">
+                        <p class="text-muted"><span data-i18n="auth.no_account">还没有账号？</span> <a href="{% url 'register' %}" class="text-primary" data-i18n="auth.register_now">立即注册</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_css %}
+    <style>
+        /* 自定义表单控件样式 */
+        .form-control {
+            border-radius: 0 0.375rem 0.375rem 0;
+            border-left: none;
+        }
+        
+        .form-control:focus {
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
+    </style>
+{% endblock %}

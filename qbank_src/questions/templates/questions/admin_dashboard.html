@@ -1,0 +1,195 @@
+{% extends 'questions/base.html' %}
+{% load custom_filters %}
+
+{% block title %}管理员仪表盘 - 题库系统{% endblock %}
+
+{% block title_key %}admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- 页面标题 -->
+    <div class="mb-4">
+        <h1 class="fw-bold text-primary" data-i18n="admin.title">管理员仪表盘</h1>
+        <p class="text-muted" data-i18n="admin.welcome">欢迎回来，管理员！这里是系统管理控制台。</p>
+    </div>
+    
+    <!-- 统计卡片 -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-sm bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h5 class="card-title mb-0" data-i18n="admin.users">用户总数</h5>
+                            <h3 class="fw-bold mt-1">{{ users.count }}</h3>
+                        </div>
+                        <div class="bg-white bg-opacity-20 rounded-circle p-3">
+                            <i class="bi bi-people fs-3"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'view_all_questions' %}" class="text-decoration-none">
+                <div class="card shadow-sm bg-success text-white hover-card">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <h5 class="card-title mb-0" data-i18n="admin.questions">题目总数</h5>
+                                <h3 class="fw-bold mt-1">{{ questions.count }}</h3>
+                            </div>
+                            <div class="bg-white bg-opacity-20 rounded-circle p-3">
+                                <i class="bi bi-book fs-3"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h5 class="card-title mb-0" data-i18n="admin.mc_count">选择题数量</h5>
+                            <h3 class="fw-bold mt-1">{{ mc_questions_count }}</h3>
+                        </div>
+                        <div class="bg-white bg-opacity-20 rounded-circle p-3">
+                            <i class="bi bi-question-circle fs-3"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 功能导航 -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-secondary text-white">
+            <h3 class="card-title mb-0" data-i18n="admin.functions">系统功能</h3>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                    <div class="col-md-3">
+                        <a href="{% url 'add_question' %}" class="btn btn-outline-primary btn-lg w-100 h-100 d-flex flex-column align-items-center justify-content-center">
+                            <i class="bi bi-plus-circle fs-3 mb-2"></i>
+                            <span data-i18n="admin.add_question">添加题目</span>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-outline-info btn-lg w-100 h-100 d-flex flex-column align-items-center justify-content-center">
+                            <i class="bi bi-bar-chart-line fs-3 mb-2"></i>
+                            <span data-i18n="admin.sys_stats">系统统计</span>
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{% url 'ai_document_management' %}" class="btn btn-outline-secondary btn-lg w-100 h-100 d-flex flex-column align-items-center justify-content-center">
+                            <i class="bi bi-file-earmark-richtext fs-3 mb-2"></i>
+                            <span data-i18n="admin.ai_docs">AI文档管理</span>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-outline-success btn-lg w-100 h-100 d-flex flex-column align-items-center justify-content-center">
+                            <i class="bi bi-file-earmark-text fs-3 mb-2"></i>
+                            <span data-i18n="admin.sys_logs">系统日志</span>
+                        </button>
+                    </div>
+                </div>
+        </div>
+    </div>
+    
+    <!-- 用户管理 -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-dark text-white">
+            <h3 class="card-title mb-0" data-i18n="admin.user_mgmt">用户管理</h3>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th data-i18n="admin.col_username">用户名</th>
+                            <th data-i18n="admin.col_joined">创建时间</th>
+                            <th data-i18n="admin.col_last_login">上次登录</th>
+                            <th data-i18n="col.actions">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>{{ user.username }}</td>
+                            <td>{{ user.date_joined|date:"Y-m-d H:i:s" }}</td>
+                            <td>
+                                {% if user.last_login %}
+                                {{ user.last_login|date:"Y-m-d H:i:s" }}
+                                {% else %}
+                                <span class="text-muted" data-i18n="us.never">从未登录</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{% url 'view_user_stats' user.id %}" class="btn btn-sm btn-info">
+                                        <i class="bi bi-eye"></i> <span data-i18n="admin.view_stats">查看统计</span>
+                                    </a>
+                                    {% if user_ai_info %}
+                                        {% with ai_info=user_ai_info|get:user.id %}
+                                            {% if ai_info.is_ai_unlocked %}
+                                                <a href="{% url 'unlock_ai' user.id %}" class="btn btn-sm btn-success">
+                                                    <i class="bi bi-unlock-fill"></i> <span data-i18n="admin.ai_unlocked">已解禁AI</span>
+                                                </a>
+                                            {% else %}
+                                                <a href="{% url 'unlock_ai' user.id %}" class="btn btn-sm btn-warning">
+                                                    <i class="bi bi-lock-fill"></i> <span data-i18n="admin.unlock_ai">解禁AI</span>
+                                                </a>
+                                            {% endif %}
+                                        {% endwith %}
+                                    {% else %}
+                                        <a href="{% url 'unlock_ai' user.id %}" class="btn btn-sm btn-warning">
+                                            <i class="bi bi-lock-fill"></i> <span data-i18n="admin.unlock_ai">解禁AI</span>
+                                        </a>
+                                    {% endif %}
+                                    <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteUserModal{{ user.id }}">
+                                        <i class="bi bi-trash"></i> <span data-i18n="common.delete">删除</span>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        
+                        <!-- 删除用户确认模态框 -->
+                        <div class="modal fade" id="deleteUserModal{{ user.id }}" tabindex="-1" aria-labelledby="deleteUserModalLabel{{ user.id }}" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header bg-danger text-white">
+                                        <h5 class="modal-title" id="deleteUserModalLabel{{ user.id }}" data-i18n="admin.confirm_delete">确认删除</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p><span data-i18n="admin.delete_pre">您确定要删除用户</span> <strong>{{ user.username }}</strong> <span data-i18n="admin.delete_post">吗？</span></p>
+                                        <p class="text-danger" data-i18n="admin.delete_warn">此操作不可逆，用户的所有答题记录也将被删除！</p>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-i18n="common.cancel">取消</button>
+                                        <form action="{% url 'delete_user' user.id %}" method="POST" class="d-inline">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-danger" data-i18n="admin.confirm_delete">确认删除</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            {% if users.count == 0 %}
+            <div class="text-center py-5">
+                <i class="bi bi-people-fill text-muted fs-5 mb-3"></i>
+                <p class="text-muted" data-i18n="admin.no_users">暂无用户记录</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

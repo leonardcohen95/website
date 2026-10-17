@@ -1,0 +1,1038 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN" data-title-key="{% block title_key %}home{% endblock %}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}题库系统{% endblock %}</title>
+    {# ===== 中英文切换：英文用户首屏先遮罩，i18n.js 应用译文后解除（2.5s 兜底） ===== #}
+    <style>html[data-lang-pending="1"] body{visibility:hidden;}</style>
+    <script>
+    (function(){try{if(localStorage.getItem('qb_lang')==='en'){document.documentElement.setAttribute('data-lang-pending','1');}}catch(e){}})();
+    </script>
+    <script src="{% static 'js/i18n.js' %}?v=20260919"></script>
+    <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
+    <!-- Bootstrap CSS -->
+    <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="{% static 'css/bootstrap-icons.css' %}" rel="stylesheet">
+    <!-- Markdown解析库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        /* 全局样式 */
+        body {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* 导航栏样式 */
+        .navbar {
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+
+        /* 导航栏语言切换按钮：超窄屏隐藏图标只留 EN/中 文字，避免与汉堡菜单拥挤 */
+        @media (max-width: 380px) {
+            .navbar-lang-btn .bi, .navbar-kb-btn .bi {
+                display: none;
+            }
+            .navbar-lang-btn, .navbar-kb-btn {
+                padding-top: .15rem;
+                padding-bottom: .15rem;
+            }
+        }
+
+        /* 品牌行：标题 + 语言切换按钮强制同一行。
+           margin-right:auto 把后面的汉堡按钮/菜单推到最右侧，
+           不依赖 Bootstrap 导航栏的默认 flex 行为 */
+        .brand-row {
+            display: inline-flex;
+            align-items: center;
+            flex-wrap: nowrap;
+            margin-right: auto;
+        }
+        .brand-row .navbar-brand {
+            margin-right: .5rem;
+            white-space: nowrap;
+        }
+        .brand-row .lang-toggle {
+            flex-shrink: 0;
+        }
+        
+        /* 主内容区 */
+        .main-content {
+            flex: 1;
+            padding: 2rem 0;
+        }
+        
+        /* 卡片样式 */
+        .card {
+            border: none;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* 按钮样式 */
+        .btn {
+            transition: all 0.3s ease;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        /* 页脚样式 */
+        footer {
+            background-color: #2c3e50;
+            color: white;
+            margin-top: auto;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 1rem;
+            }
+            
+            .card-body {
+                padding: 2rem 1.5rem;
+            }
+            
+            /* 字体大小调整 */
+            h1 {
+                font-size: 2rem;
+            }
+            
+            h2 {
+                font-size: 1.75rem;
+            }
+            
+            h3 {
+                font-size: 1.5rem;
+            }
+            
+            /* 按钮和交互元素 */
+            .btn {
+                font-size: 1rem;
+                padding: 0.75rem 1.5rem;
+                min-height: 44px;
+                min-width: 44px;
+            }
+            
+            /* 表单元素 */
+            .form-control, .form-select {
+                font-size: 1rem;
+                min-height: 44px;
+            }
+            
+            /* 导航栏 */
+            .navbar-brand {
+                font-size: 1.25rem;
+            }
+            
+            /* 页脚 */
+            footer .col-md-4 {
+                margin-bottom: 1.5rem;
+            }
+        }
+        
+        /* 小屏幕设备优化 */
+        @media (max-width: 576px) {
+            /* 卡片内边距 */
+            .card-body {
+                padding: 1.5rem 1rem;
+            }
+            
+            /* 表格响应式处理 */
+            .table-responsive {
+                font-size: 0.9rem;
+            }
+            
+            /* 按钮组 */
+            .d-flex {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+        
+        /* 渐变背景 */
+        .bg-gradient-primary {
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        }
+        
+        .bg-gradient-info {
+            background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        }
+        
+        /* 阴影效果 */
+        .shadow-sm {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+        }
+        
+        .shadow {
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+        }
+        
+        /* 动画效果 */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* 移动端交互优化 */
+        .min-height-44 {
+            min-height: 44px;
+        }
+        
+        .min-width-44 {
+            min-width: 44px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-gradient-primary">
+        <div class="container">
+            <div class="brand-row">
+                <a class="navbar-brand" href="{% url 'index' %}">
+                    <i class="bi bi-book-half me-2"></i><span data-i18n="app.name">题库系统</span>
+                </a>
+                <!-- 中英文一键切换：全站公共入口，点击无刷新切换并由 localStorage 记忆 -->
+                <button type="button" aria-label="Toggle language"
+                        class="btn btn-sm btn-outline-light rounded-pill px-2 px-sm-3 fw-semibold ms-1 ms-sm-2 lang-toggle navbar-lang-btn">
+                    <i class="bi bi-translate me-1"></i><span class="lang-label">EN</span>
+                </button>
+                {# 知识库入口：放在语言切换右侧，小屏不折叠 #}
+                {% if user.is_authenticated %}
+                <a class="btn btn-sm btn-outline-light rounded-pill px-2 px-sm-3 fw-semibold ms-1 ms-sm-2 navbar-kb-btn"
+                   aria-current="{% if request.resolver_match.url_name == 'knowledge_base' %}page{% endif %}"
+                   href="{% url 'knowledge_base' %}">
+                    <i class="bi bi-journal-text me-1"></i><span data-i18n="nav.kb">知识库</span>
+                    {% if user.is_staff or user.is_superuser %}
+                    <span class="badge bg-warning text-dark ms-1" style="font-size:.6rem;">ADMIN</span>
+                    {% endif %}
+                </a>
+                {% else %}
+                <a class="btn btn-sm btn-outline-light rounded-pill px-2 px-sm-3 fw-semibold ms-1 ms-sm-2 navbar-kb-btn"
+                   href="#" data-bs-toggle="modal" data-bs-target="#kbLoginModal">
+                    <i class="bi bi-journal-text me-1"></i><span data-i18n="nav.kb">知识库</span>
+                </a>
+                {% endif %}
+            </div>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'index' %}active{% endif %}"
+                           aria-current="{% if request.resolver_match.url_name == 'index' %}page{% endif %}"
+                           href="{% url 'index' %}">
+                            <i class="bi bi-house me-1"></i><span data-i18n="nav.home">首页</span>
+                        </a>
+                    </li>
+                    {% if user.is_authenticated %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person-circle me-1"></i><span data-i18n="nav.welcome">欢迎</span> {{ user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                            <li><a class="dropdown-item" href="{% url 'dashboard' %}"><i class="bi bi-bar-chart-line me-2"></i><span data-i18n="nav.dashboard">个人中心</span></a></li>
+                            <li><a class="dropdown-item" href="{% url 'bookshelf' %}"><i class="bi bi-bookmarks me-2"></i><span data-i18n="nav.bookshelf">公共书架</span></a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'logout' %}" id="logout-link"><i class="bi bi-box-arrow-right me-2"></i><span data-i18n="nav.logout">退出登录</span></a></li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'login' %}"><i class="bi bi-box-arrow-in-right me-1"></i><span data-i18n="nav.login">登录</span></a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'register' %}"><i class="bi bi-person-plus me-1"></i><span data-i18n="nav.register">注册</span></a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- 主内容区 -->
+    <div class="container main-content">
+        <!-- 消息提示 -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm fade-in" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+        
+        <!-- 主要内容 -->
+        {% block content %}
+        {% endblock %}
+    </div>
+    
+    <!-- AI聊天记录重置标志 -->
+    <div id="reset-ai-chat" style="display: none;" data-reset="{% if request.session.reset_ai_chat %}true{% else %}false{% endif %}"></div>
+    
+    <!-- 页脚 -->
+    <footer class="py-4">
+        <div class="container text-center">
+            <div class="row">
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <h5><i class="bi bi-book-half me-2"></i><span data-i18n="app.name">题库系统</span></h5>
+                    <p class="text-sm text-muted"></p>
+                </div>
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <h5><i class="bi bi-question-circle me-2"></i><span data-i18n="footer.features">功能特点</span></h5>
+                    <p class="text-sm text-muted" data-i18n="footer.feature_desc">多种题型，可随时查看答案</p>
+                </div>
+                <div class="col-md-4">
+                    <h5>😄</h5>
+                    <p class="text-sm text-muted" data-i18n="footer.copyright">© 2025 题库系统</p>
+                </div>
+            </div>
+            <div class="mt-4 border-top border-secondary-subtle pt-3">
+                <p class="text-sm text-muted mb-0">Designed by liaojiajun using Bootstrap & Django</p>
+            </div>
+        </div>
+    </footer>
+
+    {# 未登录点「知识库」弹出的登录引导 Modal #}
+    <div class="modal fade" id="kbLoginModal" tabindex="-1" aria-labelledby="kbLoginModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title" id="kbLoginModalLabel"><i class="bi bi-journal-lock text-primary me-2"></i><span data-i18n="modal.kb_title">请先登录</span></h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body pb-0">
+            <p class="text-muted" data-i18n="modal.kb_body">知识库功能需登录后才能使用。管理员可在里面导入文档，登录用户可基于已收录文档进行问答。</p>
+          </div>
+          <div class="modal-footer border-0">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-i18n="modal.cancel">取消</button>
+            <a class="btn btn-primary" href="{% url 'login' %}?next={% url 'knowledge_base' %}">
+              <i class="bi bi-box-arrow-in-right me-1"></i><span data-i18n="modal.go_login">去登录</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# 子模板可在此注入 JS/CSS #}
+    {% block extra_js %}{% endblock %}
+
+    <!-- AI助理浮动按钮 -->
+    <button id="ai-assistant-btn" class="btn btn-primary rounded-circle shadow-lg">
+        <i class="bi bi-robot"></i>
+    </button>
+
+    <!-- AI助理浮窗 -->
+    <div id="aiAssistantModal" class="fixed-top m-3" style="width: 90%; max-width: 500px; height: 80vh; max-height: 800px; z-index: 1050; display: none;">
+        <div class="card shadow-lg rounded-3" style="height: 100%;">
+            <!-- 浮窗头部 -->
+            <div id="chat-header" class="card-header bg-gradient-primary text-white p-3" style="cursor: move;">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-robot me-2"></i><span data-i18n="ai.title">AI助理</span>
+                </h5>
+                <button id="close-chat" class="btn-close btn-close-white" type="button"></button>
+            </div>
+            
+            <!-- 浮窗主体 -->
+            <div class="card-body p-0" style="height: calc(100% - 60px);">
+                <!-- 聊天内容区域 -->
+                <div id="chat-messages" class="overflow-y-auto" style="height: calc(100% - 100px); padding: 1rem;">
+                    <!-- 欢迎消息 -->
+                    <div class="chat-message ai-message mb-3">
+                        <div class="d-flex align-items-start">
+                            <div class="flex-shrink-0 me-3">
+                                <div class="rounded-circle bg-primary text-white p-2">
+                                    <i class="bi bi-robot"></i>
+                                </div>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="bg-light p-3 rounded-3 shadow-sm">
+                                    <p class="mb-0" data-i18n="ai.welcome">你好！我是AI助理，有什么可以帮助你的？</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 输入区域 -->
+                <div class="border-top p-3">
+                    <div class="input-group">
+                        <textarea id="user-input" class="form-control" data-i18n-ph="ai.placeholder" placeholder="请输入你的问题..." rows="2" style="resize: none;"></textarea>
+                        <button id="send-message" class="btn btn-primary" type="button">
+                            <i class="bi bi-send"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- AI助理CSS -->
+    <style>
+        .chat-message {
+            margin-bottom: 1rem;
+        }
+        
+        .user-message .bg-light {
+            background-color: #e3f2fd !important;
+        }
+        
+        .ai-message .bg-light {
+            background-color: #f1f3f4 !important;
+        }
+        
+        #chat-messages {
+            scroll-behavior: smooth;
+        }
+        
+        /* AI助理浮动按钮 */
+        #ai-assistant-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+            z-index: 1050;
+            transition: all 0.3s ease;
+        }
+        
+        #ai-assistant-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
+        }
+        
+        /* AI助理浮窗样式 */
+        #aiAssistantModal {
+            resize: both;
+            overflow: hidden;
+            min-width: 300px;
+            min-height: 400px;
+        }
+        
+        /* 调整大小的手柄 */
+        #aiAssistantModal::after {
+            content: '';
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            width: 20px;
+            height: 20px;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M12 11.5a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1 0-1h3a.5.5 0 0 1 .5.5zm-5.5-4a.5.5 0 0 1 0-1h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-2.5H6.5z" fill="%236c757d"/></svg>') no-repeat center center;
+            cursor: nwse-resize;
+            opacity: 0.5;
+        }
+        
+        /* 确保卡片高度自适应 */
+        #aiAssistantModal .card {
+            height: 100%;
+        }
+        
+        /* 确保聊天内容区域高度自适应 */
+        #aiAssistantModal #chat-messages {
+            height: calc(100% - 100px) !important;
+        }
+    </style>
+    
+    <!-- AI助理JavaScript -->
+    <script>
+        // AI助理交互逻辑
+        document.addEventListener('DOMContentLoaded', function() {
+            // 处理登出链接点击事件，直接清除AI聊天记录
+            const logoutLink = document.getElementById('logout-link');
+            if (logoutLink) {
+                logoutLink.addEventListener('click', function(e) {
+                    // 立即清除localStorage中的AI聊天记录
+                    localStorage.removeItem('aiChatHistory');
+                    localStorage.setItem('aiModalOpen', 'false');
+                    localStorage.removeItem('aiModalTop');
+                    localStorage.removeItem('aiModalLeft');
+                    localStorage.removeItem('aiModalRight');
+                    console.log('登出时清除了所有AI聊天相关数据');
+                });
+            }
+            
+            // 额外的安全措施：监听页面卸载事件，确保清除聊天记录
+            window.addEventListener('beforeunload', function() {
+                // 只有在用户已登录的情况下才清除，避免未登录用户的聊天记录也被清除
+                {% if user.is_authenticated %}
+                    localStorage.removeItem('aiChatHistory');
+                    console.log('页面卸载时清除了AI聊天记录');
+                {% endif %}
+            });
+            const aiBtn = document.getElementById('ai-assistant-btn');
+            const aiModal = document.getElementById('aiAssistantModal');
+            const chatHeader = document.getElementById('chat-header');
+            const chatMessages = document.getElementById('chat-messages');
+            const userInput = document.getElementById('user-input');
+            const sendBtn = document.getElementById('send-message');
+            const closeBtn = document.getElementById('close-chat');
+            
+            // 检查是否需要重置AI聊天记录（用户重新登录）
+            const resetAiChatElement = document.getElementById('reset-ai-chat');
+            let shouldResetChat = false;
+            
+            // 检查session标志
+            if (resetAiChatElement && resetAiChatElement.getAttribute('data-reset') === 'true') {
+                shouldResetChat = true;
+                console.log('检测到需要重置AI聊天记录（session标志）');
+            }
+            
+            // 无论如何，在页面加载时检查当前用户是否已认证
+            // 如果已认证但localStorage中有聊天记录，可能是用户切换，需要清除
+            {% if user.is_authenticated %}
+                shouldResetChat = true;
+                console.log('用户已认证，自动重置AI聊天记录（防止用户切换残留）');
+            {% endif %}
+            
+            if (shouldResetChat) {
+                // 清除localStorage中的AI聊天记录
+                localStorage.removeItem('aiChatHistory');
+                localStorage.setItem('aiModalOpen', 'false');
+                console.log('AI聊天记录已重置');
+                
+                // 请求后端清除session标志
+                fetch('/reset_ai_chat/', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                }).catch(error => {
+                    console.error('清除session标志失败:', error);
+                });
+            }
+            
+            // 检查必要的元素是否存在
+            if (!aiModal || !closeBtn) {
+                console.error('AI助理浮窗或关闭按钮不存在');
+                return;
+            }
+            
+            // 拖拽相关变量
+            let isDragging = false;
+            let startX, startY, startLeft, startTop;
+            
+            // 检查localStorage中是否保存了浮窗的显示状态
+            const isAiModalOpen = localStorage.getItem('aiModalOpen');
+            if (isAiModalOpen === 'true') {
+                aiModal.style.display = 'block';
+                // 恢复浮窗的位置（允许超出屏幕边界）
+                const savedTop = localStorage.getItem('aiModalTop') || '150px';
+                const savedLeft = localStorage.getItem('aiModalLeft');
+                const savedRight = localStorage.getItem('aiModalRight') || '1rem';
+                
+                aiModal.style.top = savedTop;
+                if (savedLeft) {
+                    aiModal.style.left = savedLeft;
+                    aiModal.style.right = 'auto';
+                } else {
+                    aiModal.style.right = savedRight;
+                    aiModal.style.left = 'auto';
+                }
+                // 检查登录状态并更新界面
+                updateAiAssistantUI();
+            }
+            
+            // 更新AI助理界面的函数，根据登录状态调整显示内容
+            function updateAiAssistantUI() {
+                // 检查登录状态
+                {% if not user.is_authenticated %}
+                    // 未登录状态
+                    // 清空聊天记录，只显示登录提示
+                    chatMessages.innerHTML = `
+                        <div class="chat-message ai-message mb-3">
+                            <div class="d-flex align-items-start">
+                                <div class="flex-shrink-0 me-3">
+                                    <div class="rounded-circle bg-primary text-white p-2">
+                                        <i class="bi bi-robot"></i>
+                                    </div>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="bg-light p-3 rounded-3 shadow-sm">
+                                        <p class="mb-0">${t('ai.login_required')}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    // 禁用输入框和发送按钮
+                    userInput.disabled = true;
+                    sendBtn.disabled = true;
+                    userInput.placeholder = t('ai.login_ph');
+                {% else %}
+                    // 已登录状态，恢复聊天记录
+                    loadChatHistory();
+                    // 启用输入框和发送按钮
+                    userInput.disabled = false;
+                    sendBtn.disabled = false;
+                    userInput.placeholder = t('ai.placeholder');
+                {% endif %}
+            }
+            
+            // 获取CSRF token的函数
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+            
+            // 切换浮窗显示/隐藏
+            aiBtn.addEventListener('click', function() {
+                if (aiModal.style.display === 'block') {
+                    // 当前浮窗已显示，点击则关闭
+                    aiModal.style.display = 'none';
+                    localStorage.setItem('aiModalOpen', 'false');
+                    saveChatHistory(); // 关闭时保存聊天记录
+                } else {
+                    // 当前浮窗隐藏，点击则打开
+                    aiModal.style.display = 'block';
+                    
+                    // 检查是否有保存的位置
+                    const savedLeft = localStorage.getItem('aiModalLeft');
+                    const savedRight = localStorage.getItem('aiModalRight');
+                    const savedTop = localStorage.getItem('aiModalTop');
+                    
+                    if (savedLeft) {
+                        // 如果有保存的left位置，使用它
+                        aiModal.style.left = savedLeft;
+                        aiModal.style.right = 'auto';
+                        aiModal.style.top = savedTop || '150px';
+                    } else {
+                        // 没有保存的left位置，使用默认位置
+                        aiModal.style.right = savedRight || '1rem';
+                        aiModal.style.left = 'auto';
+                        aiModal.style.top = savedTop || '150px'; // 从顶部往下移150px
+                    }
+                    
+                    // 保存浮窗的显示状态和位置到localStorage
+                    localStorage.setItem('aiModalOpen', 'true');
+                    localStorage.setItem('aiModalTop', aiModal.style.top);
+                    if (savedLeft) {
+                        localStorage.setItem('aiModalLeft', aiModal.style.left);
+                        localStorage.removeItem('aiModalRight');
+                    } else {
+                        localStorage.setItem('aiModalRight', aiModal.style.right);
+                        localStorage.removeItem('aiModalLeft');
+                    }
+                    
+                    // 检查登录状态并更新界面
+                    updateAiAssistantUI();
+                }
+            });
+            
+            // 关闭浮窗
+            closeBtn.addEventListener('click', function(e) {
+                // 防止事件冒泡到聊天头部的拖拽事件
+                e.stopPropagation();
+                aiModal.style.display = 'none';
+                // 保存浮窗的关闭状态到localStorage
+                localStorage.setItem('aiModalOpen', 'false');
+                // 保存聊天记录
+                saveChatHistory();
+            });
+            
+            // 为关闭按钮添加触摸事件支持
+            closeBtn.addEventListener('touchend', function(e) {
+                // 防止事件冒泡到聊天头部的触摸拖拽事件
+                e.stopPropagation();
+                aiModal.style.display = 'none';
+                // 保存浮窗的关闭状态到localStorage
+                localStorage.setItem('aiModalOpen', 'false');
+                // 保存聊天记录
+                saveChatHistory();
+            });
+            
+            // 保存聊天记录
+            function saveChatHistory() {
+                // 只有未登录用户才保存到localStorage
+                {% if not user.is_authenticated %}
+                    const messages = [];
+                    const messageElements = chatMessages.querySelectorAll('.chat-message');
+                    
+                    messageElements.forEach((element, index) => {
+                        // 跳过欢迎消息（第一个消息）
+                        if (index === 0) return;
+                        
+                        const isUserMessage = element.classList.contains('user-message');
+                        
+                        // 对于AI消息，我们需要保存原始的Markdown内容
+                        // 我们可以通过自定义属性来存储原始内容
+                        let messageContent;
+                        const messageElement = element.querySelector('.bg-light, .bg-primary-subtle');
+                        
+                        if (isUserMessage) {
+                            // 用户消息直接获取文本
+                            messageContent = messageElement.innerText;
+                        } else {
+                            // AI消息尝试获取原始Markdown内容
+                            messageContent = element.getAttribute('data-original-content') || messageElement.innerText;
+                        }
+                        
+                        messages.push({
+                            sender: isUserMessage ? 'user' : 'ai',
+                            content: messageContent
+                        });
+                    });
+                    
+                    localStorage.setItem('aiChatHistory', JSON.stringify(messages));
+                {% endif %}
+            }
+            
+            // 从后端获取聊天记录
+            function loadChatHistory() {
+                // 只有登录用户才从后端获取聊天记录
+                {% if user.is_authenticated %}
+                    // 清空现有消息（保留欢迎消息）
+                    const welcomeMessage = chatMessages.firstElementChild;
+                    chatMessages.innerHTML = '';
+                    chatMessages.appendChild(welcomeMessage);
+                    
+                    // 从后端获取聊天记录
+                    fetch('/ai/chat/history/', {
+                        method: 'GET',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken')
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.messages) {
+                            // 添加保存的消息
+                            data.messages.forEach(message => {
+                                addMessage(message.content, message.sender);
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('加载聊天记录失败:', error);
+                    });
+                {% else %}
+                    // 未登录用户从localStorage读取
+                    const savedMessages = localStorage.getItem('aiChatHistory');
+                    if (!savedMessages) return;
+                    
+                    try {
+                        const messages = JSON.parse(savedMessages);
+                        // 清空现有消息（保留欢迎消息）
+                        const welcomeMessage = chatMessages.firstElementChild;
+                        chatMessages.innerHTML = '';
+                        chatMessages.appendChild(welcomeMessage);
+                        
+                        // 添加保存的消息
+                        messages.forEach(message => {
+                            addMessage(message.content, message.sender);
+                        });
+                    } catch (error) {
+                        console.error('加载聊天记录失败:', error);
+                        localStorage.removeItem('aiChatHistory');
+                    }
+                {% endif %}
+            }
+            
+            // 拖拽功能
+            chatHeader.addEventListener('mousedown', function(e) {
+                isDragging = true;
+                
+                // 获取初始位置
+                startX = e.clientX;
+                startY = e.clientY;
+                
+                // 获取浮窗当前位置
+                const rect = aiModal.getBoundingClientRect();
+                startLeft = rect.left;
+                startTop = rect.top;
+                
+                // 添加鼠标事件监听
+                document.addEventListener('mousemove', onDrag);
+                document.addEventListener('mouseup', onDragEnd);
+                
+                // 防止文本选择
+                e.preventDefault();
+            });
+            
+            // 触摸事件支持（手机拖拽）
+            chatHeader.addEventListener('touchstart', function(e) {
+                if (e.touches.length === 1) {
+                    isDragging = true;
+                    
+                    // 获取初始触摸位置
+                    const touch = e.touches[0];
+                    startX = touch.clientX;
+                    startY = touch.clientY;
+                    
+                    // 获取浮窗当前位置
+                    const rect = aiModal.getBoundingClientRect();
+                    startLeft = rect.left;
+                    startTop = rect.top;
+                    
+                    // 添加触摸事件监听
+                    document.addEventListener('touchmove', onTouchDrag);
+                    document.addEventListener('touchend', onTouchDragEnd);
+                    
+                    // 防止页面滚动
+                    e.preventDefault();
+                }
+            });
+            
+            // 拖拽移动
+            function onDrag(e) {
+                if (!isDragging) return;
+                
+                // 计算位移
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+                
+                // 计算新位置（允许超出屏幕边界）
+                let newLeft = startLeft + deltaX;
+                let newTop = startTop + deltaY;
+                
+                // 更新位置
+                aiModal.style.left = newLeft + 'px';
+                aiModal.style.top = newTop + 'px';
+                aiModal.style.bottom = 'auto';
+                aiModal.style.right = 'auto';
+            }
+            
+            // 拖拽结束
+            function onDragEnd() {
+                isDragging = false;
+                document.removeEventListener('mousemove', onDrag);
+                document.removeEventListener('mouseup', onDragEnd);
+                
+                // 保存拖拽后的位置到localStorage
+                saveModalPosition();
+            }
+            
+            // 触摸拖拽移动
+            function onTouchDrag(e) {
+                if (!isDragging) return;
+                
+                // 获取触摸位置
+                const touch = e.touches[0];
+                
+                // 计算位移
+                const deltaX = touch.clientX - startX;
+                const deltaY = touch.clientY - startY;
+                
+                // 计算新位置（允许超出屏幕边界）
+                let newLeft = startLeft + deltaX;
+                let newTop = startTop + deltaY;
+                
+                // 更新位置
+                aiModal.style.left = newLeft + 'px';
+                aiModal.style.top = newTop + 'px';
+                aiModal.style.bottom = 'auto';
+                aiModal.style.right = 'auto';
+                
+                // 防止页面滚动
+                e.preventDefault();
+            }
+            
+            // 触摸拖拽结束
+            function onTouchDragEnd() {
+                isDragging = false;
+                document.removeEventListener('touchmove', onTouchDrag);
+                document.removeEventListener('touchend', onTouchDragEnd);
+                
+                // 保存拖拽后的位置到localStorage
+                saveModalPosition();
+            }
+            
+            // 保存浮窗位置到localStorage
+            function saveModalPosition() {
+                localStorage.setItem('aiModalTop', aiModal.style.top);
+                if (aiModal.style.left !== 'auto') {
+                    localStorage.setItem('aiModalLeft', aiModal.style.left);
+                    localStorage.removeItem('aiModalRight');
+                } else {
+                    localStorage.setItem('aiModalRight', aiModal.style.right);
+                    localStorage.removeItem('aiModalLeft');
+                }
+            }
+            
+            // 窗口大小变化时的响应式调整
+            window.addEventListener('resize', function() {
+                if (aiModal.style.display === 'block') {
+                    // 检查浮窗是否超出新的视口范围
+                    const rect = aiModal.getBoundingClientRect();
+                    const viewportWidth = window.innerWidth;
+                    const viewportHeight = window.innerHeight;
+                    
+                    let newLeft = rect.left;
+                    let newTop = rect.top;
+                    let needAdjust = false;
+                    
+                    // 调整左右位置
+                    if (newLeft < 0) {
+                        newLeft = 0;
+                        needAdjust = true;
+                    } else if (newLeft + rect.width > viewportWidth) {
+                        newLeft = viewportWidth - rect.width;
+                        needAdjust = true;
+                    }
+                    
+                    // 调整上下位置
+                    if (newTop < 0) {
+                        newTop = 0;
+                        needAdjust = true;
+                    } else if (newTop + rect.height > viewportHeight) {
+                        newTop = viewportHeight - rect.height;
+                        needAdjust = true;
+                    }
+                    
+                    // 如果需要调整，更新位置
+                    if (needAdjust) {
+                        aiModal.style.left = newLeft + 'px';
+                        aiModal.style.top = newTop + 'px';
+                        aiModal.style.bottom = 'auto';
+                        aiModal.style.right = 'auto';
+                        
+                        // 保存新位置
+                        saveModalPosition();
+                    }
+                }
+            });
+            
+            // 发送消息
+            function sendMessage() {
+                const message = userInput.value.trim();
+                if (!message) return;
+                
+                // 添加用户消息到聊天
+            addMessage(message, 'user');
+            
+            // 清空输入框
+            userInput.value = '';
+            
+            // 保存聊天记录
+            saveChatHistory();
+                
+                // 调用后端API获取AI回复
+                const csrfToken = getCookie('csrftoken');
+                console.log('CSRF Token:', csrfToken);
+                fetch("/ai/chat/", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: `message=${encodeURIComponent(message)}`
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        // 处理HTTP错误（如4xx, 5xx）
+                        return response.json().then(data => {
+                            // 如果API返回了错误信息，使用它；否则使用默认错误信息
+                            throw new Error(data.response || t('ai.err_server'));
+                        }).catch(() => {
+                            // 如果无法解析JSON，使用HTTP状态文本
+                            throw new Error(`${t('ai.err_http')}${response.status} ${response.statusText}`);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.response) {
+                        addMessage(data.response, 'ai');
+                    } else {
+                        addMessage(t('ai.err_failed'), 'ai');
+                    }
+                    // 保存聊天记录
+                    saveChatHistory();
+                })
+                .catch(error => {
+                    console.error('API请求失败:', error);
+                    // 区分网络错误和业务错误
+                    const errorMsg = error.message.includes('Network') || error.message.includes('网络') || error.message.includes('Failed to fetch')
+                        ? t('ai.err_network')
+                        : error.message;
+                    addMessage(errorMsg, 'ai');
+                });
+            }
+            
+            // 发送按钮点击事件
+            sendBtn.addEventListener('click', sendMessage);
+            
+            // 回车键发送消息
+            userInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+            
+            // 添加消息到聊天记录
+            function addMessage(message, sender) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `chat-message ${sender}-message mb-3`;
+                
+                // 对于AI消息，存储原始Markdown内容
+                if (sender === 'ai') {
+                    messageDiv.setAttribute('data-original-content', message);
+                }
+                
+                let icon = sender === 'ai' ? 'bi bi-robot' : 'bi bi-person';
+                let bgColor = sender === 'ai' ? 'bg-light' : 'bg-primary-subtle';
+                let textColor = sender === 'ai' ? 'text-dark' : 'text-dark';
+                let align = sender === 'ai' ? 'd-flex align-items-start' : 'd-flex align-items-start justify-content-end';
+                
+                // 转换Markdown为HTML
+                const html = sender === 'ai' ? marked.parse(message) : message.replace(/\n/g, '<br>');
+                
+                messageDiv.innerHTML = `
+                    <div class="${align}">
+                        <div class="flex-grow-1 ${sender === 'user' ? 'order-2' : ''}">
+                            <div class="${bgColor} p-3 rounded-3 shadow-sm ${textColor}">
+                                <div class="mb-0">${html}</div>
+                            </div>
+                        </div>
+                        <div class="flex-shrink-0 me-3 ${sender === 'user' ? 'order-1 ms-3' : ''}">
+                            <div class="rounded-circle ${sender === 'ai' ? 'bg-primary' : 'bg-info'} text-white p-2">
+                                <i class="${icon}"></i>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        });
+    </script>
+    
+    <!-- Bootstrap JS -->
+    <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+{% extends 'questions/base.html' %}
+
+{% block title %}AI 模拟面试官 - 题库系统{% endblock %}
+
+{% block content %}
+<style>
+    .mode-card {
+        border: 2px solid #e9ecef;
+        border-radius: 1rem;
+        padding: 1.1rem .6rem;
+        text-align: center;
+        transition: all .2s ease;
+        cursor: pointer;
+        height: 100%;
+    }
+    .mode-card:hover { border-color: #0d6efd; transform: translateY(-3px); }
+    .btn-check:checked + .mode-card {
+        border-color: #0d6efd;
+        background: #e7f1ff;
+        box-shadow: 0 6px 18px rgba(13,110,253,.15);
+    }
+    .num-pill {
+        border: 2px solid #e9ecef;
+        border-radius: 999px;
+        padding: .45rem 1.1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all .2s ease;
+        min-width: 64px;
+        text-align: center;
+    }
+    .btn-check:checked + .num-pill {
+        border-color: #0d6efd;
+        background: #0d6efd;
+        color: #fff;
+    }
+</style>
+
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-9 col-xl-8">
+        <div class="card shadow-lg rounded-4 overflow-hidden">
+            <div class="card-header bg-gradient-primary text-white text-center py-4">
+                <i class="bi bi-person-video3 display-3 mb-3"></i>
+                <h2 class="card-title mb-1">AI 模拟面试官</h2>
+                <p class="mb-0 opacity-75">随机抽题 · 限时作答 · 交卷即出成绩，还原真实面试节奏</p>
+            </div>
+
+            <div class="card-body p-4 p-lg-5">
+                <form method="post" action="{% url 'interview_home' %}">
+                    {% csrf_token %}
+
+                    <h5 class="mb-3"><i class="bi bi-1-circle text-primary me-2"></i>选择面试模式</h5>
+                    <div class="row g-3 mb-4">
+                        <div class="col-12 col-md-4">
+                            <input type="radio" class="btn-check" name="mode" id="mode-all" value="all" checked>
+                            <label class="mode-card d-block" for="mode-all">
+                                <i class="bi bi-collection fs-2 text-primary"></i>
+                                <div class="fw-bold mt-2">综合面试</div>
+                                <small class="text-muted d-block">选择题 + 简答题混合</small>
+                                <span class="badge bg-primary-subtle text-primary mt-2">共 {{ counts.all }} 题</span>
+                            </label>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <input type="radio" class="btn-check" name="mode" id="mode-mc" value="mc">
+                            <label class="mode-card d-block" for="mode-mc">
+                                <i class="bi bi-list-check fs-2 text-success"></i>
+                                <div class="fw-bold mt-2">选择题专场</div>
+                                <small class="text-muted d-block">快速检验知识点</small>
+                                <span class="badge bg-success-subtle text-success mt-2">共 {{ counts.mc }} 题</span>
+                            </label>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <input type="radio" class="btn-check" name="mode" id="mode-sa" value="sa">
+                            <label class="mode-card d-block" for="mode-sa">
+                                <i class="bi bi-pencil-square fs-2 text-warning"></i>
+                                <div class="fw-bold mt-2">简答题专场</div>
+                                <small class="text-muted d-block">文字作答，考察表达</small>
+                                <span class="badge bg-warning-subtle text-warning mt-2">共 {{ counts.sa }} 题</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <h5 class="mb-3"><i class="bi bi-2-circle text-primary me-2"></i>选择题目数量</h5>
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <input type="radio" class="btn-check" name="num" id="num-5" value="5">
+                        <label class="num-pill" for="num-5">5 题</label>
+                        <input type="radio" class="btn-check" name="num" id="num-10" value="10" checked>
+                        <label class="num-pill" for="num-10">10 题</label>
+                        <input type="radio" class="btn-check" name="num" id="num-15" value="15">
+                        <label class="num-pill" for="num-15">15 题</label>
+                        <input type="radio" class="btn-check" name="num" id="num-20" value="20">
+                        <label class="num-pill" for="num-20">20 题</label>
+                        <input type="radio" class="btn-check" name="num" id="num-30" value="30">
+                        <label class="num-pill" for="num-30">30 题</label>
+                    </div>
+                    <small class="text-muted">题量范围 5 - 30 题，需小于等于该模式题库总量</small>
+
+                    <div class="text-center mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg px-5 py-3 rounded-pill shadow min-height-44">
+                            <i class="bi bi-play-fill me-2"></i>开始面试
+                        </button>
+                    </div>
+                </form>
+
+                {% if recent %}
+                <hr class="my-5">
+                <h5 class="mb-3"><i class="bi bi-clock-history text-primary me-2"></i>最近的面试记录</h5>
+                <div class="list-group list-group-flush">
+                    {% for s in recent %}
+                    <a href="{% url 'interview_report' s.id %}"
+                       class="list-group-item list-group-item-action d-flex justify-content-between align-items-center rounded-3 mb-2 border">
+                        <div>
+                            <div class="fw-semibold">{{ s.get_mode_display }} · {{ s.total }} 题</div>
+                            <small class="text-muted">{{ s.started_at|date:"Y-m-d H:i" }}</small>
+                        </div>
+                        <span class="badge rounded-pill fs-6 {% if s.score >= 80 %}bg-success{% elif s.score >= 60 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                            {{ s.score }} 分
+                        </span>
+                    </a>
+                    {% endfor %}
+                </div>
+                <div class="text-center mt-3">
+                    <a href="{% url 'interview_history' %}" class="btn btn-outline-primary rounded-pill px-4">
+                        <i class="bi bi-list-ul me-1"></i>查看全部记录
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

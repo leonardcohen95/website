@@ -1,0 +1,124 @@
+{% extends 'questions/base.html' %}
+{% load static %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-lg rounded-4 overflow-hidden">
+                <!-- 卡片头部 -->
+                <div class="card-header bg-gradient-primary text-white text-center py-4">
+                    <i class="bi bi-book-half display-3 mb-3"></i>
+                    <h1 class="card-title" data-i18n="app.name">题库系统</h1>
+                    <p class="mt-2" data-i18n="home.subtitle">一些Linux，Shell相关题目</p>
+                </div>
+
+                <!-- 卡片主体 -->
+                <div class="card-body p-5">
+                    <div class="text-center mb-5">
+                        <p class="lead" data-i18n="home.lead">欢迎使用题库系统！</p>
+                    </div>
+
+                    <!-- 开始按钮 -->
+                    <div class="text-center">
+                        {% if total_questions > 0 %}
+                            <div class="d-flex flex-column gap-3">
+                                <a href="{% url 'answer_question' first_question_id %}" class="btn btn-primary btn-lg px-5 py-3 rounded-pill shadow min-height-44">
+                                    <i class="bi bi-list-nested me-2"></i><span data-i18n="home.start_order">按顺序答题</span>
+                                </a>
+                                <a href="{% url 'start_quiz' %}" class="btn btn-success btn-lg px-5 py-3 rounded-pill shadow min-height-44">
+                                    <i class="bi bi-shuffle me-2"></i><span data-i18n="home.start_random">随机出题</span>
+                                </a>
+                                {% if user.is_authenticated %}
+                                <a href="{% url 'interview_home' %}" class="btn btn-warning btn-lg px-5 py-3 rounded-pill shadow min-height-44">
+                                    <i class="bi bi-person-video3 me-2"></i><span>模拟面试</span>
+                                </a>
+                                <div class="text-muted mt-2">
+                                    <small>AI 模拟面试官：随机抽题 · 限时作答 · 交卷自动判分</small>
+                                </div>
+                                <a href="{% url 'k8s_learning' %}" class="btn btn-lg px-5 py-3 rounded-pill shadow min-height-44 text-white" style="background:#326ce5;border-color:#326ce5;">
+                                    <i class="bi bi-boxes me-2"></i><span>K8s 学习中心</span>
+                                </a>
+                                <div class="text-muted mt-2">
+                                    <small>像玩游戏一样学 Kubernetes：20 章闯关 · 答题赚星星 · 升级头衔 · 排行榜</small>
+                                </div>
+                                <a href="{% url 'pet_page' %}" class="btn btn-outline-success btn-lg px-5 py-3 rounded-pill shadow min-height-44">
+                                    <i class="bi bi-egg me-2"></i><span>我的宠物</span>
+                                </a>
+                                <a href="{% url 'shop_page' %}" class="btn btn-outline-warning btn-lg px-5 py-3 rounded-pill shadow min-height-44">
+                                    <i class="bi bi-shop me-2"></i><span>星星商店</span>
+                                </a>
+                                <div class="text-muted mt-2">
+                                    <small>用答题赚到的星星，养一只电子乌龟，还能在商店买龟粮、玩具和装饰</small>
+                                </div>
+                                {% endif %}
+                                <div class="text-muted mt-2">
+                                    <small data-i18n="home.random_tip">随机出题模式：每次随机生成最多10道题目</small>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info" data-i18n="home.no_questions">
+                                系统中暂无题目，请稍后再试。
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- 后台管理按钮 -->
+                    <div class="text-center mb-5">
+                        <a href="{% url 'admin_dashboard' %}" class="btn btn-outline-primary btn-lg px-5 py-2 rounded-pill shadow">
+                            <i class="bi bi-person-gear me-2"></i><span data-i18n="home.admin">后台管理</span>
+                        </a>
+                    </div>
+
+                    <!-- 功能特点 -->
+                    <div class="mt-5">
+                        <h5 class="text-center mb-3" data-i18n="home.features">功能特点</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start mb-3">
+                                    <i class="bi bi-check-lg text-success me-3 mt-1"></i>
+                                    <div>
+                                        <h6 data-i18n="home.f1_title">多种题型</h6>
+                                        <p class="text-sm text-muted" data-i18n="home.f1_desc">支持选择题和简答题</p>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-start mb-3">
+                                    <i class="bi bi-check-lg text-success me-3 mt-1"></i>
+                                    <div>
+                                        <h6 data-i18n="home.f2_title">支持滑动</h6>
+                                        <p class="text-sm text-muted" data-i18n="home.f2_desc">支持左滑进入上一题，右滑进入下一题</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start mb-3">
+                                    <i class="bi bi-check-lg text-success me-3 mt-1"></i>
+                                    <div>
+                                        <h6 data-i18n="home.f3_title">查看答案</h6>
+                                        <p class="text-sm text-muted" data-i18n="home.f3_desc">随时查看正确答案</p>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-start mb-3">
+                                    <i class="bi bi-check-lg text-success me-3 mt-1"></i>
+                                    <div>
+                                        <h6 data-i18n="home.f4_title">响应式设计</h6>
+                                        <p class="text-sm text-muted" data-i18n="home.f4_desc">适配各种设备屏幕</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 卡片底部 -->
+                <div class="card-footer bg-light text-center py-3">
+                    <p class="text-sm text-muted mb-0" data-i18n="footer.copyright">© 2025 题库系统</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+{% endblock %}
+
+{% block extra_js %}
+{% endblock %}

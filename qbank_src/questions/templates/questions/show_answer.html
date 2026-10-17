@@ -1,0 +1,431 @@
+{% extends 'questions/base.html' %}
+{% load custom_filters %}
+
+{% block title_key %}sa{% endblock %}
+
+{% block content %}
+    <div class="row justify-content-center m-0 p-0">
+        <div class="col-12 col-lg-8 col-xl-7 p-0 p-lg-3">
+            <div class="card question-card shadow-lg rounded-3 overflow-hidden mx-auto" style="max-width: 900px;">
+                <!-- 卡片头部 -->
+                <div class="card-header bg-gradient-primary text-white p-2 p-lg-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h3 class="card-title mb-0">
+                            <i class="bi bi-book-half me-2"></i><span data-i18n="sa.title">答案解析</span>
+                        </h3>
+                        <span class="badge bg-white text-primary px-2 py-1 fs-6 rounded-pill" data-i18n-qtype>
+                            {{ question.type }}
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- 题号导航 -->
+                <div class="card-header bg-light p-1 p-lg-2 border-bottom">
+                    <div class="d-flex justify-content-start gap-3">
+                        <span class="text-muted me-1 align-self-center" data-i18n="quiz.qnum">题号：</span>
+                        {% if quiz_questions %}
+                            {% for i in quiz_questions|length|get_range %}
+                                {% with question_id=quiz_questions|index:i %}
+                                    {% if question_id == question.id %}
+                                        <a href="{% url 'answer_question' question_id %}" 
+                                           class="btn btn-primary btn-sm px-2 py-0.5 rounded-pill active shadow-sm">
+                                            {{ i|add:1 }}
+                                        </a>
+                                    {% else %}
+                                        {% if request.session.wrong_mc_indices and i in request.session.wrong_mc_indices %}
+                                            <a href="{% url 'answer_question' question_id %}" 
+                                               class="btn btn-danger btn-sm px-2 py-0.5 rounded-pill shadow-sm">
+                                                {{ i|add:1 }}
+                                            </a>
+                                        {% elif request.session.correct_mc_indices and i in request.session.correct_mc_indices %}
+                                            <a href="{% url 'answer_question' question_id %}" 
+                                               class="btn btn-success btn-sm px-2 py-0.5 rounded-pill shadow-sm">
+                                                {{ i|add:1 }}
+                                            </a>
+                                        {% else %}
+                                            <a href="{% url 'answer_question' question_id %}" 
+                                               class="btn btn-outline-secondary btn-sm px-2 py-0.5 rounded-pill shadow-sm">
+                                                {{ i|add:1 }}
+                                            </a>
+                                        {% endif %}
+                                    {% endif %}
+                                {% endwith %}
+                            {% endfor %}
+                        {% else %}
+                            {% for i in total_questions|get_range %}
+                                {% with q_num=i|add:1 %}
+                                    {% if q_num == question.id %}
+                                        <a href="{% url 'answer_question' q_num %}" 
+                                           class="btn btn-primary btn-sm px-2 py-0.5 rounded-pill active shadow-sm">
+                                            {{ q_num }}
+                                        </a>
+                                    {% else %}
+                                        {% if question_status and question_status|get:q_num == 'correct' %}
+                                            <a href="{% url 'answer_question' q_num %}" 
+                                               class="btn btn-success btn-sm px-2 py-0.5 rounded-pill shadow-sm">
+                                                {{ q_num }}
+                                            </a>
+                                        {% elif question_status and question_status|get:q_num == 'wrong' %}
+                                            <a href="{% url 'answer_question' q_num %}" 
+                                               class="btn btn-danger btn-sm px-2 py-0.5 rounded-pill shadow-sm">
+                                                {{ q_num }}
+                                            </a>
+                                        {% elif question_status and question_status|get:q_num == 'answered' %}
+                                            <a href="{% url 'answer_question' q_num %}" 
+                                               class="btn btn-info btn-sm px-2 py-0.5 rounded-pill shadow-sm">
+                                                {{ q_num }}
+                                            </a>
+                                        {% else %}
+                                            <a href="{% url 'answer_question' q_num %}" 
+                                               class="btn btn-outline-secondary btn-sm px-2 py-0.5 rounded-pill shadow-sm">
+                                                {{ q_num }}
+                                            </a>
+                                        {% endif %}
+                                    {% endif %}
+                                {% endwith %}
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- 卡片主体 -->
+                <div class="card-body p-2 p-lg-4">
+                    <!-- 问题内容 -->
+                    <div class="mt-2 mt-lg-3 mb-1 mb-lg-2">
+                        <h4 class="text-dark fw-bold">
+                            <i class="bi bi-question-circle text-primary me-2"></i>{{ question.question }}
+                        </h4>
+                    </div>
+                    
+                    <!-- 选项显示 -->
+                    {% if question.options %}
+                        <div class="mt-4">
+                            <h5 class="text-dark fw-semibold mb-2">
+                                <i class="bi bi-list-check text-primary me-2"></i><span data-i18n="sa.options">选项：</span>
+                            </h5>
+                            <div class="d-flex flex-column">
+                                {% for option in question.options %}
+                                    {% with option_letter=forloop.counter|add:64|chr %}
+                                        <div class="mb-2 mb-lg-3 p-3 p-lg-4 rounded-3 hover-shadow transition-all d-flex align-items-start max-w-100 bg-light{% if option_letter == question.answer %} bg-success bg-opacity-10 border-left-4 border-success{% endif %}{% if user_answer == option_letter and option_letter != question.answer %} bg-danger bg-opacity-10 border-left-4 border-danger{% endif %}">
+                                            <div class="d-flex align-items-baseline flex-nowrap flex-grow-1">
+                                                <span class="text-primary fw-bold me-2">{{ option_letter }}.</span>
+                                                <span style="overflow-wrap: break-word; flex-shrink: 1; min-width: 0;">{{ option }}</span>
+                                            </div>
+                                            <div class="ms-auto">
+                                                {% if option_letter == question.answer %}
+                                                    <span class="badge bg-success px-2 py-0.5 rounded-pill" data-i18n="sa.correct_badge">正确答案</span>
+                                                {% endif %}
+                                                {% if user_answer == option_letter and option_letter != question.answer %}
+                                                    <span class="badge bg-danger px-2 py-0.5 rounded-pill" data-i18n="sa.your_badge">你的答案</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    {% endwith %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+                    
+                    <!-- 你的答案 (仅非选择题显示) -->
+                    {% if question.type != '选择题' %}
+                    <div class="mt-4">
+                        <h5 class="text-dark fw-semibold mb-2">
+                            <i class="bi bi-person-check text-primary me-2"></i><span data-i18n="sa.your_answer">你的答案：</span>
+                        </h5>
+                        {% if user_answer %}
+                            <div class="alert alert-info rounded-3 shadow-sm p-3">
+                                {{ user_answer }}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning rounded-3 shadow-sm p-3" data-i18n="sa.no_answer">
+                                你还没有保存答案
+                            </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <!-- 正确答案 -->
+                    <div class="mt-4">
+                        <h5 class="text-dark fw-semibold mb-2">
+                            <i class="bi bi-check-circle-fill text-primary me-2"></i><span data-i18n="sa.correct_answer">正确答案：</span>
+                        </h5>
+                        <div class="alert alert-success rounded-3 shadow-sm p-3">
+                            {{ question.answer }}
+                        </div>
+                    </div>
+                    
+                    <!-- 答案解析 -->
+                    <div class="mt-4">
+                        <h5 class="text-dark fw-semibold mb-2">
+                            <i class="bi bi-lightbulb-fill text-primary me-2"></i><span data-i18n="sa.analysis">答案解析：</span>
+                        </h5>
+                        <div class="alert alert-primary rounded-3 shadow-sm p-3">
+                            {{ question.analysis }}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 卡片底部 -->
+                <div class="card-footer bg-light p-1 p-lg-2 sticky-bottom">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <!-- 返回答题按钮 -->
+                        <a href="{% url 'answer_question' question.id %}" 
+                           class="btn btn-outline-primary rounded-pill px-1.5 px-lg-3 py-0.5 py-lg-1 shadow-sm hover-shadow btn-sm fs-7 fs-lg-6">
+                            <i class="bi bi-arrow-left me-0.5"></i> <span data-i18n="sa.back">返回答题</span>
+                        </a>
+
+                        <!-- 首页按钮 -->
+                        <a href="{% url 'index' %}"
+                           class="btn btn-outline-secondary rounded-pill px-1.5 px-lg-3 py-0.5 py-lg-1 shadow-sm hover-shadow btn-sm fs-7 fs-lg-6">
+                            <i class="bi bi-house me-0.5"></i> <span data-i18n="common.home">首页</span>
+                        </a>
+
+                        <!-- 下一题按钮 -->
+                        {% if next_question %}
+                            <a href="{% url 'answer_question' next_question.id %}"
+                               class="btn btn-outline-primary rounded-pill px-1.5 px-lg-3 py-0.5 py-lg-1 shadow-sm hover-shadow btn-sm fs-7 fs-lg-6">
+                                <span data-i18n="quiz.next">下一题</span> <i class="bi bi-arrow-right ms-0.5"></i>
+                            </a>
+                        {% else %}
+                            <button class="btn btn-outline-primary rounded-pill px-1.5 px-lg-3 py-0.5 py-lg-1 shadow-sm btn-sm fs-7 fs-lg-6" disabled>
+                                <span data-i18n="quiz.next">下一题</span> <i class="bi bi-arrow-right ms-0.5"></i>
+                            </button>
+                        {% endif %}
+                    </div>
+                </div>
+        </div>
+        
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                let touchStartX = 0;
+                const swipeThreshold = 50;
+                
+                document.addEventListener('touchstart', e => {
+                    touchStartX = e.changedTouches[0].screenX;
+                });
+                
+                document.addEventListener('touchend', e => {
+                    if (!touchStartX) return;
+                    const touchEndX = e.changedTouches[0].screenX;
+                    const diff = touchEndX - touchStartX;
+                    
+                    // 左滑（下一题）
+                    if (Math.abs(diff) > swipeThreshold && diff < 0) {
+                        const nextBtn = document.querySelector('.card-footer .btn-outline-primary:last-child');
+                        if (nextBtn && nextBtn.hasAttribute('href')) nextBtn.click();
+                    }
+                    // 右滑（返回答题）
+                    else if (Math.abs(diff) > swipeThreshold && diff > 0) {
+                        const backBtn = document.querySelector('.card-footer .btn-outline-primary:first-child');
+                        if (backBtn && backBtn.hasAttribute('href')) backBtn.click();
+                    }
+                    touchStartX = 0;
+                });
+            });
+        </script>
+    
+    <style>
+        html {
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        
+        /* 滑动容器样式优化 */
+        .question-slider {
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+            height: auto;
+        }
+        
+        .question-track {
+            display: flex;
+            transition: transform 0.3s ease;
+            width: 300%;
+            position: relative;
+            transform: translateX(-100%);
+        }
+        
+        .question-slide {
+            flex: 0 0 33.333%;
+            width: 33.333%;
+            padding: 0 15px;
+            box-sizing: border-box;
+        }
+        
+        /* 恢复Bootstrap容器的默认居中行为 */
+        .container {
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        
+        .row {
+            /* 默认不设置高度，让内容自然撑开 */
+        }
+        .hover-shadow {
+            transition: box-shadow 0.3s ease;
+        }
+        
+        .hover-shadow:hover {
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .transition-all {
+            transition: all 0.3s ease;
+        }
+        
+        .form-check:hover {
+            background-color: #e9ecef !important;
+        }
+        
+        /* 桌面端特定样式 */
+        @media (min-width: 769px) {
+            .question-card {
+                height: auto;
+                margin: 2rem auto;
+            }
+            
+            .card-header.bg-gradient-primary h3.card-title {
+                font-size: 1.3rem;
+            }
+            
+            h4 {
+                font-size: 1.25rem;
+            }
+            
+            h5 {
+                font-size: 1.1rem;
+            }
+            
+            .badge {
+                font-size: 0.9rem;
+            }
+            
+            /* 确保底部按钮在桌面端水平排列且有合适的间距 */
+            .question-card .card-footer .d-flex {
+                gap: 1rem;
+            }
+            
+            /* 增大桌面端底部按钮的大小 */
+            .question-card .card-footer .btn {
+                padding: 0.75rem 1.5rem !important;
+                font-size: 1rem !important;
+                min-height: 44px;
+            }
+        }
+        
+        /* 确保内容正确换行 */
+        * {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        /* 响应式样式 */
+        @media (max-width: 768px) {
+            .question-card {
+                display: flex;
+                flex-direction: column;
+                min-height: 100vh;
+            }
+            
+            .row {
+                min-height: 100vh;
+            }
+            
+            .question-card .card-body {
+                overflow-y: auto;
+                flex: 1;
+                -webkit-overflow-scrolling: touch;
+                padding: 1rem !important;
+            }
+            
+            .question-card .card-footer {
+                position: sticky;
+                bottom: 0;
+                z-index: 100;
+            }
+            
+            /* 确保底部按钮在移动设备上保持水平排列 */
+            .question-card .card-footer .d-flex {
+                flex-direction: row !important;
+                flex-wrap: nowrap;
+                gap: 0.5rem;
+            }
+            
+            h3.card-title {
+                font-size: 1.1rem;
+            }
+            
+            h4, h5 {
+                font-size: 1rem;
+            }
+            
+            .badge {
+                font-size: 0.7rem;
+            }
+            
+            /* 调整卡片主体在移动端的内边距 */
+            .card-body {
+                padding: 1rem !important;
+            }
+            
+            /* 调整题号导航在移动端的显示 */
+            .card-header.bg-light {
+                padding: 0.5rem !important;
+            }
+            
+            /* 强制设置移动端题号容器横向排列 */
+            .card-header.bg-light .d-flex {
+                gap: 0.2rem !important;
+                flex-wrap: nowrap !important;
+                overflow-x: auto !important;
+                white-space: nowrap !important;
+                padding: 0.25rem 0.5rem !important;
+                margin: 0 !important;
+                display: flex !important;
+                flex-direction: row !important;
+                width: auto !important;
+                max-width: 100% !important;
+            }
+            
+            /* 确保按钮横向排列 */
+            .card-header.bg-light .d-flex > * {
+                display: inline-flex !important;
+                white-space: nowrap !important;
+                flex-shrink: 0 !important;
+            }
+            
+            /* 减小题号按钮宽度 */
+            .card-header.bg-light .btn {
+                padding: 0.05rem 0.25rem !important;
+                font-size: 0.5rem !important;
+                min-width: 14px !important;
+                max-width: 22px !important;
+                min-height: 18px !important;
+                max-height: 18px !important;
+                border-radius: 3px !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                line-height: 1 !important;
+                flex-shrink: 0 !important;
+            }
+            
+            /* 调整按钮组在移动端的间距 */
+            .d-flex.gap-3 {
+                gap: 0.75rem !important;
+            }
+            
+            /* 隐藏题号文字在移动端 */
+            .card-header.bg-light span.text-muted {
+                display: none;
+            }
+        }
+    </style>
+{% endblock %}

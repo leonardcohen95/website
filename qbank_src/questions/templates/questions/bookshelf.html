@@ -1,0 +1,73 @@
+{% extends 'questions/base.html' %}
+
+{% block title %}公共书架 - 题库系统{% endblock %}
+
+{% block title_key %}bookshelf{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- 页面标题 -->
+    <div class="mb-4">
+        <h1 class="fw-bold text-primary" data-i18n="bs.title">公共书架</h1>
+        <p class="text-muted" data-i18n="bs.subtitle">查看和下载管理员上传的文档</p>
+    </div>
+    
+    <!-- 文档列表 -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-dark text-white">
+            <h3 class="card-title mb-0" data-i18n="bs.uploaded">已上传文档</h3>
+        </div>
+        <div class="card-body">
+            {% if documents %}            
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th data-i18n="col.title">标题</th>
+                            <th data-i18n="col.file_type">文件类型</th>
+                            <th data-i18n="col.uploaded_at">上传时间</th>
+                            <th data-i18n="col.actions">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for document in documents %}
+                        <tr>
+                            <td>{{ document.title }}</td>
+                            <td>
+                                {% if document.file_type == 'pdf' %}
+                                <span class="badge bg-danger">PDF</span>
+                                {% elif document.file_type == 'txt' %}
+                                <span class="badge bg-success">TXT</span>
+                                {% elif document.file_type == 'doc' or document.file_type == 'docx' %}
+                                <span class="badge bg-primary">Word</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ document.uploaded_at|date:"Y-m-d H:i:s" }}</td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{{ document.file.url }}" class="btn btn-sm btn-info" target="_blank">
+                                        <i class="bi bi-eye"></i> <span data-i18n="common.view">查看</span>
+                                    </a>
+                                    <a href="{{ document.file.url }}" class="btn btn-sm btn-secondary" download>
+                                        <i class="bi bi-download"></i> <span data-i18n="common.download">下载</span>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-bookmarks text-muted fs-5 mb-3"></i>
+                <p class="text-muted" data-i18n="bs.empty">您的书架目前是空的</p>
+                <a href="{% url 'ai_document_management' %}" class="btn btn-primary">
+                    <i class="bi bi-upload me-2"></i><span data-i18n="bs.upload">上传文档</span>
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends 'questions/base.html' %}
+{% load static %}
+{% block title %}我的宠物 - 题库系统{% endblock %}
+{% block title_key %}pet{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow-lg rounded-4 overflow-hidden">
+            <div class="card-header bg-gradient-primary text-white text-center py-4">
+                <div style="font-size:2.5rem;line-height:1;">🐢</div>
+                <h1 class="card-title mt-2 mb-0">我的宠物</h1>
+                <p class="mt-2 mb-0 text-white-50">用学习中心答题赚到的星星，照顾你的电子乌龟</p>
+            </div>
+            <div class="card-body p-4" id="pet-root">
+                <div class="text-center text-muted py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <div class="mt-2">加载中…</div>
+                </div>
+            </div>
+        </div>
+        <div class="text-center mt-3">
+            <a href="{% url 'shop_page' %}" class="btn btn-outline-warning rounded-pill px-4">
+                <i class="bi bi-shop me-2"></i>去星星商店
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/pet.js' %}?v=20261017y"></script>
+{% endblock %}

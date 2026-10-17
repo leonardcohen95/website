@@ -1,0 +1,72 @@
+{% extends 'questions/base.html' %}
+{% load custom_filters %}
+
+{% block title %}面试历史 - 题库系统{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-9 col-xl-8">
+        <div class="card shadow-lg rounded-4 overflow-hidden">
+            <div class="card-header bg-gradient-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>我的模拟面试记录</h5>
+                <a href="{% url 'interview_home' %}" class="btn btn-sm btn-light rounded-pill">
+                    <i class="bi bi-plus-lg me-1"></i>新面试
+                </a>
+            </div>
+
+            <div class="card-body p-0">
+                {% if sessions %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4">时间</th>
+                                <th>模式</th>
+                                <th>题量</th>
+                                <th>得分</th>
+                                <th>用时</th>
+                                <th class="text-end pe-4"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in sessions %}
+                            <tr>
+                                <td class="ps-4 text-nowrap">{{ s.started_at|date:"Y-m-d H:i" }}</td>
+                                <td>{{ s.get_mode_display }}</td>
+                                <td>{{ s.total }}</td>
+                                <td>
+                                    {% if s.is_finished %}
+                                    <span class="badge rounded-pill {% if s.score >= 80 %}bg-success{% elif s.score >= 60 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                                        {{ s.score }} 分
+                                    </span>
+                                    {% else %}
+                                    <span class="badge rounded-pill bg-secondary">未完成</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-nowrap">{% if s.is_finished %}{{ s.duration_seconds|mmss }}{% else %}—{% endif %}</td>
+                                <td class="text-end pe-4">
+                                    {% if s.is_finished %}
+                                    <a href="{% url 'interview_report' s.id %}" class="btn btn-sm btn-outline-primary rounded-pill">查看报告</a>
+                                    {% else %}
+                                    <a href="{% url 'interview_run' s.id %}" class="btn btn-sm btn-primary rounded-pill">继续</a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center p-5">
+                    <i class="bi bi-inbox display-1 text-muted"></i>
+                    <p class="text-muted mt-3 mb-4">还没有面试记录，来一场模拟面试练练手吧！</p>
+                    <a href="{% url 'interview_home' %}" class="btn btn-primary rounded-pill px-4 min-height-44">
+                        <i class="bi bi-play-fill me-1"></i>开始第一次面试
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

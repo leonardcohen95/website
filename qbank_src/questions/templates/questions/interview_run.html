@@ -1,0 +1,274 @@
+{% extends 'questions/base.html' %}
+
+{% block title %}模拟面试进行中 - 题库系统{% endblock %}
+
+{% block content %}
+<style>
+    /* 沉浸模式：只隐藏主页脚，保留备案信息 */
+    footer.py-4 { display: none; }
+
+    .interview-stage { max-width: 760px; margin: 0 auto; }
+
+    .stage-head {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 1rem; margin-bottom: .75rem;
+    }
+
+    .countdown-chip {
+        display: inline-flex; align-items: center; gap: .4rem;
+        font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.05rem;
+        padding: .35rem .95rem; border-radius: 999px;
+        background: #e7f1ff; color: #0d6efd; transition: all .2s ease;
+    }
+    .countdown-chip.warn { background: #fff3cd; color: #b8860b; }
+    .countdown-chip.danger { background: #f8d7da; color: #dc3545; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+
+    .time-track { height: 8px; border-radius: 999px; background: #e9ecef; overflow: hidden; }
+    .time-track > i { display: block; height: 100%; width: 100%; background: #0d6efd; transition: width 1s linear, background .3s ease; }
+
+    .q-card { border: none; border-radius: 1.25rem; box-shadow: 0 12px 40px rgba(0, 0, 0, .08); }
+    .q-text { font-size: 1.15rem; line-height: 1.7; font-weight: 600; }
+
+    .option-row {
+        display: flex; align-items: flex-start; gap: .75rem;
+        border: 2px solid #e9ecef; border-radius: .9rem;
+        padding: 1rem 1.1rem; margin-bottom: .7rem;
+        cursor: pointer; transition: all .15s ease;
+    }
+    .option-row:hover { border-color: #0d6efd; background: #f6faff; }
+    .option-row:has(input:checked) { border-color: #0d6efd; background: #e7f1ff; box-shadow: 0 4px 14px rgba(13, 110, 253, .15); }
+    .option-badge {
+        flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%;
+        background: #f1f3f5; color: #495057; font-weight: 700; font-size: .85rem;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .option-row:has(input:checked) .option-badge { background: #0d6efd; color: #fff; }
+
+    .fade-swap { animation: fadeSwap .28s ease; }
+    @keyframes fadeSwap { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+</style>
+
+<div class="interview-stage">
+    <div class="stage-head">
+        <div class="text-muted fw-semibold">
+            <i class="bi bi-person-video3 me-1"></i>模拟面试进行中
+            <span class="ms-2 text-dark">第 <span id="idx">{{ index }}</span> / {{ total }} 题</span>
+        </div>
+        <div class="countdown-chip" id="chip">
+            <i class="bi bi-stopwatch"></i><span id="cd">--:--</span>
+        </div>
+    </div>
+    <div class="time-track mb-4"><i id="timebar"></i></div>
+
+    <div class="card q-card mb-4">
+        <div class="card-body p-4 p-lg-5" id="q-wrap">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge bg-primary rounded-pill px-3 py-2" id="q-no">第 {{ index }} 题</span>
+                <span class="badge bg-secondary rounded-pill px-3 py-2" id="q-type">—</span>
+            </div>
+            <p class="q-text mb-4" id="q-text">加载中…</p>
+            <div id="q-body"></div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div class="text-muted small">
+            <i class="bi bi-lock-fill me-1"></i>确认后本题<b>不可修改</b>，且<b>不能回看</b>已答题目
+        </div>
+        <button type="button" id="confirm-btn" class="btn btn-primary btn-lg rounded-pill px-5">
+            <span id="confirm-label">确认并下一题</span> <i class="bi bi-arrow-right"></i>
+        </button>
+    </div>
+
+    <div class="alert alert-light border rounded-4 small mt-4 mb-0">
+        <i class="bi bi-info-circle text-primary me-1"></i>
+        倒计时结束会自动提交本题并翻到下一题；全部答完后自动交卷、统一判分。
+    </div>
+</div>
+
+<script>
+(function () {
+    const ANSWER_URL = "{% url 'interview_answer' session.id %}";
+    const SUBMIT_URL = "{% url 'interview_submit' session.id %}";
+
+    let current = {{ question_json|safe }};
+    let curIndex = {{ index }};
+    let total = {{ total }};
+    let limit = {{ limit }};
+    let draft = '';
+    let remain = limit;
+    let tickId = null;
+    let busy = false;
+    let finished = false;
+
+    const el = {
+        idx: document.getElementById('idx'),
+        chip: document.getElementById('chip'),
+        cd: document.getElementById('cd'),
+        bar: document.getElementById('timebar'),
+        no: document.getElementById('q-no'),
+        type: document.getElementById('q-type'),
+        text: document.getElementById('q-text'),
+        body: document.getElementById('q-body'),
+        wrap: document.getElementById('q-wrap'),
+        btn: document.getElementById('confirm-btn'),
+        label: document.getElementById('confirm-label'),
+    };
+
+    function escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s == null ? '' : String(s);
+        return d.innerHTML;
+    }
+
+    function getCookie(name) {
+        const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+        return m ? decodeURIComponent(m.pop()) : '';
+    }
+
+    function renderQuestion(q) {
+        el.type.textContent = q.type;
+        el.text.textContent = q.question;
+        el.no.textContent = '第 ' + curIndex + ' 题';
+        el.idx.textContent = curIndex;
+        draft = '';
+        if (q.type === '选择题') {
+            el.body.innerHTML = (q.options || []).map(function (opt, i) {
+                const L = String.fromCharCode(65 + i);
+                return '<label class="option-row">' +
+                    '<input type="radio" name="mc" value="' + L + '" class="d-none">' +
+                    '<span class="option-badge">' + L + '</span>' +
+                    '<span>' + escapeHtml(opt) + '</span></label>';
+            }).join('');
+        } else {
+            el.body.innerHTML =
+                '<textarea id="sa-input" class="form-control rounded-3" rows="4" ' +
+                'placeholder="请在这里写下你的回答…（Ctrl+Enter 提交）"></textarea>';
+            const ta = document.getElementById('sa-input');
+            ta.addEventListener('input', function () { draft = ta.value; });
+        }
+        el.label.textContent = (curIndex >= total) ? '确认并交卷' : '确认并下一题';
+        el.wrap.classList.remove('fade-swap');
+        void el.wrap.offsetWidth;
+        el.wrap.classList.add('fade-swap');
+    }
+
+    el.body.addEventListener('change', function (e) {
+        if (e.target.matches('input[type=radio]')) { draft = e.target.value; }
+    });
+
+    function paintTimer() {
+        const m = Math.floor(remain / 60);
+        const s = remain % 60;
+        el.cd.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+        const ratio = limit > 0 ? Math.max(0, remain) / limit : 0;
+        el.bar.style.width = (ratio * 100) + '%';
+        el.chip.classList.remove('warn', 'danger');
+        if (remain <= 10) {
+            el.bar.style.background = '#dc3545';
+            el.chip.classList.add('danger');
+        } else if (ratio <= 0.4) {
+            el.bar.style.background = '#ffc107';
+            el.chip.classList.add('warn');
+        } else {
+            el.bar.style.background = '#0d6efd';
+        }
+    }
+
+    function stopTimer() {
+        if (tickId) { clearInterval(tickId); tickId = null; }
+    }
+
+    function startTimer() {
+        stopTimer();
+        remain = limit;
+        paintTimer();
+        tickId = setInterval(function () {
+            remain -= 1;
+            if (remain <= 0) {
+                remain = 0;
+                paintTimer();
+                stopTimer();
+                confirmAnswer(true);
+            } else {
+                paintTimer();
+            }
+        }, 1000);
+    }
+
+    function confirmAnswer(auto) {
+        if (busy || finished) { return; }
+        busy = true;
+        stopTimer();
+        el.btn.disabled = true;
+
+        fetch(ANSWER_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({ answer: draft })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data || !data.ok) { throw new Error('bad'); }
+            if (data.done) { submit(); return; }
+            current = data.question;
+            curIndex = data.index;
+            total = data.total;
+            limit = data.limit;
+            renderQuestion(current);
+            busy = false;
+            el.btn.disabled = false;
+            startTimer();
+        })
+        .catch(function () {
+            busy = false;
+            el.btn.disabled = false;
+            alert('提交本题失败，请检查网络后重试。');
+            startTimer();
+        });
+    }
+
+    function submit() {
+        stopTimer();
+        finished = true;
+        el.label.textContent = '正在判分…';
+        fetch(SUBMIT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({})
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data && data.redirect) { window.location.href = data.redirect; }
+            else { throw new Error('bad'); }
+        })
+        .catch(function () {
+            finished = false;
+            el.label.textContent = '确认并交卷';
+            alert('交卷失败，请重试。');
+        });
+    }
+
+    el.btn.addEventListener('click', function () { confirmAnswer(false); });
+
+    document.addEventListener('keydown', function (e) {
+        if (finished) { return; }
+        if (current.type === '选择题' && e.key === 'Enter') {
+            e.preventDefault();
+            confirmAnswer(false);
+        } else if (current.type === '简答题' && e.key === 'Enter' && e.ctrlKey) {
+            e.preventDefault();
+            confirmAnswer(false);
+        }
+    });
+
+    window.addEventListener('beforeunload', function (e) {
+        if (!finished && !busy) { e.preventDefault(); e.returnValue = ''; }
+    });
+
+    renderQuestion(current);
+    startTimer();
+})();
+</script>
+{% endblock %}

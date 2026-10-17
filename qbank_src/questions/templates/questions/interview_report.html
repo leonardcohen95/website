@@ -1,0 +1,117 @@
+{% extends 'questions/base.html' %}
+{% load custom_filters %}
+
+{% block title %}面试报告 - 题库系统{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-9 col-xl-8">
+        <!-- 成绩总览 -->
+        <div class="card shadow-lg rounded-4 overflow-hidden mb-3">
+            <div class="card-header bg-gradient-primary text-white text-center py-4">
+                <div class="display-3 fw-bold lh-1">{{ session.score }}</div>
+                <div class="opacity-75">综合得分（满分 100）</div>
+                <div class="mt-2 small opacity-75">
+                    <i class="bi bi-clipboard-check me-1"></i>{{ session.get_mode_display }}
+                    &nbsp;·&nbsp;<i class="bi bi-calendar3 me-1"></i>{{ session.started_at|date:"Y-m-d H:i" }}
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row text-center g-3">
+                    <div class="col-4">
+                        <div class="p-3 bg-light rounded-4 h-100">
+                            <div class="fs-3 fw-bold text-success">{{ session.correct }}</div>
+                            <div class="small text-muted">答对</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-3 bg-light rounded-4 h-100">
+                            <div class="fs-3 fw-bold text-primary">{{ session.correct }} / {{ session.total }}</div>
+                            <div class="small text-muted">正确率</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-3 bg-light rounded-4 h-100">
+                            <div class="fs-3 fw-bold text-dark">{{ session.duration_seconds|mmss }}</div>
+                            <div class="small text-muted">用时</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-center mt-3">
+                    <span class="badge rounded-pill fs-6 px-3 py-2 {% if session.score >= 80 %}bg-success{% elif session.score >= 60 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                        {% if session.score >= 85 %}表现优秀，可以自信地去面试啦
+                        {% elif session.score >= 60 %}基本达标，再巩固下错题就更稳了
+                        {% else %}还有不少薄弱点，建议重点复盘的错题如下
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        {% if ai_enabled and ai_review %}
+        <!-- AI 点评（大模型额度恢复后启用） -->
+        <div class="card shadow-sm rounded-4 mb-3 border-start border-4 border-info">
+            <div class="card-body">
+                <h6 class="text-info mb-2"><i class="bi bi-robot me-2"></i>AI 点评</h6>
+                <div class="small">{{ ai_review|linebreaks }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 逐题回顾 -->
+        <h5 class="mb-3"><i class="bi bi-list-check text-primary me-2"></i>逐题回顾</h5>
+
+        {% for a in answers %}
+        <div class="card shadow-sm rounded-4 mb-3 border-start border-4 {% if a.is_correct %}border-success{% else %}border-danger{% endif %}">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="badge bg-primary rounded-pill">第 {{ forloop.counter }} 题</span>
+                    <span class="badge rounded-pill {% if a.is_correct %}bg-success{% else %}bg-danger{% endif %}">
+                        {% if a.is_correct %}<i class="bi bi-check-lg me-1"></i>正确{% else %}<i class="bi bi-x-lg me-1"></i>错误{% endif %}
+                    </span>
+                </div>
+                <p class="fw-semibold">{{ a.question.question }}</p>
+                <div class="small">
+                    <div class="mb-1">
+                        <span class="text-muted">你的答案：</span>
+                        <span class="fw-semibold {% if a.is_correct %}text-success{% else %}text-danger{% endif %}">
+                            {{ a.user_answer|default:"（未作答）" }}
+                        </span>
+                    </div>
+                    <div class="mb-1">
+                        <span class="text-muted">正确答案：</span>
+                        <span class="fw-semibold text-success">{{ a.question.answer }}</span>
+                    </div>
+                    {% if a.question.type == '简答题' %}
+                    <div class="mb-1">
+                        <span class="text-muted">文本相似度：</span>
+                        <span class="fw-semibold text-primary">{{ a.similarity|floatformat:2 }}</span>
+                        <span class="text-muted">（≥ 0.50 判定为答对）</span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% if a.question.analysis %}
+                <div class="mt-2 p-3 bg-light rounded-3 small">
+                    <span class="fw-semibold text-secondary">解析：</span>{{ a.question.analysis }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% empty %}
+        <div class="alert alert-info rounded-4">本次面试没有有效的作答记录。</div>
+        {% endfor %}
+
+        <div class="text-center my-4 d-flex flex-wrap gap-2 justify-content-center">
+            <a href="{% url 'interview_home' %}" class="btn btn-primary rounded-pill px-4 min-height-44">
+                <i class="bi bi-arrow-repeat me-1"></i>再来一次
+            </a>
+            <a href="{% url 'interview_history' %}" class="btn btn-outline-primary rounded-pill px-4 min-height-44">
+                <i class="bi bi-clock-history me-1"></i>历史记录
+            </a>
+            <a href="{% url 'index' %}" class="btn btn-outline-secondary rounded-pill px-4 min-height-44">
+                <i class="bi bi-house me-1"></i>返回首页
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

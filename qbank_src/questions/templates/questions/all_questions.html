@@ -1,0 +1,83 @@
+{% extends 'questions/base.html' %}
+
+{% block title %}题目列表 - 题库系统{% endblock %}
+
+{% block title_key %}questions{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- 页面标题 -->
+    <div class="mb-4">
+        <h1 class="fw-bold text-primary" data-i18n="ql.title">题目列表</h1>
+        <p class="text-muted" data-i18n="ql.subtitle">这里是系统中所有的题目列表，您可以查看详细信息。</p>
+    </div>
+    
+    <!-- 题目统计 -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0" data-i18n="ql.stats">题目统计</h5>
+                <div class="text-end">
+                    <span class="badge bg-primary rounded-pill px-3 py-1 fs-6"><span data-i18n="ql.total">总题目数：</span>{{ questions.count }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 题目列表 -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-dark text-white">
+            <h3 class="card-title mb-0" data-i18n="ql.all">所有题目</h3>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th data-i18n="ql.col_id">题目ID</th>
+                            <th data-i18n="ql.col_type">题目类型</th>
+                            <th data-i18n="ql.col_content">题目内容</th>
+                            <th data-i18n="ql.col_options">选项</th>
+                            <th data-i18n="ql.col_answer">正确答案</th>
+                            <th data-i18n="ql.col_analysis">答案解析</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for question in questions %}
+                        <tr>
+                            <td>{{ question.id }}</td>
+                            <td>
+                                <span class="badge {% if question.type == '选择题' %}bg-primary{% else %}bg-success{% endif %} rounded-pill" data-i18n-qtype>
+                                    {{ question.type }}
+                                </span>
+                            </td>
+                            <td>{{ question.question }}</td>
+                            <td>
+                                {% if question.options %}
+                                    <ul class="list-unstyled mb-0">
+                                        {% for option in question.options %}
+                                            <li>{{ option }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <span class="text-muted" data-i18n="ql.no_options">无选项（简答题）</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ question.answer }}</td>
+                            <td>{{ question.analysis }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            {% if questions.count == 0 %}
+            <div class="text-center py-5">
+                <i class="bi bi-book-fill text-muted fs-5 mb-3"></i>
+                <p class="text-muted" data-i18n="ql.empty">暂无题目记录</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

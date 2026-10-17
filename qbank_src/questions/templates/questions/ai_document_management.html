@@ -1,0 +1,107 @@
+{% extends 'questions/base.html' %}
+
+{% block title %}AI文档管理 - 题库系统{% endblock %}
+
+{% block title_key %}aidocs{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- 页面标题 -->
+    <div class="mb-4">
+        <h1 class="fw-bold text-primary" data-i18n="adm.title">AI文档管理</h1>
+        <p class="text-muted" data-i18n="adm.subtitle">上传文档供AI助理学习使用</p>
+    </div>
+    
+    <!-- 上传文档卡片 -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h3 class="card-title mb-0" data-i18n="adm.upload_new">上传新文档</h3>
+        </div>
+        <div class="card-body">
+            <form action="{% url 'ai_document_management' %}" method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="title" class="form-label" data-i18n="adm.doc_title">文档标题</label>
+                            <input type="text" class="form-control" id="title" name="title" required>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="file" class="form-label" data-i18n="adm.select_file">选择文件</label>
+                            <input type="file" class="form-control" id="file" name="file" accept=".pdf,.txt,.doc,.docx" required>
+                            <small class="text-muted" data-i18n="adm.file_tip">支持PDF、TXT、Word格式文件</small>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-upload me-2"></i><span data-i18n="adm.upload_btn">上传文档</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 文档列表 -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-dark text-white">
+            <h3 class="card-title mb-0" data-i18n="bs.uploaded">已上传文档</h3>
+        </div>
+        <div class="card-body">
+            {% if documents %}            
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th data-i18n="col.title">标题</th>
+                            <th data-i18n="col.file_type">文件类型</th>
+                            <th data-i18n="col.uploaded_at">上传时间</th>
+                            <th data-i18n="col.uploader">上传者</th>
+                            <th data-i18n="col.actions">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for document in documents %}
+                        <tr>
+                            <td>{{ document.title }}</td>
+                            <td>
+                                {% if document.file_type == 'pdf' %}
+                                <span class="badge bg-danger">PDF</span>
+                                {% elif document.file_type == 'txt' %}
+                                <span class="badge bg-success">TXT</span>
+                                {% elif document.file_type == 'doc' or document.file_type == 'docx' %}
+                                <span class="badge bg-primary">Word</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ document.uploaded_at|date:"Y-m-d H:i:s" }}</td>
+                            <td>{{ document.uploaded_by.username }}</td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{{ document.file.url }}" class="btn btn-sm btn-info" target="_blank">
+                                        <i class="bi bi-eye"></i> <span data-i18n="common.view">查看</span>
+                                    </a>
+                                    <form action="{% url 'delete_ai_document' document.id %}" method="POST" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-danger" data-i18n-confirm="admin.confirm_delete_doc">
+                                            <i class="bi bi-trash"></i> <span data-i18n="common.delete">删除</span>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-file-earmark-text text-muted fs-5 mb-3"></i>
+                <p class="text-muted" data-i18n="adm.empty">暂无上传的文档</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
