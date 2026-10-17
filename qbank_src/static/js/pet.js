@@ -1422,34 +1422,6 @@
       drawLeg(-rw * 1.0, armY, armY + 17 * s, r.walkPhase + Math.PI, s, false);
       drawLeg(rw * 1.0, armY, armY + 17 * s, r.walkPhase, s, false);
 
-      // ---- 头（抬到躯干上方，正视：双眼左右对称 → 头不歪）----
-      ctx.save();
-      var headX = (col.rx * 0.86 + r.headExt * 7 + (r.headPeck || 0)) * s;
-      ctx.translate(0, -rh * 0.58);     // 头底部落在躯干上缘附近，脖子从领口伸出
-      ctx.rotate(-Math.PI / 2);
-      ctx.translate(-headX, 0);         // 抵消 drawHead 的前伸偏移，让头居中于颈上
-      drawHead(r, s, 0, true);          // side=0 正视；外饰在这里自己摆正后绘制
-      // 外饰：头整体转了 -90°，帽子需要再转 +90° 才在正视下是正的，安在头顶。
-      // 关键：帽子必须放在与头部完全相同的变换系（含 headX 平移 + headTurn 旋转），
-      // 否则乌龟转头时帽子会留在原位、与头脱节。
-      var accs = r.isOpp ? (r.accessories || [])
-                        : ((petState && petState.pet && petState.pet.accessories) || []);
-      if (accs.indexOf('acc_santa') >= 0) {
-        ctx.save();
-        // 复刻 drawHead 内部的平移与旋转，让帽子与头共坐标系
-        ctx.translate(headX, 0);                    // headDrop 在 side=0 时为 0
-        ctx.rotate(r.headTurn * 0.35);
-        // 让帽子以"帽檐正好搭在头顶"的方式佩戴（与爬行态 drawHat 的相对关系一致）：
-        // 原 drawHat 帽檐中心在自身坐标 (4.6hs, -6.2hs)，相对头顶 (5hs, -8hs) 的偏移为 (-0.4hs, 1.8hs)；
-        // 这里额外旋转 +90° 让帽子直立，偏移向量旋转后变为 (-1.8hs, -0.4hs)，
-        // 故 translate = 头顶 + 旋转后偏移 - 旋转后的帽檐坐标(6.2hs, 4.6hs)。
-        ctx.translate(-1.6 * hs * s, -14.4 * hs * s);
-        ctx.rotate(Math.PI / 2);
-        drawHat(s);
-        ctx.restore();
-      }
-      ctx.restore();
-
       // ---- 武士盔甲（叠加在直立乌龟之上）----
       // 配色：黑漆甲 + 金箔缘饰 + 朱红内衬
       var armorDark = '#141414', armorMid = '#2a2723', armorLight = '#4c463c';
@@ -1618,6 +1590,34 @@
       ng.addColorStop(0, armorLight); ng.addColorStop(1, armorMid);
       ctx.fillStyle = ng; ctx.fill();
       ctx.lineWidth = 1.1 * s; ctx.strokeStyle = gold; ctx.stroke();
+      ctx.restore();
+
+      // ---- 头（抬到躯干上方，正视：双眼左右对称 → 头不歪）----
+      // 放在盔甲之后绘制，确保头和帽子不会被胸甲盖住
+      ctx.save();
+      var headX = (col.rx * 0.86 + r.headExt * 7 + (r.headPeck || 0)) * s;
+      ctx.translate(0, -rh * 0.58);     // 头底部落在躯干上缘附近，脖子从领口伸出
+      ctx.rotate(-Math.PI / 2);
+      ctx.translate(-headX, 0);         // 抵消 drawHead 的前伸偏移，让头居中于颈上
+      drawHead(r, s, 0, true);          // side=0 正视；外饰在这里自己摆正后绘制
+      // 外饰：头整体转了 -90°，帽子需要再转 +90° 才在正视下是正的，安在头顶。
+      // 关键：帽子必须放在与头部完全相同的变换系（含 headX 平移 + headTurn 旋转），
+      // 否则乌龟转头时帽子会留在原位、与头脱节。
+      var accs = r.isOpp ? (r.accessories || [])
+                        : ((petState && petState.pet && petState.pet.accessories) || []);
+      if (accs.indexOf('acc_santa') >= 0) {
+        ctx.save();
+        // 复刻 drawHead 内部的平移与旋转，让帽子与头共坐标系
+        ctx.translate(headX, 0);                    // headDrop 在 side=0 时为 0
+        ctx.rotate(r.headTurn * 0.35);
+        // 帽子放在头顶：drawHat 帽檐经 +90° 旋转后在头局部坐标中为竖椭圆，
+        // 中心 translate 后约 (4.6hs, -15.4hs)，映射到屏幕 x≈-15.4hs，
+        // 帽檐右缘约 -6hs，正好位于头部左眼(screen x=-4.4hs)的左侧，不遮脸。
+        ctx.translate(-1.6 * hs * s, -20.0 * hs * s);
+        ctx.rotate(Math.PI / 2);
+        drawHat(s);
+        ctx.restore();
+      }
       ctx.restore();
 
       // ---- 武器：握在右手（右侧前腿）----
