@@ -292,26 +292,33 @@
     // 家纹
     if (C.emblem) C.emblem(ctx, s, 0, -SHELL_RY * 0.14, 6.6 * s, C);
 
-    // 袖（肩甲）—— 双肩各三片叠瓦，垂在肩外侧（不压胸甲）
+    // 袖（肩甲）—— 罩住肩关节，两片叠瓦向外下微展，不压胸甲
     [-1, 1].forEach(function (sg) {
-      var sx = sg * (SHELL_RX * 1.12), sy = dTop + 8 * s;
-      ctx.save(); ctx.translate(sx, sy); ctx.rotate(sg * 0.62);
-      for (var L = 0; L < 3; L++) {
-        var g2 = grad(ctx, -8 * s, 0, 8 * s, 0, C.dark, C.lite, C.dark);
-        plate(ctx, -8 * s, L * 6 * s, 16 * s, 10.5 * s, 4 * s, g2, C.edge, 1.1 * s);
+      ctx.save();
+      ctx.translate(sg * 28, -9);
+      ctx.rotate(-sg * 0.5);
+      for (var L = 0; L < 2; L++) {
+        var g2 = grad(ctx, -6 * s, 0, 6 * s, 0, C.dark, C.lite, C.dark);
+        plate(ctx, -6 * s, (L * 6 - 4) * s, 12 * s, 10.5 * s, 4.5 * s, g2, C.edge, 1.1 * s);
       }
+      // 肩头圆盖
+      ctx.beginPath();
+      ctx.ellipse(0, -4 * s, 6.5 * s, 4.5 * s, 0, Math.PI, Math.PI * 2);
+      ctx.fillStyle = grad(ctx, -6.5 * s, -5 * s, 6.5 * s, 1 * s, C.lite, C.mid, C.dark);
+      ctx.fill();
+      ctx.lineWidth = 1.1 * s; ctx.strokeStyle = C.edge; ctx.stroke();
       ctx.restore();
     });
 
-    // 笼手（臂甲）—— 小臂外侧
+    // 笼手（臂甲）—— 覆盖小臂，贴合前臂走向
     [-1, 1].forEach(function (sg) {
-      var ax = sg * (SHELL_RX * 0.9 + 11), ay = 15 * s;
+      var ax = sg * 40.5, ay = 28;
       var g3 = grad(ctx, ax - 5 * s, 0, ax + 5 * s, 0, C.dark, C.lite, C.dark);
-      plate(ctx, ax - 5.5 * s, ay - 9 * s, 11 * s, 22 * s, 4 * s, g3, C.edge, 1.1 * s, sg * 0.35, ax, ay);
+      plate(ctx, ax - 5.5 * s, ay - 8 * s, 11 * s, 16 * s, 4 * s, g3, C.edge, 1.1 * s, -sg * 0.28, ax, ay);
       ctx.strokeStyle = C.edgeDark; ctx.lineWidth = 0.9 * s;
       for (var i = 1; i <= 2; i++) {
-        ctx.beginPath(); ctx.moveTo(ax - 5 * s, ay - 9 * s + i * 6.5 * s);
-        ctx.lineTo(ax + 5 * s, ay - 9 * s + i * 6.5 * s); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ax - 5 * s, ay - 8 * s + i * 5.5 * s);
+        ctx.lineTo(ax + 5 * s, ay - 8 * s + i * 5.5 * s); ctx.stroke();
       }
     });
 
