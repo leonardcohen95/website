@@ -29,6 +29,147 @@
     }).catch(function () { return { error: '网络错误' }; });
   }
 
+  /* ---------------- PixiJS 视觉增强层 ----------------
+     渐进式增强：原有 Canvas 2D 绘制与状态机逻辑完全不动，改由 Pixi
+     在宠物场地之上叠加一层「泛光(bloom) + 高光粒子」。Pixi 加载失败时
+     自动降级为纯 Canvas，功能不受影响。 */
+  var PixiFX = (function () {
+    var lib = 'idle';                 // idle | loading | ready | failed
+    var waiters = [];
+    var app = null, tex = null, glow = null, gfx = null;
+    var W = 0, H = 0, live = false;
+    var pool = [], MAXP = 180, cursor = 0;
+
+    function settle(ok) {
+      lib = ok ? 'ready' : 'failed';
+      var w = waiters; waiters = [];
+      for (var i = 0; i < w.length; i++) w[i](ok);
+    }
+    function addScript(src, next) {
+      var s = document.createElement('script');
+      s.async = true; s.src = src;
+      s.onload = function () { next(!!(window.PIXI && window.PIXI.Application)); };
+      s.onerror = function () { next(false); };
+      document.head.appendChild(s);
+    }
+    function ensure(cb) {
+      if (lib === 'ready') return cb(true);
+      if (lib === 'failed') return cb(false);
+      waiters.push(cb);
+      if (lib === 'loading') return;
+      lib = 'loading';
+      addScript('/static/js/vendor/pixi.min.js', function (ok) {
+        if (ok) return settle(true);
+        addScript('https://cdn.jsdelivr.net/npm/pixi.js@7.4.2/dist/pixi.min.js', settle);
+      });
+    }
+
+    function destroy() {
+      live = false;
+      if (app) { try { app.destroy(true, { children: true, texture: false, baseTexture: false }); } catch (e) {} }
+      app = null; tex = null; glow = null; gfx = null;
+    }
+
+    function build(canvasEl, pen) {
+      var dpr = window.devicePixelRatio || 1;
+      var w = pen.clientWidth || 300, h = pen.clientHeight || 200;
+      app = new PIXI.Application({
+        width: w, height: h, resolution: dpr, autoDensity: true,
+        backgroundAlpha: 0, antialias: true, powerPreference: 'high-performance'
+      });
+      app.ticker.stop();                       // 复用外层 rAF，避免双循环
+      var view = app.view;
+      view.style.position = 'absolute';
+      view.style.left = '0'; view.style.top = '0';
+      view.style.width = '100%'; view.style.height = '100%';
+      view.style.pointerEvents = 'none';
+      if (view.parentNode) view.parentNode.removeChild(view);
+      pen.appendChild(view);
+
+      tex = PIXI.Texture.from(canvasEl);       // 把 2D 画布作为 GPU 纹理
+      glow = new PIXI.Sprite(tex);
+      glow.width = w; glow.height = h;
+      glow.alpha = 0.4;
+      glow.blendMode = PIXI.BLEND_MODES.ADD;
+      glow.filters = [new PIXI.BlurFilter(3, 3)];
+      app.stage.addChild(glow);
+
+      gfx = new PIXI.Graphics();               // 所有粒子共用一张 Graphics，省开销
+      app.stage.addChild(gfx);
+
+      pool = [];
+      for (var i = 0; i < MAXP; i++) {
+        pool.push({ a: false, x: 0, y: 0, vx: 0, vy: 0, r: 2, life: 0, max: 1, c: 0xffffff, g: 150 });
+      }
+      cursor = 0;
+      W = w; H = h; live = true;
+    }
+
+    function attach(canvasEl, pen) {
+      destroy();
+      if (!canvasEl || !pen) return;
+      ensure(function (ok) {
+        if (!ok) return;                                      // 加载失败 → 保持纯 Canvas
+        if (document.getElementById('pet-canvas') !== canvasEl || !canvasEl.parentNode) return;
+        try { build(canvasEl, pen); } catch (e) { destroy(); }
+      });
+    }
+
+    function alloc() {
+      for (var i = 0; i < MAXP; i++) {
+        var p = pool[(cursor + i) % MAXP];
+        if (!p.a) { cursor = (cursor + i + 1) % MAXP; return p; }
+      }
+      cursor = (cursor + 1) % MAXP;
+      return pool[cursor];
+    }
+
+    function emit(x, y, color, count, spd, up, size, life) {
+      if (!live) return;
+      count = count || 8;
+      for (var i = 0; i < count; i++) {
+        var p = alloc();
+        var a = Math.random() * Math.PI * 2;
+        var sp = (spd || 60) * (0.4 + Math.random() * 0.8);
+        p.a = true; p.x = x; p.y = y;
+        p.vx = Math.cos(a) * sp;
+        p.vy = Math.sin(a) * sp - (up || 0);
+        p.r = (size || 2) * (0.6 + Math.random() * 0.8);
+        p.life = p.max = (life || 0.7) * (0.6 + Math.random() * 0.8);
+        p.c = color != null ? color : 0xffffff;
+        p.g = 150;
+      }
+    }
+
+    function tick(dt) {
+      if (!live || !app) return;
+      try { tex.baseTexture.update(); } catch (e) {}          // 重新上传刚画好的画布
+      gfx.clear();
+      for (var i = 0; i < MAXP; i++) {
+        var p = pool[i];
+        if (!p.a) continue;
+        p.life -= dt;
+        if (p.life <= 0) { p.a = false; continue; }
+        p.vy += p.g * dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        var k = p.life / p.max;                               // 1 → 0
+        gfx.beginFill(p.c, Math.min(1, k * 1.4));
+        gfx.drawCircle(p.x, p.y, p.r * (0.5 + k * 0.5));
+        gfx.endFill();
+      }
+      app.renderer.render(app.stage);
+    }
+
+    return {
+      attach: attach,
+      tick: tick,
+      active: function () { return live; },
+      burst: function (x, y, color, count) { emit(x, y, color, count, 70, 20, 2.4, 0.8); },
+      sparkle: function (x, y) { emit(x, y, 0xfff3c4, 1, 18, 34, 1.8, 1.1); }
+    };
+  })();
+
   /* ---------------- 宠物页 ---------------- */
   var petState = null;   // 最近一次 /api/pet/status 返回的数据
 
@@ -524,6 +665,7 @@
       canvas.height = pen.clientHeight * dpr;
     }
     resize();
+    PixiFX.attach(canvas, pen);
     var ctx = canvas.getContext('2d');
     var W = pen.clientWidth, H = pen.clientHeight;
     var margin = 40;
@@ -1905,6 +2047,7 @@
     /* ---------- 对战：双龟靠近 → 按服务端时间线互相攻击 ---------- */
     function pushFloater(x, y, text, color) {
       roaming.floaters.push({ x: x, y: y, life: 1.15, text: text, color: color });
+      PixiFX.burst(x, y, 0xffca28, 8);
     }
 
     function drawShadow(a) {
@@ -2217,6 +2360,7 @@
           roaming.state = 'idle';
           roaming.timer = 0.8 + Math.random();
           roaming.headExtTarget = 0.2;
+          PixiFX.burst(roaming.x, roaming.y - 18, 0x8bc34a, 14);
           var cb = roaming.onFeedDone;
           roaming.onFeedDone = null;
           if (cb) cb();
@@ -2273,6 +2417,16 @@
 
       // 对战 HUD：双方生命值 / 武力值
       if (roaming.battle) drawBattleHud();
+
+      // Pixi 增强层：把本帧画布交给 Pixi 做泛光合成，再叠加粒子
+      if (!roaming.battle) {
+        roaming.fxT = (roaming.fxT || 0) - dt;
+        if (roaming.fxT <= 0) {
+          roaming.fxT = 0.45 + Math.random() * 0.7;
+          PixiFX.sparkle(roaming.x + Math.cos(roaming.angle) * 12 * bodyScale(), roaming.y - 8);
+        }
+      }
+      PixiFX.tick(dt);
 
       roaming.raf = requestAnimationFrame(frame);
     }
