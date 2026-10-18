@@ -2460,10 +2460,17 @@
     switchTab('power');
   }
 
+  // 排行榜按钮：按钮在静态 HTML 中，脚本加载时已存在，直接绑定（兼容移动端）
+  var _lbBtn = document.getElementById('pet-leaderboard-btn');
+  if (_lbBtn) {
+    _lbBtn.style.pointerEvents = 'auto';
+    _lbBtn.addEventListener('click', showLeaderboard);
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     if (document.getElementById('pet-root')) renderPet();
     if (document.getElementById('shop-root')) renderShop();
     var lbBtn = document.getElementById('pet-leaderboard-btn');
-    if (lbBtn) lbBtn.addEventListener('click', showLeaderboard);
+    if (lbBtn && !lbBtn._lbBound) { lbBtn._lbBound = true; lbBtn.addEventListener('click', showLeaderboard); }
   });
 })();
