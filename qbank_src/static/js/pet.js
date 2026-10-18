@@ -636,7 +636,7 @@
     }
 
     /* 画一条腿：从髋点到脚。髋点/落脚点由调用方按视角算好，这里只做步态 */
-    function drawLeg(ax, ay, footY, phase, s, far) {
+    function drawLeg(ax, ay, footY, phase, s, far, wearBoots) {
       var tk = col.leg;                       // 品种腿粗细
       var sinP = Math.sin(phase);
       // 摆动：sin>0 时脚在身体后方（支撑相），sin<0 时脚向前迈（摆动相）
@@ -693,6 +693,8 @@
         ctx.ellipse(footX + i * 1.6 * tk * s, footYF + clawDir * 2.4 * tk * s, 0.8 * s, 1.2 * s, 0, 0, Math.PI * 2);
         ctx.fill();
       }
+      // 外饰：小皮靴套在脚上
+      if (wearBoots) drawBoot(footX, footYF, s, tk);
     }
 
     /* 盾片纹理：中央椎盾 + 两侧肋盾 + 边缘分块（供各品种复用） */
@@ -953,6 +955,255 @@
       ctx.restore();
     }
 
+    /* 外饰：黄金王冠。金属光泽 + 红蓝宝，戴在头顶 */
+    function drawCrown(s) {
+      var hs = col.hsize;
+      var cx = 4.6 * hs * s;
+      var cy = -6.2 * hs * s;
+      var w = 8.5 * hs * s, h = 5.5 * hs * s;
+      ctx.save();
+      // 底座
+      ctx.beginPath();
+      ctx.moveTo(cx - w * 0.5, cy + h * 0.1);
+      ctx.lineTo(cx + w * 0.5, cy + h * 0.1);
+      ctx.lineTo(cx + w * 0.42, cy - h * 0.45);
+      ctx.lineTo(cx + w * 0.22, cy - h * 0.1);
+      ctx.lineTo(cx, cy - h * 0.95);
+      ctx.lineTo(cx - w * 0.22, cy - h * 0.1);
+      ctx.lineTo(cx - w * 0.42, cy - h * 0.45);
+      ctx.closePath();
+      var cg = ctx.createLinearGradient(cx, cy - h, cx, cy + h * 0.1);
+      cg.addColorStop(0, '#fff2a8');
+      cg.addColorStop(0.4, '#f5c518');
+      cg.addColorStop(1, '#b8860b');
+      ctx.fillStyle = cg; ctx.fill();
+      ctx.lineWidth = 1 * s; ctx.strokeStyle = '#7a5a00'; ctx.stroke();
+      // 宝石：中红、两侧蓝
+      var gems = [[cx, cy - h * 0.05, '#e02020'], [cx - w * 0.28, cy + h * 0.02, '#2860d6'], [cx + w * 0.28, cy + h * 0.02, '#2860d6']];
+      gems.forEach(function (g) {
+        ctx.beginPath(); ctx.arc(g[0], g[1], 1.3 * hs * s, 0, Math.PI * 2);
+        var gg = ctx.createRadialGradient(g[0] - 0.4 * s, g[1] - 0.4 * s, 0.2 * s, g[0], g[1], 1.4 * hs * s);
+        gg.addColorStop(0, '#fff'); gg.addColorStop(0.4, g[2]); gg.addColorStop(1, shade(g[2], -40));
+        ctx.fillStyle = gg; ctx.fill();
+        ctx.lineWidth = 0.6 * s; ctx.strokeStyle = shade(g[2], -60); ctx.stroke();
+      });
+      ctx.restore();
+    }
+
+    /* 外饰：江湖斗笠。宽檐锥形草帽，竹编纹 */
+    function drawBambooHat(s) {
+      var hs = col.hsize;
+      var cx = 4.6 * hs * s;
+      var cy = -5.8 * hs * s;
+      var rx = 11 * hs * s, ry = 3.4 * hs * s;
+      var tipY = cy - 7 * hs * s;
+      ctx.save();
+      // 帽身：三角形（俯视椭圆帽檐 + 锥顶）
+      ctx.beginPath();
+      ctx.moveTo(cx - rx, cy + ry * 0.15);
+      ctx.quadraticCurveTo(cx, tipY - 1 * hs * s, cx + rx, cy + ry * 0.15);
+      ctx.quadraticCurveTo(cx, cy + ry * 0.5, cx - rx, cy + ry * 0.15);
+      ctx.closePath();
+      var bg = ctx.createLinearGradient(cx - rx, cy, cx + rx, cy);
+      bg.addColorStop(0, '#c9a04a');
+      bg.addColorStop(0.5, '#e6c76a');
+      bg.addColorStop(1, '#b8892f');
+      ctx.fillStyle = bg; ctx.fill();
+      ctx.lineWidth = 1.1 * s; ctx.strokeStyle = '#7a5a1a'; ctx.stroke();
+      // 竹编横纹
+      ctx.strokeStyle = 'rgba(122,90,26,.55)';
+      ctx.lineWidth = 0.7 * s;
+      for (var i = 1; i <= 4; i++) {
+        var yy = cy + ry * 0.1 - (ry * 0.1 + (tipY - cy)) * (i / 5);
+        ctx.beginPath();
+        ctx.moveTo(cx - rx * (1 - i * 0.16), yy);
+        ctx.quadraticCurveTo(cx, yy - 1.5 * s, cx + rx * (1 - i * 0.16), yy);
+        ctx.stroke();
+      }
+      // 帽尖小珠
+      ctx.beginPath(); ctx.arc(cx, tipY, 1.1 * hs * s, 0, Math.PI * 2);
+      ctx.fillStyle = '#8a6a20'; ctx.fill();
+      ctx.restore();
+    }
+
+    /* 外饰：星辰巫师帽。深蓝紫高尖帽 + 星尘 + 月 */
+    function drawWizardHat(s) {
+      var hs = col.hsize;
+      var cx = 4.6 * hs * s;
+      var cy = -6.2 * hs * s;
+      var rx = 9.5 * hs * s, ry = 3.6 * hs * s;
+      var tipX = cx + 3 * hs * s;
+      var tipY = cy - 20 * hs * s;
+      ctx.save();
+      // 帽身
+      ctx.beginPath();
+      ctx.moveTo(cx - rx, cy + ry * 0.2);
+      ctx.quadraticCurveTo(cx - rx * 0.4, cy - 10 * hs * s, tipX, tipY);
+      ctx.quadraticCurveTo(cx + rx * 0.5, cy - 9 * hs * s, cx + rx, cy + ry * 0.2);
+      ctx.closePath();
+      var wg = ctx.createLinearGradient(cx - rx, cy, tipX, tipY);
+      wg.addColorStop(0, '#3a2a6b');
+      wg.addColorStop(0.6, '#5b3fa0');
+      wg.addColorStop(1, '#241849');
+      ctx.fillStyle = wg; ctx.fill();
+      ctx.lineWidth = 1.1 * s; ctx.strokeStyle = '#150d33'; ctx.stroke();
+      // 星尘
+      ctx.fillStyle = '#ffe98a';
+      for (var i = 0; i < 7; i++) {
+        var sx = cx - rx * 0.6 + Math.random() * rx * 1.2;
+        var sy = cy - 2 * hs * s - Math.random() * 14 * hs * s;
+        if (sy < tipY + 2 * hs * s) continue;
+        ctx.beginPath(); ctx.arc(sx, sy, 0.7 * s, 0, Math.PI * 2); ctx.fill();
+      }
+      // 帽檐（深色圈）
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#2a1d54'; ctx.fill();
+      ctx.lineWidth = 1 * s; ctx.strokeStyle = '#120a2e'; ctx.stroke();
+      // 帽尖月亮
+      ctx.beginPath(); ctx.arc(tipX + 0.5 * s, tipY + 1.5 * hs * s, 1.6 * hs * s, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff5c2'; ctx.fill();
+      ctx.restore();
+    }
+
+    /* 外饰：黑超墨镜。两眼深色镜片 + 鼻梁架，贴在脸部 */
+    function drawGlasses(s) {
+      var hs = col.hsize;
+      // 眼睛大约在头部椭圆中心 (5hs,0) 两侧
+      var eyeY = 0.5 * hs * s;
+      var lensR = 2.6 * hs * s;
+      var lx = 2.6 * hs * s, rx = 7.2 * hs * s;
+      ctx.save();
+      // 左镜片
+      ctx.beginPath(); ctx.ellipse(lx, eyeY, lensR, lensR * 0.8, 0, 0, Math.PI * 2);
+      var lg = ctx.createLinearGradient(lx, eyeY - lensR, lx, eyeY + lensR);
+      lg.addColorStop(0, '#1a1a1a'); lg.addColorStop(1, '#4a4a4a');
+      ctx.fillStyle = lg; ctx.fill();
+      ctx.lineWidth = 1.1 * s; ctx.strokeStyle = '#000'; ctx.stroke();
+      // 右镜片
+      ctx.beginPath(); ctx.ellipse(rx, eyeY, lensR, lensR * 0.8, 0, 0, Math.PI * 2);
+      ctx.fillStyle = lg; ctx.fill();
+      ctx.lineWidth = 1.1 * s; ctx.strokeStyle = '#000'; ctx.stroke();
+      // 鼻梁架
+      ctx.beginPath(); ctx.moveTo(lx + lensR * 0.8, eyeY); ctx.lineTo(rx - lensR * 0.8, eyeY);
+      ctx.lineWidth = 1.2 * s; ctx.strokeStyle = '#000'; ctx.stroke();
+      // 高光
+      ctx.fillStyle = 'rgba(255,255,255,.35)';
+      ctx.beginPath(); ctx.ellipse(lx - lensR * 0.3, eyeY - lensR * 0.35, lensR * 0.35, lensR * 0.18, -0.4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(rx - lensR * 0.3, eyeY - lensR * 0.35, lensR * 0.35, lensR * 0.18, -0.4, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+
+    /* 外饰：针织围巾。绕颈一圈，两端垂在胸前，位于脖子根部 */
+    function drawScarf(s) {
+      var hs = col.hsize;
+      // 脖子根部大约在头部椭圆左缘附近：x ≈ -4hs, y 围绕 0
+      var nx = -4 * hs * s;
+      ctx.save();
+      // 绕颈的环（一段粗弧）
+      ctx.beginPath();
+      ctx.ellipse(nx, 0, 3.5 * hs * s, 4.2 * hs * s, 0, Math.PI * 0.15, Math.PI * 1.1);
+      ctx.lineWidth = 3.4 * hs * s;
+      ctx.lineCap = 'round';
+      var sg = ctx.createLinearGradient(nx - 4 * hs * s, -4 * hs * s, nx + 4 * hs * s, 4 * hs * s);
+      sg.addColorStop(0, '#d64040'); sg.addColorStop(0.5, '#e86565'); sg.addColorStop(1, '#a82828');
+      ctx.strokeStyle = sg; ctx.stroke();
+      // 针织纹理
+      ctx.strokeStyle = 'rgba(120,20,20,.4)'; ctx.lineWidth = 0.7 * s;
+      for (var a = Math.PI * 0.2; a < Math.PI * 1.05; a += 0.35) {
+        var px = nx + Math.cos(a) * 3.5 * hs * s;
+        var py = Math.sin(a) * 4.2 * hs * s;
+        ctx.beginPath(); ctx.moveTo(px - 1.5 * s, py - 1.5 * s); ctx.lineTo(px + 1.5 * s, py + 1.5 * s); ctx.stroke();
+      }
+      // 两条尾端垂在脖子下方
+      ctx.fillStyle = sg;
+      ctx.beginPath();
+      ctx.moveTo(nx - 1.5 * hs * s, 3 * hs * s);
+      ctx.quadraticCurveTo(nx - 2 * hs * s, 8 * hs * s, nx - 1 * hs * s, 11 * hs * s);
+      ctx.lineTo(nx + 1.2 * hs * s, 10.5 * hs * s);
+      ctx.quadraticCurveTo(nx + 0.5 * hs * s, 7 * hs * s, nx + 1.5 * hs * s, 3 * hs * s);
+      ctx.closePath(); ctx.fill();
+      ctx.lineWidth = 0.8 * s; ctx.strokeStyle = '#7a1818'; ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(nx + 1.5 * hs * s, 3.5 * hs * s);
+      ctx.quadraticCurveTo(nx + 2.6 * hs * s, 8.5 * hs * s, nx + 3.2 * hs * s, 12 * hs * s);
+      ctx.lineTo(nx + 5.2 * hs * s, 11.3 * hs * s);
+      ctx.quadraticCurveTo(nx + 4 * hs * s, 7.5 * hs * s, nx + 3 * hs * s, 3.5 * hs * s);
+      ctx.closePath(); ctx.fill();
+      ctx.stroke();
+      // 尾端流苏
+      ctx.strokeStyle = '#c03030'; ctx.lineWidth = 0.6 * s;
+      for (var t = 0; t < 4; t++) {
+        ctx.beginPath(); ctx.moveTo(nx - 0.5 * hs * s + t * 0.7 * hs * s, 10.8 * hs * s); ctx.lineTo(nx - 0.5 * hs * s + t * 0.7 * hs * s, 12 * hs * s); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(nx + 3.4 * hs * s + t * 0.5 * hs * s, 11.6 * hs * s); ctx.lineTo(nx + 3.4 * hs * s + t * 0.5 * hs * s, 12.8 * hs * s); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    /* 外饰：英雄红披风。披在龟壳后方/背后，纯装饰 */
+    function drawCape(s, side) {
+      var rx = col.rx * s, ry = col.ry * s;
+      ctx.save();
+      // 披风从壳顶两侧垂下，略大于壳，后方飘动
+      ctx.beginPath();
+      ctx.moveTo(-rx * 0.55, -ry * 0.7);
+      ctx.quadraticCurveTo(-rx * 1.25, -ry * 0.2, -rx * 1.15, ry * 0.9);
+      ctx.quadraticCurveTo(-rx * 0.7, ry * 0.6, -rx * 0.3, ry * 0.4);
+      ctx.lineTo(rx * 0.3, ry * 0.4);
+      ctx.quadraticCurveTo(rx * 0.7, ry * 0.6, rx * 1.15, ry * 0.9);
+      ctx.quadraticCurveTo(rx * 1.25, -ry * 0.2, rx * 0.55, -ry * 0.7);
+      ctx.quadraticCurveTo(0, -ry * 0.55, -rx * 0.55, -ry * 0.7);
+      ctx.closePath();
+      var cg = ctx.createLinearGradient(0, -ry, 0, ry);
+      cg.addColorStop(0, '#c02020');
+      cg.addColorStop(0.5, '#e03838');
+      cg.addColorStop(1, '#8a1414');
+      ctx.fillStyle = cg; ctx.fill();
+      ctx.lineWidth = 1.2 * s; ctx.strokeStyle = '#5a0e0e'; ctx.stroke();
+      // 披风内领（深色）
+      ctx.beginPath();
+      ctx.moveTo(-rx * 0.4, -ry * 0.55);
+      ctx.quadraticCurveTo(0, -ry * 0.45, rx * 0.4, -ry * 0.55);
+      ctx.lineTo(rx * 0.25, -ry * 0.35);
+      ctx.quadraticCurveTo(0, -ry * 0.3, -rx * 0.25, -ry * 0.35);
+      ctx.closePath();
+      ctx.fillStyle = '#3a0a0a'; ctx.fill();
+      ctx.restore();
+    }
+
+    /* 外饰：小皮靴。套在一只脚上（footX, footYF 为脚底坐标） */
+    function drawBoot(footX, footYF, s, tk) {
+      var bw = 4.6 * tk * s, bh = 4.2 * tk * s;
+      ctx.save();
+      // 靴身
+      ctx.beginPath();
+      ctx.moveTo(footX - bw * 0.9, footYF);
+      ctx.lineTo(footX - bw * 0.5, footYF - bh);
+      ctx.lineTo(footX + bw * 0.5, footYF - bh);
+      ctx.lineTo(footX + bw * 1.1, footYF - bh * 0.4);
+      ctx.quadraticCurveTo(footX + bw * 1.3, footYF, footX + bw * 0.9, footYF + 0.5 * s);
+      ctx.lineTo(footX - bw * 0.9, footYF + 0.5 * s);
+      ctx.closePath();
+      var bg = ctx.createLinearGradient(footX, footYF - bh, footX, footYF);
+      bg.addColorStop(0, '#6b3a1a');
+      bg.addColorStop(0.5, '#8a4e22');
+      bg.addColorStop(1, '#4a2810');
+      ctx.fillStyle = bg; ctx.fill();
+      ctx.lineWidth = 1 * s; ctx.strokeStyle = '#2e1808'; ctx.stroke();
+      // 鞋底
+      ctx.beginPath();
+      ctx.moveTo(footX - bw * 0.95, footYF + 0.5 * s);
+      ctx.lineTo(footX + bw * 1.15, footYF + 0.5 * s);
+      ctx.lineWidth = 1.8 * s; ctx.strokeStyle = '#2e1808'; ctx.stroke();
+      // 鞋带
+      ctx.strokeStyle = '#e8d0a0'; ctx.lineWidth = 0.8 * s;
+      for (var i = 0; i < 3; i++) {
+        var yy = footYF - bh * 0.25 - i * bh * 0.22;
+        ctx.beginPath(); ctx.moveTo(footX - bw * 0.35, yy); ctx.lineTo(footX + bw * 0.35, yy - 1 * s); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     /* 画头 + 脖子：品种头部特征（大小/眼睛/眉骨/侧纹/耳斑） */
     function drawHead(r, s, side, noAcc) {
       var hs = col.hsize;
@@ -1125,10 +1376,17 @@
         ctx.stroke();
       }
 
-      // 外饰：圣诞帽戴在头顶（跟着头的转向、伸缩一起动；对战双方各戴各自的外饰）
+      // 外饰：头部相关（帽子/墨镜/围巾），戴在头上跟着头的转向、伸缩一起动
       var accs = r.isOpp ? (r.accessories || [])
                         : ((petState && petState.pet && petState.pet.accessories) || []);
-      if (!noAcc && accs.indexOf('acc_santa') >= 0) drawHat(s);
+      if (!noAcc) {
+        if (accs.indexOf('acc_santa') >= 0) drawHat(s);
+        if (accs.indexOf('acc_crown') >= 0) drawCrown(s);
+        if (accs.indexOf('acc_bamboo') >= 0) drawBambooHat(s);
+        if (accs.indexOf('acc_wizard') >= 0) drawWizardHat(s);
+        if (accs.indexOf('acc_glasses') >= 0) drawGlasses(s);
+        if (accs.indexOf('acc_scarf') >= 0) drawScarf(s);
+      }
 
       ctx.restore();
     }
@@ -1404,12 +1662,25 @@
       var rh = rx;                      // 直立躯干半高（垂直）= 壳横径
       ctx.save();
 
+      // 已装备的外饰
+      var accs = r.isOpp ? (r.accessories || [])
+                        : ((petState && petState.pet && petState.pet.accessories) || []);
+      var wearBoots = accs.indexOf('acc_boots') >= 0;
+
+      // 披风：披在躯干后方（先于腿和躯干绘制）
+      if (accs.indexOf('acc_cape') >= 0) {
+        ctx.save();
+        ctx.rotate(-Math.PI / 2);
+        drawCape(s, 0.55);
+        ctx.restore();
+      }
+
       // ---- 后腿（站立支撑）----
       var legHipY = ry * 0.55;
       var legFootY = ry + 20 * s;
       var legSpread = rx * 0.42;
-      drawLeg(-legSpread, legHipY, legFootY, r.walkPhase, s, false);
-      drawLeg(legSpread, legHipY, legFootY, r.walkPhase + Math.PI, s, false);
+      drawLeg(-legSpread, legHipY, legFootY, r.walkPhase, s, false, wearBoots);
+      drawLeg(legSpread, legHipY, legFootY, r.walkPhase + Math.PI, s, false, wearBoots);
 
       // ---- 躯干（龟壳直立）----
       ctx.save();
@@ -1419,8 +1690,8 @@
 
       // ---- 前腿（化为双臂，垂在躯干两侧）----
       var armY = -rh * 0.60;
-      drawLeg(-rw * 1.0, armY, armY + 17 * s, r.walkPhase + Math.PI, s, false);
-      drawLeg(rw * 1.0, armY, armY + 17 * s, r.walkPhase, s, false);
+      drawLeg(-rw * 1.0, armY, armY + 17 * s, r.walkPhase + Math.PI, s, false, wearBoots);
+      drawLeg(rw * 1.0, armY, armY + 17 * s, r.walkPhase, s, false, wearBoots);
 
       // ---- 头（抬到躯干上方，正视：双眼左右对称 → 头不歪）----
       ctx.save();
@@ -1432,24 +1703,18 @@
       // 外饰：头整体转了 -90°，帽子需要再转 +90° 才在正视下是正的，安在头顶。
       // 关键：帽子必须放在与头部完全相同的变换系（含 headX 平移 + headTurn 旋转），
       // 否则乌龟转头时帽子会留在原位、与头脱节。
-      var accs = r.isOpp ? (r.accessories || [])
-                        : ((petState && petState.pet && petState.pet.accessories) || []);
-      if (accs.indexOf('acc_santa') >= 0) {
-        ctx.save();
-        // 复刻 drawHead 内部的平移与旋转，让帽子与头共坐标系
-        ctx.translate(headX, 0);                    // headDrop 在 side=0 时为 0
-        ctx.rotate(r.headTurn * 0.35);
-        // 帽子放在头部正上方（屏幕上方 = 头部坐标系的 -X 方向）：
-        // 头部椭圆中心 (5hs,0)、长半轴 10hs，头顶端点在局部坐标 (15hs, 0) → 屏幕正上方。
-        // 帽檐中心 (4.6hs, -6.2hs)，经 +90° 旋转后屏幕坐标 = (px+dy, py-dx)。
-        // 令帽檐中心 X=0（居中）、Y≈-16hs（略高于头顶 -15hs，让帽檐搭住头顶）：
-        //   4.6 + dy = 0  → dy = -4.6
-        //  -6.2 - dx = -16 → dx = 9.8
-        ctx.translate(9.8 * hs * s, -4.6 * hs * s);
-        ctx.rotate(Math.PI / 2);
-        drawHat(s);
-        ctx.restore();
-      }
+      ctx.save();
+      ctx.translate(headX, 0);                    // headDrop 在 side=0 时为 0
+      ctx.rotate(r.headTurn * 0.35);
+      ctx.translate(9.8 * hs * s, -4.6 * hs * s);
+      ctx.rotate(Math.PI / 2);
+      if (accs.indexOf('acc_santa') >= 0) drawHat(s);
+      if (accs.indexOf('acc_crown') >= 0) drawCrown(s);
+      if (accs.indexOf('acc_bamboo') >= 0) drawBambooHat(s);
+      if (accs.indexOf('acc_wizard') >= 0) drawWizardHat(s);
+      if (accs.indexOf('acc_glasses') >= 0) drawGlasses(s);
+      if (accs.indexOf('acc_scarf') >= 0) drawScarf(s);
+      ctx.restore();
       ctx.restore();
 
       // ---- 武士盔甲（叠加在直立乌龟之上）----
@@ -1857,6 +2122,12 @@
       // 尾巴
       drawTail(r, s);
 
+      // 披风：披在龟壳后方（先于腿和壳绘制，作为背景层）
+      var accsBody = r.isOpp ? (r.accessories || [])
+                             : ((petState && petState.pet && petState.pet.accessories) || []);
+      if (accsBody.indexOf('acc_cape') >= 0) drawCape(s, side);
+      var wearBoots = accsBody.indexOf('acc_boots') >= 0;
+
       // 腿：俯视时伸向壳体两侧；侧身时从壳底（腹甲侧）向下蹬地
       var legBX = col.rx * 0.5 * s;
       var legBYTop = col.ry * 0.78 * s;
@@ -1878,7 +2149,7 @@
       });
       // 远的腿先画，保证前后层次
       legs.sort(function (a, b) { return (b.far ? 1 : 0) - (a.far ? 1 : 0); });
-      legs.forEach(function (L) { drawLeg(L.ax, L.ay, L.footY, L.phase, s, L.far); });
+      legs.forEach(function (L) { drawLeg(L.ax, L.ay, L.footY, L.phase, s, L.far, wearBoots); });
 
       // 龟壳
       drawShell(s, side);
