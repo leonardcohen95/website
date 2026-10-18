@@ -1225,10 +1225,11 @@
     }
 
     /* 外饰：飘动斗篷（站姿专用，较短）。从双肩垂下，底边随 `wind` 波浪起伏 */
-    function drawFlowingCape(s, wind, tw, th) {
+    function drawFlowingCape(s, wind, tw, th, shX, shY) {
       ctx.save();
-      var shL = -tw * 0.82, shR = tw * 0.82;
-      var shY = -th * 0.5;
+      shX = shX || tw * 0.82;
+      shY = shY || -th * 0.5;
+      var shL = -shX, shR = shX;
       var capeLen = th * 1.25;                    // 较短：到腿中部
       var billow = 1 + Math.sin(wind) * 0.1 + Math.sin(wind * 2.1) * 0.05;
       var segs = 14, pts = [];
@@ -1278,14 +1279,17 @@
       ctx.restore();
     }
 
-    /* 装备超人斗篷时的站姿：乌龟直立、正脸朝镜头（露腹甲），斗篷在身后飘逸。
-       完全自绘正脸头部（眼睛左右排列），外饰坐标直接对齐，不依赖俯视图的旋转变换。 */
+    /* 装备超人斗篷时的站姿：乌龟直立行走。
+       - 正面（side≈0）：露腹甲，眼睛左右排列
+       - 侧身（side>0.5）：露龟壳侧面，头部侧视，斗篷在身后飘逸
+       外饰坐标直接对齐，不依赖俯视图的旋转变换。 */
     function drawStandingCape(r, s, wid) {
       var rx = col.rx * s;
       var ry = col.ry * s;
       var hs = col.hsize;
-      var tw = ry;      // 躯干半宽（壳竖径 → 正脸宽度）
-      var th = rx;      // 躯干半高（壳横径 → 正脸高度）
+      var tw = ry;      // 躯干半宽
+      var th = rx;      // 躯干半高
+      var side = r.side;
       ctx.save();
 
       var accs = r.isOpp ? (r.accessories || [])
@@ -1293,152 +1297,261 @@
       var wearBoots = accs.indexOf('acc_boots') >= 0;
       var wind = performance.now() / 500 + (r.state === 'walk' ? r.walkPhase * 1.2 : 0);
 
-      // ---- 飘动斗篷（最底层）----
-      drawFlowingCape(s, wind, tw, th);
+      // 肩部坐标（斗篷、手臂共用）
+      var shX = tw * 0.78;
+      var shY = -th * 0.62;
 
-      // ---- 后腿（站立支撑）----
-      var legSpread = tw * 0.42;
-      var hipY = th * 0.55;
-      var footY = th + 15 * s;
-      drawLeg(-legSpread, hipY, footY, r.walkPhase, s, false, wearBoots);
-      drawLeg(legSpread, hipY, footY, r.walkPhase + Math.PI, s, false, wearBoots);
+      if (side > 0.5) {
+        // ============ 侧身视角 ============
+        var flip = r.angle > 0 ? 1 : -1;   // 面朝方向
+        // 斗篷（在身后）
+        ctx.save();
+        ctx.scale(flip, 1);
+        drawFlowingCape(s, wind, tw, th);
+        ctx.restore();
 
-      // ---- 腹甲（正脸躯干）----
-      drawBelly(s, tw, th);
+        // 后腿（远侧先画，近侧后画）
+        var legSpread = tw * 0.32;
+        var hipY = th * 0.5;
+        var footY = th + 14 * s;
+        drawLeg(-legSpread, hipY, footY, r.walkPhase, s, true, wearBoots);
+        drawLeg(legSpread, hipY, footY, r.walkPhase + Math.PI, s, false, wearBoots);
 
-      // ---- 前腿（化为双臂，垂在躯干两侧）----
-      var armY = -th * 0.5;
-      drawLeg(-tw * 0.9, armY, armY + 13 * s, r.walkPhase + Math.PI, s, false, wearBoots);
-      drawLeg(tw * 0.9, armY, armY + 13 * s, r.walkPhase, s, false, wearBoots);
+        // 躯干：龟壳侧面直立
+        ctx.save();
+        ctx.rotate(-Math.PI / 2);
+        drawShell(s, 1);
+        ctx.restore();
 
-      // ---- 正脸头部（眼睛左右排列）+ 外饰 ----
-      var headCY = -th - 1.5 * hs * s;     // 头顶位于躯干上缘上方
-      ctx.save();
-      ctx.translate(0, headCY);
-      var headRX = 9.5 * hs * s, headRY = 8.5 * hs * s;
+        // 前腿（双臂）
+        drawLeg(-tw * 0.7, shY, shY + 14 * s, r.walkPhase + Math.PI, s, true, wearBoots);
+        drawLeg(tw * 0.7, shY, shY + 14 * s, r.walkPhase, s, false, wearBoots);
 
-      // 脖子（连接头与躯干）
-      ctx.beginPath();
-      ctx.moveTo(-3.5 * hs * s, headRY - 1 * s);
-      ctx.quadraticCurveTo(-3 * hs * s, headRY + 4 * s, -2 * hs * s, headRY + 6 * s);
-      ctx.lineTo(2 * hs * s, headRY + 6 * s);
-      ctx.quadraticCurveTo(3 * hs * s, headRY + 4 * s, 3.5 * hs * s, headRY - 1 * s);
-      ctx.closePath();
-      ctx.fillStyle = col.skin; ctx.fill();
-      ctx.lineWidth = 1.2 * s; ctx.strokeStyle = col.outline; ctx.stroke();
-
-      // 头主体（正脸椭圆）
-      ctx.beginPath();
-      ctx.ellipse(0, 0, headRX, headRY, 0, 0, Math.PI * 2);
-      var hg = ctx.createRadialGradient(-2 * s, -3 * s, 1 * s, 0, 0, headRX);
-      hg.addColorStop(0, col.skinLight); hg.addColorStop(1, col.skin);
-      ctx.fillStyle = hg; ctx.fill();
-      ctx.lineWidth = 1.4 * s; ctx.strokeStyle = col.outline; ctx.stroke();
-
-      // 头侧条纹（草龟/黄缘）：左右脸颊各一条
-      if (col.stripe) {
-        ctx.strokeStyle = col.stripe; ctx.lineWidth = 1.6 * s;
-        [-1, 1].forEach(function (sgn) {
+        // 头部（侧视）
+        ctx.save();
+        ctx.translate(0, -th - 1 * hs * s);
+        ctx.scale(flip, 1);
+        // 脖子
+        ctx.beginPath();
+        ctx.moveTo(-2 * hs * s, 6 * hs * s);
+        ctx.quadraticCurveTo(3 * hs * s, 4 * hs * s, 5 * hs * s, 0);
+        ctx.lineTo(5 * hs * s, 3 * hs * s);
+        ctx.quadraticCurveTo(3 * hs * s, 7 * hs * s, -2 * hs * s, 8 * hs * s);
+        ctx.closePath();
+        ctx.fillStyle = col.skin; ctx.fill();
+        ctx.lineWidth = 1.2 * s; ctx.strokeStyle = col.outline; ctx.stroke();
+        // 头（侧视椭圆）
+        ctx.beginPath();
+        ctx.ellipse(6 * hs * s, 0, 9 * hs * s, 7.5 * hs * s, 0, 0, Math.PI * 2);
+        var hg = ctx.createRadialGradient(4 * hs * s, -2 * hs * s, 1 * s, 6 * hs * s, 0, 9 * hs * s);
+        hg.addColorStop(0, col.skinLight); hg.addColorStop(1, col.skin);
+        ctx.fillStyle = hg; ctx.fill();
+        ctx.lineWidth = 1.4 * s; ctx.strokeStyle = col.outline; ctx.stroke();
+        // 脸颊条纹
+        if (col.stripe) {
+          ctx.strokeStyle = col.stripe; ctx.lineWidth = 1.6 * s;
           ctx.beginPath();
-          ctx.moveTo(sgn * headRX * 0.5, -headRY * 0.55);
-          ctx.quadraticCurveTo(sgn * headRX * 0.85, -headRY * 0.1, sgn * headRX * 0.6, headRY * 0.45);
+          ctx.moveTo(2 * hs * s, -4 * hs * s);
+          ctx.quadraticCurveTo(6 * hs * s, -3 * hs * s, 10 * hs * s, -1 * hs * s);
           ctx.stroke();
-        });
-      }
-      // 耳斑（巴西龟）
-      if (col.ear) {
-        ctx.fillStyle = col.ear;
-        [-1, 1].forEach(function (sgn) {
-          ctx.beginPath();
-          ctx.ellipse(sgn * headRX * 0.78, 0, 2.2 * s, 1.7 * s, 0, 0, Math.PI * 2);
-          ctx.fill();
-        });
-      }
-
-      // 眼睛（左右排列，正视）
-      var eyeX = 4.6 * hs * s, eyeY = -1.4 * hs * s, eyeR = col.eyeR * s;
-      [-1, 1].forEach(function (sgn) {
-        var ex = sgn * eyeX, ey = eyeY;
+        }
+        // 单眼（侧视）
+        var ex = 9 * hs * s, ey = -1 * hs * s, eyeR = col.eyeR * s;
         ctx.beginPath();
         ctx.ellipse(ex, ey, eyeR * 1.05, eyeR * 1.15, 0, 0, Math.PI * 2);
         ctx.fillStyle = '#fff'; ctx.fill();
         ctx.lineWidth = 0.8 * s; ctx.strokeStyle = col.outline; ctx.stroke();
-        var lookX = Math.cos(r.headTurn) * 0.5 * s;
-        ctx.beginPath(); ctx.arc(ex + lookX, ey, eyeR * 0.78, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(ex, ey, eyeR * 0.78, 0, Math.PI * 2);
         ctx.fillStyle = col.eye; ctx.fill();
-        ctx.beginPath(); ctx.arc(ex + lookX, ey, eyeR * 0.36, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(ex, ey, eyeR * 0.36, 0, Math.PI * 2);
         ctx.fillStyle = '#141414'; ctx.fill();
-        ctx.beginPath(); ctx.arc(ex + lookX + 0.5 * s, ey - 0.6 * s, 0.6 * s, 0, Math.PI * 2);
-        ctx.fillStyle = '#fff'; ctx.fill();
-      });
-
-      // 鼻孔 + 嘴
-      ctx.fillStyle = col.outline;
-      ctx.beginPath(); ctx.arc(-0.8 * s, 2.4 * hs * s, 0.55 * s, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(0.8 * s, 2.4 * hs * s, 0.55 * s, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(-3 * hs * s, 5 * hs * s);
-      ctx.quadraticCurveTo(0, 6.2 * hs * s, 3 * hs * s, 5 * hs * s);
-      ctx.lineWidth = 1.2 * s; ctx.strokeStyle = shade(col.skinDark, -20); ctx.stroke();
-
-      // ---- 头部外饰（正脸坐标直接对齐）----
-      // 帽子：头顶正上方。帽子函数以 cx≈4.6hs 为中心，故左移 4.6hs 使其中线对齐 x=0
-      ctx.save();
-      ctx.translate(-4.6 * hs * s, -headRY - 0.5 * hs * s);
-      if (accs.indexOf('acc_santa') >= 0) drawHat(s);
-      if (accs.indexOf('acc_crown') >= 0) drawCrown(s);
-      if (accs.indexOf('acc_bamboo') >= 0) drawBambooHat(s);
-      if (accs.indexOf('acc_wizard') >= 0) drawWizardHat(s);
-      ctx.restore();
-
-      // 墨镜：眼睛高度，旋转 90° 让镜片从上下变为左右排列
-      if (accs.indexOf('acc_glasses') >= 0) {
-        ctx.save();
-        // drawGlasses 镜片在 (7hs, ±4.4hs)；旋转 π/2 后 → (∓4.4hs, 7hs)
-        // 需平移使 y=7hs 落到 eyeY=-1.4hs，故 ty = eyeY - 7hs
-        ctx.translate(0, eyeY - 7 * hs * s);
-        ctx.rotate(Math.PI / 2);
-        drawGlasses(s, 0);
-        ctx.restore();
-      }
-
-      // 围巾：脖子根部水平环绕，两条尾端垂在胸前（正脸专用）
-      if (accs.indexOf('acc_scarf') >= 0) {
-        ctx.save();
-        var sy = headRY + 0.5 * hs * s;
-        // 环绕脖子的横带
+        // 鼻孔 + 嘴
+        ctx.fillStyle = col.outline;
+        ctx.beginPath(); ctx.arc(13.5 * hs * s, 1.5 * hs * s, 0.55 * s, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath();
-        ctx.ellipse(0, sy, headRX * 0.82, 3.2 * hs * s, 0, 0, Math.PI * 2);
-        var sg = ctx.createLinearGradient(0, sy - 3 * hs * s, 0, sy + 3 * hs * s);
-        sg.addColorStop(0, '#d64040'); sg.addColorStop(0.5, '#e86565'); sg.addColorStop(1, '#a82828');
-        ctx.fillStyle = sg; ctx.fill();
-        ctx.lineWidth = 1 * s; ctx.strokeStyle = '#7a1818'; ctx.stroke();
-        // 针织横纹
-        ctx.strokeStyle = 'rgba(120,20,20,.4)'; ctx.lineWidth = 0.7 * s;
-        for (var k = -1; k <= 1; k++) {
-          ctx.beginPath();
-          ctx.ellipse(0, sy + k * 1.1 * s, headRX * 0.78, 2.6 * hs * s, 0, 0, Math.PI * 2);
-          ctx.stroke();
+        ctx.moveTo(14 * hs * s, 3 * hs * s);
+        ctx.quadraticCurveTo(11 * hs * s, 4.5 * hs * s, 8 * hs * s, 3.5 * hs * s);
+        ctx.lineWidth = 1.2 * s; ctx.strokeStyle = shade(col.skinDark, -20); ctx.stroke();
+        // 帽子（侧视，居中在头顶）
+        ctx.save();
+        ctx.translate(-4.6 * hs * s, 0);
+        if (accs.indexOf('acc_santa') >= 0) drawHat(s);
+        if (accs.indexOf('acc_crown') >= 0) drawCrown(s);
+        if (accs.indexOf('acc_bamboo') >= 0) drawBambooHat(s);
+        if (accs.indexOf('acc_wizard') >= 0) drawWizardHat(s);
+        ctx.restore();
+        // 墨镜（侧视，单片）
+        if (accs.indexOf('acc_glasses') >= 0) {
+          ctx.save();
+          ctx.translate(0, -1 * hs * s);
+          ctx.rotate(Math.PI / 2);
+          drawGlasses(s, 1);
+          ctx.restore();
         }
-        // 两条尾端垂在胸前
-        ctx.fillStyle = sg;
+        // 围巾
+        if (accs.indexOf('acc_scarf') >= 0) {
+          ctx.save();
+          var sy = 6 * hs * s;
+          ctx.beginPath();
+          ctx.ellipse(2 * hs * s, sy, 5 * hs * s, 3 * hs * s, 0, 0, Math.PI * 2);
+          var sg = ctx.createLinearGradient(0, sy - 3 * hs * s, 0, sy + 3 * hs * s);
+          sg.addColorStop(0, '#d64040'); sg.addColorStop(0.5, '#e86565'); sg.addColorStop(1, '#a82828');
+          ctx.fillStyle = sg; ctx.fill();
+          ctx.lineWidth = 1 * s; ctx.strokeStyle = '#7a1818'; ctx.stroke();
+          // 尾端
+          ctx.fillStyle = sg;
+          ctx.beginPath();
+          ctx.moveTo(4 * hs * s, sy + 2 * hs * s);
+          ctx.quadraticCurveTo(5 * hs * s, sy + 7 * hs * s, 3 * hs * s, sy + 10 * hs * s);
+          ctx.lineTo(1 * hs * s, sy + 9.5 * hs * s);
+          ctx.quadraticCurveTo(2 * hs * s, sy + 6 * hs * s, 2 * hs * s, sy + 2 * hs * s);
+          ctx.closePath(); ctx.fill();
+          ctx.lineWidth = 0.8 * s; ctx.strokeStyle = '#7a1818'; ctx.stroke();
+          ctx.restore();
+        }
+        ctx.restore();   // head
+      } else {
+        // ============ 正面视角 ============
+        // 斗篷（从肩部开始，在身后）
+        drawFlowingCape(s, wind, tw, th, shX, shY);
+
+        // 后腿
+        var legSpread = tw * 0.42;
+        var hipY = th * 0.55;
+        var footY = th + 15 * s;
+        drawLeg(-legSpread, hipY, footY, r.walkPhase, s, false, wearBoots);
+        drawLeg(legSpread, hipY, footY, r.walkPhase + Math.PI, s, false, wearBoots);
+
+        // 腹甲
+        drawBelly(s, tw, th);
+
+        // 前腿（双臂，从肩部接到腹甲边缘，略向外下）
+        drawLeg(-shX, shY, shY + 16 * s, r.walkPhase + Math.PI, s, false, wearBoots);
+        drawLeg(shX, shY, shY + 16 * s, r.walkPhase, s, false, wearBoots);
+
+        // 头部
+        var headCY = -th - 1.5 * hs * s;
+        ctx.save();
+        ctx.translate(0, headCY);
+        var headRX = 9.5 * hs * s, headRY = 8.5 * hs * s;
+
+        // 脖子
         ctx.beginPath();
-        ctx.moveTo(-headRX * 0.45, sy + 2 * hs * s);
-        ctx.quadraticCurveTo(-headRX * 0.55, sy + 7 * hs * s, -headRX * 0.35, sy + 10 * hs * s);
-        ctx.lineTo(-headRX * 0.05, sy + 9.5 * hs * s);
-        ctx.quadraticCurveTo(-headRX * 0.15, sy + 6 * hs * s, -headRX * 0.1, sy + 2 * hs * s);
-        ctx.closePath(); ctx.fill();
-        ctx.lineWidth = 0.8 * s; ctx.strokeStyle = '#7a1818'; ctx.stroke();
+        ctx.moveTo(-3.5 * hs * s, headRY - 1 * s);
+        ctx.quadraticCurveTo(-3 * hs * s, headRY + 4 * s, -2 * hs * s, headRY + 6 * s);
+        ctx.lineTo(2 * hs * s, headRY + 6 * s);
+        ctx.quadraticCurveTo(3 * hs * s, headRY + 4 * s, 3.5 * hs * s, headRY - 1 * s);
+        ctx.closePath();
+        ctx.fillStyle = col.skin; ctx.fill();
+        ctx.lineWidth = 1.2 * s; ctx.strokeStyle = col.outline; ctx.stroke();
+
+        // 头主体
         ctx.beginPath();
-        ctx.moveTo(headRX * 0.05, sy + 2 * hs * s);
-        ctx.quadraticCurveTo(headRX * 0.15, sy + 7 * hs * s, headRX * 0.4, sy + 11 * hs * s);
-        ctx.lineTo(headRX * 0.6, sy + 10.5 * hs * s);
-        ctx.quadraticCurveTo(headRX * 0.4, sy + 6.5 * hs * s, headRX * 0.4, sy + 2 * hs * s);
-        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.ellipse(0, 0, headRX, headRY, 0, 0, Math.PI * 2);
+        var hg2 = ctx.createRadialGradient(-2 * s, -3 * s, 1 * s, 0, 0, headRX);
+        hg2.addColorStop(0, col.skinLight); hg2.addColorStop(1, col.skin);
+        ctx.fillStyle = hg2; ctx.fill();
+        ctx.lineWidth = 1.4 * s; ctx.strokeStyle = col.outline; ctx.stroke();
+
+        // 脸颊条纹
+        if (col.stripe) {
+          ctx.strokeStyle = col.stripe; ctx.lineWidth = 1.6 * s;
+          [-1, 1].forEach(function (sgn) {
+            ctx.beginPath();
+            ctx.moveTo(sgn * headRX * 0.5, -headRY * 0.55);
+            ctx.quadraticCurveTo(sgn * headRX * 0.85, -headRY * 0.1, sgn * headRX * 0.6, headRY * 0.45);
+            ctx.stroke();
+          });
+        }
+        if (col.ear) {
+          ctx.fillStyle = col.ear;
+          [-1, 1].forEach(function (sgn) {
+            ctx.beginPath();
+            ctx.ellipse(sgn * headRX * 0.78, 0, 2.2 * s, 1.7 * s, 0, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        }
+
+        // 眼睛（左右）
+        var eyeX = 4.6 * hs * s, eyeY = -1.4 * hs * s, eyeR = col.eyeR * s;
+        [-1, 1].forEach(function (sgn) {
+          var ex = sgn * eyeX, ey = eyeY;
+          ctx.beginPath();
+          ctx.ellipse(ex, ey, eyeR * 1.05, eyeR * 1.15, 0, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff'; ctx.fill();
+          ctx.lineWidth = 0.8 * s; ctx.strokeStyle = col.outline; ctx.stroke();
+          var lookX = Math.cos(r.headTurn) * 0.5 * s;
+          ctx.beginPath(); ctx.arc(ex + lookX, ey, eyeR * 0.78, 0, Math.PI * 2);
+          ctx.fillStyle = col.eye; ctx.fill();
+          ctx.beginPath(); ctx.arc(ex + lookX, ey, eyeR * 0.36, 0, Math.PI * 2);
+          ctx.fillStyle = '#141414'; ctx.fill();
+          ctx.beginPath(); ctx.arc(ex + lookX + 0.5 * s, ey - 0.6 * s, 0.6 * s, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff'; ctx.fill();
+        });
+
+        // 鼻孔 + 嘴
+        ctx.fillStyle = col.outline;
+        ctx.beginPath(); ctx.arc(-0.8 * s, 2.4 * hs * s, 0.55 * s, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(0.8 * s, 2.4 * hs * s, 0.55 * s, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-3 * hs * s, 5 * hs * s);
+        ctx.quadraticCurveTo(0, 6.2 * hs * s, 3 * hs * s, 5 * hs * s);
+        ctx.lineWidth = 1.2 * s; ctx.strokeStyle = shade(col.skinDark, -20); ctx.stroke();
+
+        // 帽子：平移归零，帽檐自然落在额头（帽子函数 cx≈4.6hs，故左移 4.6hs 居中）
+        ctx.save();
+        ctx.translate(-4.6 * hs * s, 0);
+        if (accs.indexOf('acc_santa') >= 0) drawHat(s);
+        if (accs.indexOf('acc_crown') >= 0) drawCrown(s);
+        if (accs.indexOf('acc_bamboo') >= 0) drawBambooHat(s);
+        if (accs.indexOf('acc_wizard') >= 0) drawWizardHat(s);
         ctx.restore();
+
+        // 墨镜
+        if (accs.indexOf('acc_glasses') >= 0) {
+          ctx.save();
+          ctx.translate(0, eyeY - 7 * hs * s);
+          ctx.rotate(Math.PI / 2);
+          drawGlasses(s, 0);
+          ctx.restore();
+        }
+
+        // 围巾
+        if (accs.indexOf('acc_scarf') >= 0) {
+          ctx.save();
+          var sy = headRY + 0.5 * hs * s;
+          ctx.beginPath();
+          ctx.ellipse(0, sy, headRX * 0.82, 3.2 * hs * s, 0, 0, Math.PI * 2);
+          var sg = ctx.createLinearGradient(0, sy - 3 * hs * s, 0, sy + 3 * hs * s);
+          sg.addColorStop(0, '#d64040'); sg.addColorStop(0.5, '#e86565'); sg.addColorStop(1, '#a82828');
+          ctx.fillStyle = sg; ctx.fill();
+          ctx.lineWidth = 1 * s; ctx.strokeStyle = '#7a1818'; ctx.stroke();
+          ctx.strokeStyle = 'rgba(120,20,20,.4)'; ctx.lineWidth = 0.7 * s;
+          for (var k = -1; k <= 1; k++) {
+            ctx.beginPath();
+            ctx.ellipse(0, sy + k * 1.1 * s, headRX * 0.78, 2.6 * hs * s, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.fillStyle = sg;
+          ctx.beginPath();
+          ctx.moveTo(-headRX * 0.45, sy + 2 * hs * s);
+          ctx.quadraticCurveTo(-headRX * 0.55, sy + 7 * hs * s, -headRX * 0.35, sy + 10 * hs * s);
+          ctx.lineTo(-headRX * 0.05, sy + 9.5 * hs * s);
+          ctx.quadraticCurveTo(-headRX * 0.15, sy + 6 * hs * s, -headRX * 0.1, sy + 2 * hs * s);
+          ctx.closePath(); ctx.fill();
+          ctx.lineWidth = 0.8 * s; ctx.strokeStyle = '#7a1818'; ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(headRX * 0.05, sy + 2 * hs * s);
+          ctx.quadraticCurveTo(headRX * 0.15, sy + 7 * hs * s, headRX * 0.4, sy + 11 * hs * s);
+          ctx.lineTo(headRX * 0.6, sy + 10.5 * hs * s);
+          ctx.quadraticCurveTo(headRX * 0.4, sy + 6.5 * hs * s, headRX * 0.4, sy + 2 * hs * s);
+          ctx.closePath(); ctx.fill(); ctx.stroke();
+          ctx.restore();
+        }
+
+        ctx.restore();   // head
       }
 
-      ctx.restore();   // head context
       ctx.restore();   // standing context
     }
 
