@@ -964,8 +964,8 @@
     function drawCrown(s) {
       var hs = col.hsize;
       var cx = 4.6 * hs * s;
-      var cy = -6.2 * hs * s;
-      var w = 8.5 * hs * s, h = 5.5 * hs * s;
+      var cy = -6.8 * hs * s;
+      var w = 12 * hs * s, h = 7.8 * hs * s;
       ctx.save();
       // 底座
       ctx.beginPath();
@@ -986,8 +986,8 @@
       // 宝石：中红、两侧蓝
       var gems = [[cx, cy - h * 0.05, '#e02020'], [cx - w * 0.28, cy + h * 0.02, '#2860d6'], [cx + w * 0.28, cy + h * 0.02, '#2860d6']];
       gems.forEach(function (g) {
-        ctx.beginPath(); ctx.arc(g[0], g[1], 1.3 * hs * s, 0, Math.PI * 2);
-        var gg = ctx.createRadialGradient(g[0] - 0.4 * s, g[1] - 0.4 * s, 0.2 * s, g[0], g[1], 1.4 * hs * s);
+        ctx.beginPath(); ctx.arc(g[0], g[1], 1.8 * hs * s, 0, Math.PI * 2);
+        var gg = ctx.createRadialGradient(g[0] - 0.4 * s, g[1] - 0.4 * s, 0.2 * s, g[0], g[1], 1.9 * hs * s);
         gg.addColorStop(0, '#fff'); gg.addColorStop(0.4, g[2]); gg.addColorStop(1, shade(g[2], -40));
         ctx.fillStyle = gg; ctx.fill();
         ctx.lineWidth = 0.6 * s; ctx.strokeStyle = shade(g[2], -60); ctx.stroke();
