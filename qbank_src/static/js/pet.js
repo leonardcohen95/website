@@ -1186,6 +1186,134 @@
       ctx.restore();
     }
 
+    /* 外饰：飘动斗篷（站姿专用）。从双肩垂下，底边随 `wind` 相位波浪起伏，
+       走路时 billow 幅度更大。坐标系：直立躯干居中，y 向下。 */
+    function drawFlowingCape(s, wind) {
+      var rx = col.rx * s, ry = col.ry * s;
+      var rw = ry;   // 躯干半宽
+      var rh = rx;   // 躯干半高
+      ctx.save();
+      // 肩部附着点
+      var shL = -rw * 0.78, shR = rw * 0.78;
+      var shY = -rh * 0.52;
+      // 斗篷长度 & billow
+      var capeLen = rh * 2.1;
+      var billow = 1 + Math.sin(wind) * 0.12 + Math.sin(wind * 2.3) * 0.06;
+      // 采样底边，用多段二次曲线形成飘动波浪
+      var segs = 16;
+      var pts = [];
+      for (var i = 0; i <= segs; i++) {
+        var u = i / segs;
+        var bx = shL + (shR - shL) * u;
+        // 底部 y：中间垂得最长，两侧略短；叠加波浪
+        var lenT = capeLen * (0.85 + 0.3 * Math.sin(u * Math.PI));
+        var wave = Math.sin(u * Math.PI * 3 + wind * 1.6) * 3 * s
+                 + Math.sin(u * Math.PI * 5 + wind * 0.9) * 1.6 * s;
+        var by = shY + lenT * billow + wave;
+        pts.push([bx, by]);
+      }
+      // 披风主体
+      ctx.beginPath();
+      ctx.moveTo(shL, shY);
+      // 左上 billow 弧
+      ctx.quadraticCurveTo(shL - rw * 0.55 * billow, shY + capeLen * 0.35, pts[0][0], pts[0][1]);
+      for (var j = 0; j < segs; j++) {
+        var midX = (pts[j][0] + pts[j + 1][0]) / 2;
+        var midY = (pts[j][1] + pts[j + 1][1]) / 2;
+        ctx.quadraticCurveTo(pts[j][0], pts[j][1], midX, midY);
+      }
+      ctx.quadraticCurveTo(pts[segs][0], pts[segs][1], shR, shY);
+      ctx.quadraticCurveTo(shR + rw * 0.55 * billow, shY + capeLen * 0.35, shL, shY);
+      ctx.closePath();
+      var cg = ctx.createLinearGradient(0, shY, 0, shY + capeLen);
+      cg.addColorStop(0, '#c02020');
+      cg.addColorStop(0.45, '#e03838');
+      cg.addColorStop(1, '#8a1414');
+      ctx.fillStyle = cg; ctx.fill();
+      ctx.lineWidth = 1.2 * s; ctx.strokeStyle = '#5a0e0e'; ctx.stroke();
+      // 内领（深色）
+      ctx.beginPath();
+      ctx.moveTo(shL * 0.78, shY);
+      ctx.quadraticCurveTo(0, shY + rh * 0.22, shR * 0.78, shY);
+      ctx.lineTo(shR * 0.5, shY + rh * 0.28);
+      ctx.quadraticCurveTo(0, shY + rh * 0.34, -shR * 0.5, shY + rh * 0.28);
+      ctx.closePath();
+      ctx.fillStyle = '#3a0a0a'; ctx.fill();
+      // 披风褶皱高光（随风动）
+      ctx.strokeStyle = 'rgba(255,180,180,.28)';
+      ctx.lineWidth = 0.9 * s;
+      for (var f = 1; f <= 2; f++) {
+        ctx.beginPath();
+        var fx = shL + (shR - shL) * (f / 3);
+        ctx.moveTo(fx, shY + rh * 0.4);
+        ctx.quadraticCurveTo(fx + Math.sin(wind + f) * 4 * s, shY + capeLen * 0.6, fx + Math.sin(wind * 1.3 + f) * 6 * s, shY + capeLen * 0.95);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    /* 装备超人斗篷时的站姿：乌龟直立行走，斗篷在身后随风飘逸。
+       复用 drawStandingArmor 的"直立本体"部分，但不画武士甲胄。 */
+    function drawStandingCape(r, s, wid) {
+      var rx = col.rx * s;
+      var ry = col.ry * s;
+      var hs = col.hsize;
+      var rw = ry, rh = rx;
+      ctx.save();
+
+      var accs = r.isOpp ? (r.accessories || [])
+                        : ((petState && petState.pet && petState.pet.accessories) || []);
+      var wearBoots = accs.indexOf('acc_boots') >= 0;
+
+      // 风速相位：呼吸驱动的微风 + 走路时的强风
+      var wind = performance.now() / 500 + (r.state === 'walk' ? r.walkPhase * 1.2 : 0);
+
+      // ---- 飘动斗篷（最底层，在腿和躯干之后）----
+      drawFlowingCape(s, wind);
+
+      // ---- 后腿（站立支撑）----
+      var legHipY = ry * 0.55;
+      var legFootY = ry + 20 * s;
+      var legSpread = rx * 0.42;
+      drawLeg(-legSpread, legHipY, legFootY, r.walkPhase, s, false, wearBoots);
+      drawLeg(legSpread, legHipY, legFootY, r.walkPhase + Math.PI, s, false, wearBoots);
+
+      // ---- 躯干（龟壳直立）----
+      ctx.save();
+      ctx.rotate(-Math.PI / 2);
+      drawShell(s, 0.55);
+      ctx.restore();
+
+      // ---- 前腿（化为双臂，垂在躯干两侧）----
+      var armY = -rh * 0.60;
+      drawLeg(-rw * 1.0, armY, armY + 17 * s, r.walkPhase + Math.PI, s, false, wearBoots);
+      drawLeg(rw * 1.0, armY, armY + 17 * s, r.walkPhase, s, false, wearBoots);
+
+      // ---- 头（抬到躯干上方，正视）----
+      ctx.save();
+      var headX = (col.rx * 0.86 + r.headExt * 7 + (r.headPeck || 0)) * s;
+      ctx.translate(0, -rh * 0.58);
+      ctx.rotate(-Math.PI / 2);
+      ctx.translate(-headX, 0);
+      drawHead(r, s, 0, true);
+      // 头部外饰摆正
+      ctx.save();
+      ctx.translate(headX, 0);
+      ctx.rotate(r.headTurn * 0.35);
+      ctx.translate(9.8 * hs * s, -4.6 * hs * s);
+      ctx.rotate(Math.PI / 2);
+      if (accs.indexOf('acc_santa') >= 0) drawHat(s);
+      if (accs.indexOf('acc_crown') >= 0) drawCrown(s);
+      if (accs.indexOf('acc_bamboo') >= 0) drawBambooHat(s);
+      if (accs.indexOf('acc_wizard') >= 0) drawWizardHat(s);
+      if (accs.indexOf('acc_glasses') >= 0) drawGlasses(s, 0);
+      if (accs.indexOf('acc_scarf') >= 0) drawScarf(s);
+      ctx.restore();
+      ctx.restore();
+
+      ctx.restore();
+    }
+
     /* 外饰：小皮靴。套在一只脚上（footX, footYF 为脚底坐标） */
     function drawBoot(footX, footYF, s, tk) {
       var bw = 4.6 * tk * s, bh = 4.2 * tk * s;
@@ -2134,13 +2262,22 @@
         return;
       }
 
+      // 外饰：装备超人斗篷 → 切换为直立站姿，斗篷随风飘逸
+      var accsCape = r.isOpp ? (r.accessories || [])
+                             : ((petState && petState.pet && petState.pet.accessories) || []);
+      if (accsCape.indexOf('acc_cape') >= 0) {
+        drawStandingCape(r, s, wid);
+        ctx.restore();
+        col = prevCol;
+        return;
+      }
+
       // 尾巴
       drawTail(r, s);
 
-      // 披风：披在龟壳后方（先于腿和壳绘制，作为背景层）
+      // 爬行视角下不再单独画斗篷（装备斗篷已切到直立站姿）
       var accsBody = r.isOpp ? (r.accessories || [])
                              : ((petState && petState.pet && petState.pet.accessories) || []);
-      if (accsBody.indexOf('acc_cape') >= 0) drawCape(s, side);
       var wearBoots = accsBody.indexOf('acc_boots') >= 0;
 
       // 腿：俯视时伸向壳体两侧；侧身时从壳底（腹甲侧）向下蹬地
