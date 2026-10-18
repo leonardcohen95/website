@@ -7,6 +7,7 @@ from functools import wraps
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.contrib.auth.models import User
 from django.db.models import Count
 from django.http import HttpResponse, JsonResponse, HttpResponseNotFound
@@ -53,23 +54,26 @@ def index(request):
 
 def user_register(request):
     if request.method == 'POST':
+        form = UserCreationForm(request.POST)
         username = request.POST.get('username', '').strip()
-        password = request.POST.get('password', '')
+        password = request.POST.get('password1', '')
         if not username or not password:
             messages.error(request, '用户名和密码不能为空')
-            return render(request, 'questions/register.html')
+            return render(request, 'questions/register.html', {'form': form})
         if User.objects.filter(username=username).exists():
             messages.error(request, '用户名已存在')
-            return render(request, 'questions/register.html')
+            return render(request, 'questions/register.html', {'form': form})
         user = User.objects.create_user(username=username, password=password)
         UserAIUsage.objects.get_or_create(user=user)
         messages.success(request, '注册成功，请登录')
         return redirect('login')
-    return render(request, 'questions/register.html')
+    form = UserCreationForm()
+    return render(request, 'questions/register.html', {'form': form})
 
 
 def user_login(request):
     if request.method == 'POST':
+        form = AuthenticationForm(request, data=request.POST)
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '')
         user = authenticate(request, username=username, password=password)
@@ -78,7 +82,9 @@ def user_login(request):
             messages.success(request, f'欢迎回来，{username}')
             return redirect('index')
         messages.error(request, '用户名或密码错误')
-    return render(request, 'questions/login.html')
+    else:
+        form = AuthenticationForm()
+    return render(request, 'questions/login.html', {'form': form})
 
 
 def user_logout(request):
