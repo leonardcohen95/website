@@ -28,6 +28,23 @@ from questions.pet_shop import (
     POINTS_PER_LEVEL, POW_PER_POINT, SHOP_ITEMS, get_item, get_species, level_from_exp, pet_stats,
 )
 
+# 外饰部位槽位：同槽位只能佩戴一件，装备新的自动替换旧的
+ACCESSORY_SLOTS = {
+    'head': {'acc_santa', 'acc_crown', 'acc_bamboo', 'acc_wizard'},   # 头部：帽子
+    'face': {'acc_glasses'},                                           # 面部：眼镜
+    'neck': {'acc_scarf'},                                             # 颈部：围巾
+    'back': {'acc_cape'},                                              # 背部：披风
+    'feet': {'acc_boots'},                                             # 脚部：靴子
+}
+
+
+def _accessory_slot(item_id):
+    """返回外饰所属槽位，未知外饰返回 None（不参与互斥）。"""
+    for slot, ids in ACCESSORY_SLOTS.items():
+        if item_id in ids:
+            return slot
+    return None
+
 
 def _api_login_required(view_func):
     """API 统一要求登录：未登录返回 401 JSON，避免被重定向到登录页。"""
@@ -416,6 +433,12 @@ def api_pet_equip(request):
         active.remove(item_id)
         action = 'removed'
     else:
+        # 外饰：同部位槽位互斥——装备新的自动卸下同槽位旧外饰（如帽子换帽子）
+        if item['category'] == 'accessory':
+            slot = _accessory_slot(item_id)
+            if slot is not None:
+                slot_ids = ACCESSORY_SLOTS[slot]
+                active = [a for a in active if a not in slot_ids]
         active.append(item_id)
         action = 'added'
     setattr(pet, field, ','.join(active))

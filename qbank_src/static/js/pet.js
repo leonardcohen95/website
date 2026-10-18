@@ -681,22 +681,24 @@
       ctx.strokeStyle = col.outline;
       ctx.stroke();
 
-      // 脚掌
-      ctx.beginPath();
-      ctx.ellipse(footX, footYF, 4.2 * tk * s, 3 * tk * s, 0, 0, Math.PI * 2);
-      ctx.fillStyle = far ? col.skin : col.skinDark;
-      ctx.fill();
-      ctx.lineWidth = 1 * s;
-      ctx.strokeStyle = col.outline;
-      ctx.stroke();
-
-      // 爪尖（3 个小爪）
-      ctx.fillStyle = shade(col.skinDark, -20);
-      var clawDir = footYF >= ay ? 1 : -1;
-      for (var i = -1; i <= 1; i++) {
+      // 脚掌（穿靴时由靴子覆盖，不画裸脚掌）
+      if (!wearBoots) {
         ctx.beginPath();
-        ctx.ellipse(footX + i * 1.6 * tk * s, footYF + clawDir * 2.4 * tk * s, 0.8 * s, 1.2 * s, 0, 0, Math.PI * 2);
+        ctx.ellipse(footX, footYF, 4.2 * tk * s, 3 * tk * s, 0, 0, Math.PI * 2);
+        ctx.fillStyle = far ? col.skin : col.skinDark;
         ctx.fill();
+        ctx.lineWidth = 1 * s;
+        ctx.strokeStyle = col.outline;
+        ctx.stroke();
+
+        // 爪尖（3 个小爪）
+        ctx.fillStyle = shade(col.skinDark, -20);
+        var clawDir = footYF >= ay ? 1 : -1;
+        for (var i = -1; i <= 1; i++) {
+          ctx.beginPath();
+          ctx.ellipse(footX + i * 1.6 * tk * s, footYF + clawDir * 2.4 * tk * s, 0.8 * s, 1.2 * s, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       // 外饰：小皮靴套在脚上
       if (wearBoots) drawBoot(footX, footYF, s, tk);
@@ -1358,12 +1360,20 @@
             ctx.beginPath(); ctx.moveTo(-5 * s, 0); ctx.lineTo(4 * s, 0); ctx.stroke();
             ctx.lineWidth = 3 * s; ctx.strokeStyle = '#cfd6dd';
             ctx.beginPath(); ctx.moveTo(4 * s, -3.4 * s); ctx.lineTo(4 * s, 3.4 * s); ctx.stroke();
+            var glowT1 = performance.now() * 0.008;
+            var glowPulse1 = (10 + Math.sin(glowT1) * 4 + Math.random() * 3) * s;
             var lg = ctx.createLinearGradient(5 * s, 0, 5 * s + L, 0);
             lg.addColorStop(0, '#eafffb'); lg.addColorStop(0.4, '#78f0ff'); lg.addColorStop(1, '#2ea8ff');
-            ctx.shadowColor = '#78f0ff'; ctx.shadowBlur = 10 * s;
+            ctx.shadowColor = '#78f0ff'; ctx.shadowBlur = glowPulse1;
             ctx.lineWidth = 5.2 * s; ctx.strokeStyle = lg;
             ctx.beginPath(); ctx.moveTo(5 * s, 0); ctx.lineTo(5 * s + L, 0); ctx.stroke();
             ctx.shadowBlur = 0;
+            ctx.fillStyle = '#eafffb';
+            for (var sp1 = 0; sp1 < 4; sp1++) {
+              var spx1 = 5 * s + Math.random() * L;
+              var spy1 = (Math.random() - 0.5) * 4 * s;
+              ctx.beginPath(); ctx.arc(spx1, spy1, (0.4 + Math.random() * 0.9) * s, 0, Math.PI * 2); ctx.fill();
+            }
           } else {
             ctx.lineWidth = 5 * s; ctx.strokeStyle = '#7a4a24';
             ctx.beginPath(); ctx.moveTo(-6 * s, 0); ctx.lineTo(6 * s, 0); ctx.stroke();
@@ -1513,12 +1523,20 @@
             ctx.beginPath(); ctx.moveTo(-5 * s, 0); ctx.lineTo(4 * s, 0); ctx.stroke();
             ctx.lineWidth = 3 * s; ctx.strokeStyle = '#cfd6dd';
             ctx.beginPath(); ctx.moveTo(4 * s, -3.4 * s); ctx.lineTo(4 * s, 3.4 * s); ctx.stroke();
+            var glowT2 = performance.now() * 0.008;
+            var glowPulse2 = (10 + Math.sin(glowT2) * 4 + Math.random() * 3) * s;
             var lg2 = ctx.createLinearGradient(5 * s, 0, 5 * s + L2, 0);
             lg2.addColorStop(0, '#eafffb'); lg2.addColorStop(0.4, '#78f0ff'); lg2.addColorStop(1, '#2ea8ff');
-            ctx.shadowColor = '#78f0ff'; ctx.shadowBlur = 10 * s;
+            ctx.shadowColor = '#78f0ff'; ctx.shadowBlur = glowPulse2;
             ctx.lineWidth = 5.2 * s; ctx.strokeStyle = lg2;
             ctx.beginPath(); ctx.moveTo(5 * s, 0); ctx.lineTo(5 * s + L2, 0); ctx.stroke();
             ctx.shadowBlur = 0;
+            ctx.fillStyle = '#eafffb';
+            for (var sp2 = 0; sp2 < 4; sp2++) {
+              var spx2 = 5 * s + Math.random() * L2;
+              var spy2 = (Math.random() - 0.5) * 4 * s;
+              ctx.beginPath(); ctx.arc(spx2, spy2, (0.4 + Math.random() * 0.9) * s, 0, Math.PI * 2); ctx.fill();
+            }
           } else {
             ctx.lineWidth = 5 * s; ctx.strokeStyle = '#7a4a24';
             ctx.beginPath(); ctx.moveTo(-6 * s, 0); ctx.lineTo(6 * s, 0); ctx.stroke();
@@ -2111,15 +2129,24 @@
         ctx.beginPath(); ctx.moveTo(-5 * s, 0); ctx.lineTo(4 * s, 0); ctx.stroke();
         ctx.lineWidth = 3 * s; ctx.strokeStyle = '#cfd6dd';
         ctx.beginPath(); ctx.moveTo(4 * s, -3.4 * s); ctx.lineTo(4 * s, 3.4 * s); ctx.stroke();
-        // 发光光刃
+        // 发光光刃（持续闪烁：光晕脉动 + 星尘飞溅）
+        var glowT = performance.now() * 0.008;
+        var glowPulse = (10 + Math.sin(glowT) * 4 + Math.random() * 3) * s;
         var lg = ctx.createLinearGradient(5 * s, 0, 5 * s + L, 0);
         lg.addColorStop(0, '#eafffb'); lg.addColorStop(0.4, '#78f0ff'); lg.addColorStop(1, '#2ea8ff');
-        ctx.shadowColor = '#78f0ff'; ctx.shadowBlur = 10 * s;
+        ctx.shadowColor = '#78f0ff'; ctx.shadowBlur = glowPulse;
         ctx.lineWidth = 5.2 * s; ctx.strokeStyle = lg;
         ctx.beginPath(); ctx.moveTo(5 * s, 0); ctx.lineTo(5 * s + L, 0); ctx.stroke();
         ctx.shadowBlur = 0;
         ctx.lineWidth = 1.6 * s; ctx.strokeStyle = 'rgba(255,255,255,.92)';
         ctx.beginPath(); ctx.moveTo(6 * s, 0); ctx.lineTo(5 * s + L * 0.95, 0); ctx.stroke();
+        // 星尘闪烁
+        ctx.fillStyle = '#eafffb';
+        for (var sp = 0; sp < 4; sp++) {
+          var spx = 5 * s + Math.random() * L;
+          var spy = (Math.random() - 0.5) * 4 * s;
+          ctx.beginPath(); ctx.arc(spx, spy, (0.4 + Math.random() * 0.9) * s, 0, Math.PI * 2); ctx.fill();
+        }
       } else {
         // 大砍刀：木柄 + 宽刃
         ctx.lineWidth = 5 * s; ctx.strokeStyle = '#7a4a24';
@@ -2392,12 +2419,20 @@
           ctx.beginPath(); ctx.moveTo(-5 * s, 0); ctx.lineTo(4 * s, 0); ctx.stroke();
           ctx.lineWidth = 3 * s; ctx.strokeStyle = '#cfd6dd';
           ctx.beginPath(); ctx.moveTo(4 * s, -3.4 * s); ctx.lineTo(4 * s, 3.4 * s); ctx.stroke();
+          var glowT3 = performance.now() * 0.008;
+          var glowPulse3 = (10 + Math.sin(glowT3) * 4 + Math.random() * 3) * s;
           var lg = ctx.createLinearGradient(5 * s, 0, 5 * s + L, 0);
           lg.addColorStop(0, '#eafffb'); lg.addColorStop(0.4, '#78f0ff'); lg.addColorStop(1, '#2ea8ff');
-          ctx.shadowColor = '#78f0ff'; ctx.shadowBlur = 10 * s;
+          ctx.shadowColor = '#78f0ff'; ctx.shadowBlur = glowPulse3;
           ctx.lineWidth = 5.2 * s; ctx.strokeStyle = lg;
           ctx.beginPath(); ctx.moveTo(5 * s, 0); ctx.lineTo(5 * s + L, 0); ctx.stroke();
           ctx.shadowBlur = 0;
+          ctx.fillStyle = '#eafffb';
+          for (var sp3 = 0; sp3 < 4; sp3++) {
+            var spx3 = 5 * s + Math.random() * L;
+            var spy3 = (Math.random() - 0.5) * 4 * s;
+            ctx.beginPath(); ctx.arc(spx3, spy3, (0.4 + Math.random() * 0.9) * s, 0, Math.PI * 2); ctx.fill();
+          }
         } else {
           ctx.lineWidth = 5 * s; ctx.strokeStyle = '#7a4a24';
           ctx.beginPath(); ctx.moveTo(-6 * s, 0); ctx.lineTo(6 * s, 0); ctx.stroke();
