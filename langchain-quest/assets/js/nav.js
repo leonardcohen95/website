@@ -37,7 +37,9 @@ function getCurrentChapterId() {
 }
 
 function getPathPrefix() {
-  return document.body.getAttribute("data-page") === "home" ? "" : "../";
+  // 只有章节页位于 chapters/ 子目录，需回退一级；
+  // 首页/排行榜/我的 与 index.html 同级（都在 /langchain-learning/ 下），无需回退。
+  return document.body.getAttribute("data-page") === "chapter" ? "../" : "";
 }
 
 // 渲染顶部导航
