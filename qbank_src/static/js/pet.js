@@ -641,8 +641,8 @@
     }
 
     /* 画一条腿：从髋点到脚。髋点/落脚点由调用方按视角算好，这里只做步态 */
-    function drawLeg(ax, ay, footY, phase, s, far, wearBoots) {
-      var tk = col.leg;                       // 品种腿粗细
+    function drawLeg(ax, ay, footY, phase, s, far, wearBoots, tkScale) {
+      var tk = col.leg * (tkScale || 1);        // 品种腿粗细（站姿可放大）
       var sinP = Math.sin(phase);
       // 摆动：sin>0 时脚在身体后方（支撑相），sin<0 时脚向前迈（摆动相）
       var swingX = sinP * 7 * s;
@@ -1292,6 +1292,11 @@
       var side = r.side;
       ctx.save();
 
+      // 站姿整体上移：让脚踩在与爬行姿势相同的地面高度，避免悬空
+      // 爬行侧身脚位置 ≈ ry*0.24 + 13*s；站姿脚位置 = th + 14*s
+      var standOffset = th + 14 * s - (ry * 0.24 + 13 * s);
+      ctx.translate(0, -standOffset);
+
       var accs = r.isOpp ? (r.accessories || [])
                         : ((petState && petState.pet && petState.pet.accessories) || []);
       var wearBoots = accs.indexOf('acc_boots') >= 0;
@@ -1320,9 +1325,9 @@
         ctx.restore();
 
         // 远侧后腿（在壳后）
-        drawLeg(-legX, hipY, footY, r.walkPhase, s, true, wearBoots);
+        drawLeg(-legX, hipY, footY, r.walkPhase, s, true, wearBoots, 1.5);
         // 远侧前腿（手臂，在壳后）
-        drawLeg(-armX, armY, armY + armLen, r.walkPhase + Math.PI, s, true, wearBoots);
+        drawLeg(-armX, armY, armY + armLen, r.walkPhase + Math.PI, s, true, wearBoots, 1.5);
 
         // 躯干：龟壳侧面直立
         ctx.save();
@@ -1331,9 +1336,9 @@
         ctx.restore();
 
         // 近侧前腿（手臂，在壳前）
-        drawLeg(armX, armY, armY + armLen, r.walkPhase, s, false, wearBoots);
+        drawLeg(armX, armY, armY + armLen, r.walkPhase, s, false, wearBoots, 1.5);
         // 近侧后腿（在壳前）
-        drawLeg(legX, hipY, footY, r.walkPhase + Math.PI, s, false, wearBoots);
+        drawLeg(legX, hipY, footY, r.walkPhase + Math.PI, s, false, wearBoots, 1.5);
 
         // 头部（侧视）
         ctx.save();
@@ -1442,15 +1447,15 @@
         var legSpread = tw * 0.42;
         var hipY = th * 0.55;
         var footY = th + 15 * s;
-        drawLeg(-legSpread, hipY, footY, r.walkPhase, s, false, wearBoots);
-        drawLeg(legSpread, hipY, footY, r.walkPhase + Math.PI, s, false, wearBoots);
+        drawLeg(-legSpread, hipY, footY, r.walkPhase, s, false, wearBoots, 1.5);
+        drawLeg(legSpread, hipY, footY, r.walkPhase + Math.PI, s, false, wearBoots, 1.5);
 
         // 腹甲
         drawBelly(s, tw, th);
 
         // 前腿（双臂，从肩部接到腹甲边缘，略向外下）
-        drawLeg(-shX, shY, shY + 16 * s, r.walkPhase + Math.PI, s, false, wearBoots);
-        drawLeg(shX, shY, shY + 16 * s, r.walkPhase, s, false, wearBoots);
+        drawLeg(-shX, shY, shY + 16 * s, r.walkPhase + Math.PI, s, false, wearBoots, 1.5);
+        drawLeg(shX, shY, shY + 16 * s, r.walkPhase, s, false, wearBoots, 1.5);
 
         // 头部
         var headCY = -th - 1.5 * hs * s;
