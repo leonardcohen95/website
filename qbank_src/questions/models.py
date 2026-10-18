@@ -140,6 +140,23 @@ class K8sProgress(models.Model):
         return f'{self.user.username} - ⭐{self.stars}'
 
 
+class LangChainProgress(models.Model):
+    """LangChain 学习中心（langchain-quest 站点）的用户进度，按题库系统用户存储。"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='langchain_progress', verbose_name='关联用户')
+    stars = models.IntegerField(default=0, verbose_name='总星星数')
+    # {章节ID: {completed: bool, stars: int, questions: {题ID: True}}}
+    chapters = models.JSONField(default=dict, verbose_name='章节进度')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        verbose_name = 'LangChain学习进度'
+        verbose_name_plural = 'LangChain学习进度'
+        ordering = ['-stars']
+
+    def __str__(self):
+        return f'{self.user.username} - ⭐{self.stars}'
+
+
 class Pet(models.Model):
     """用户养的电子乌龟，每个用户一只。"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='pet', verbose_name='主人')

@@ -40,6 +40,10 @@ const GameSystem = (function () {
   let authToken = null;
   let userId = null;
   let nickname = null;
+  let djangoAuthed = false; // Django session 认证状态
+
+  // API 前缀：集成到题库系统时使用 /langchain-api/
+  const API_PREFIX = '/langchain-api';
 
   function defaultProgress() {
     return { stars: 0, chapters: {}, achievements: [] };
@@ -59,10 +63,12 @@ const GameSystem = (function () {
   }
 
   function isLoggedIn() {
-    return !!authToken;
+    return djangoAuthed || !!authToken;
   }
 
   function isBackendAuthed() {
+    // Django session 已登录，或后端 token 已登录
+    if (djangoAuthed) return true;
     return backendAvailable && !!authToken && /^\d+:/.test(authToken);
   }
 
@@ -73,10 +79,25 @@ const GameSystem = (function () {
 
   async function checkBackend() {
     try {
-      const res = await fetch('/api/leaderboard?limit=1');
+      const res = await fetch(API_PREFIX + '/leaderboard?limit=1');
       if (res.ok) { backendAvailable = true; return true; }
     } catch {}
     backendAvailable = false;
+    return false;
+  }
+
+  async function checkDjangoAuth() {
+    // 尝试访问 progress，如果成功说明 Django session 已登录
+    try {
+      const res = await fetch(API_PREFIX + '/progress');
+      if (res.ok) {
+        const data = await res.json();
+        djangoAuthed = true;
+        nickname = data.nickname || nickname;
+        return true;
+      }
+    } catch {}
+    djangoAuthed = false;
     return false;
   }
 
@@ -112,7 +133,7 @@ const GameSystem = (function () {
     if (!username || !password) return { success: false, error: "请输入用户名和密码" };
     if (backendAvailable) {
       try {
-        const res = await fetch('/api/login', {
+        const res = await fetch(API_PREFIX + '/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password })
@@ -133,7 +154,7 @@ const GameSystem = (function () {
     if (!username || !password) return { success: false, error: "请输入用户名和密码" };
     if (backendAvailable) {
       try {
-        const res = await fetch('/api/register', {
+        const res = await fetch(API_PREFIX + '/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password, nickname })
@@ -158,9 +179,7 @@ const GameSystem = (function () {
   async function load() {
     if (isBackendAuthed()) {
       try {
-        const res = await fetch('/api/progress', {
-          headers: { Authorization: `Bearer ${authToken}` }
-        });
+        const res = await fetch(API_PREFIX + '/progress');
         if (res.ok) {
           const data = await res.json();
           const chapterSum = Object.values(data.chapters || {}).reduce((s, c) => s + (c?.stars || 0), 0);
@@ -219,9 +238,9 @@ const GameSystem = (function () {
   async function addStars(chapterId, questionId, starCount) {
     if (isBackendAuthed()) {
       try {
-        const res = await fetch('/api/submit', {
+        const res = await fetch(API_PREFIX + '/submit', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ chapterId, questionId, starCount })
         });
         if (res.ok) {
@@ -260,9 +279,9 @@ const GameSystem = (function () {
   async function spendStars(count = 1) {
     if (isBackendAuthed()) {
       try {
-        const res = await fetch('/api/spend', {
+        const res = await fetch(API_PREFIX + '/spend', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ count })
         });
         if (res.ok) {
@@ -428,13 +447,17 @@ const GameSystem = (function () {
     flyStars, showAchievementPopup,
     renderStarDisplay, renderTitleBar,
     showLoginModal, login, register, logout, isLoggedIn, isBackendAuthed, getAuth, restoreAuth,
-    checkBackend, backendAvailable: () => backendAvailable
+    checkBackend, checkDjangoAuth, backendAvailable: () => backendAvailable
   };
 })();
 
 document.addEventListener('DOMContentLoaded', async function () {
   GameSystem.restoreAuth();
   await GameSystem.checkBackend();
+  // 如果后端可用，检查 Django session 认证状态
+  if (GameSystem.backendAvailable()) {
+    await GameSystem.checkDjangoAuth();
+  }
   GameSystem.renderStarDisplay();
   try { window.dispatchEvent(new CustomEvent("langchainquest:auth")); } catch {}
 });

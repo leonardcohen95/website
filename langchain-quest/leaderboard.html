@@ -47,7 +47,7 @@
 
       let players = [];
       try {
-        const res = await fetch('/api/leaderboard?limit=50');
+        const res = await fetch('/langchain-api/leaderboard?limit=50');
         if (res.ok) {
           players = await res.json();
         }

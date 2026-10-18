@@ -47,6 +47,18 @@ urlpatterns = [
     path('api/submit', views.k8s_api_submit, name='k8s_api_submit'),
     path('api/spend', views.k8s_api_spend, name='k8s_api_spend'),
 
+    # ================ LangChain 学习中心（搬运自静态站点 langchain-quest） ================
+    path('langchain-learning/', views.langchain_learning, name='langchain_learning'),
+    path('langchain-learning/<path:asset_path>', views.langchain_learning, name='langchain_learning_asset'),
+
+    # LangChain 学习中心服务端接口（进度持久化 + 全站共享排行榜）
+    path('langchain-api/login', views.langchain_api_login, name='langchain_api_login'),
+    path('langchain-api/register', views.langchain_api_register, name='langchain_api_register'),
+    path('langchain-api/progress', views.langchain_api_progress, name='langchain_api_progress'),
+    path('langchain-api/leaderboard', views.langchain_api_leaderboard, name='langchain_api_leaderboard'),
+    path('langchain-api/submit', views.langchain_api_submit, name='langchain_api_submit'),
+    path('langchain-api/spend', views.langchain_api_spend, name='langchain_api_spend'),
+
 
     # ================ 宠物养成 + 星星商店（星星来自 K8s 学习中心答题） ================
     path('pet/', pet_views.pet_page, name='pet_page'),

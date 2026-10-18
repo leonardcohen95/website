@@ -1,6 +1,7 @@
 """宠物养成 + 星星商店：页面与 API 视图。
 
-星星复用 K8s 学习中心的 K8sProgress.stars（答题获得），这里作为可消费货币。
+星星来自 K8s 学习中心（K8sProgress.stars）和 LangChain 学习中心（LangChainProgress.stars），
+两个学习中心的星星汇总后作为可消费货币。
 所有涉及扣星的写操作都走 transaction.atomic + select_for_update，避免并发双花。
 
 养成规则：
@@ -20,7 +21,7 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
-from questions.models import InventoryItem, K8sProgress, Pet, StarLedger
+from questions.models import InventoryItem, K8sProgress, LangChainProgress, Pet, StarLedger
 from questions.pet_shop import (
     BALL_KICK_COOLDOWN, BALL_KICK_EXP, CATEGORY_LABELS, EXP_PER_LEVEL, HP_PER_POINT,
     MAX_LEVEL, PET_SPECIES, PK_DAILY_LIMIT, PK_REFRESH_LIMIT, PK_WIN_EXP, PK_WIN_STARS,
@@ -46,7 +47,53 @@ def _body(request):
 
 
 def _stars_of(user):
+    """返回 K8s 进度对象（历史兼容）。"""
     return K8sProgress.objects.get_or_create(user=user)[0]
+
+
+def _langchain_stars_of(user):
+    """返回 LangChain 进度对象。"""
+    return LangChainProgress.objects.get_or_create(user=user)[0]
+
+
+def _total_stars(user):
+    """汇总 K8s + LangChain 两个学习中心的星星总数。"""
+    k8s = K8sProgress.objects.get_or_create(user=user)[0]
+    lc = LangChainProgress.objects.get_or_create(user=user)[0]
+    return k8s.stars + lc.stars
+
+
+def _deduct_stars(user, amount):
+    """从两个学习中心扣除星星：优先扣 K8s，不够再扣 LangChain。
+    返回扣除后的总星星数。"""
+    k8s = K8sProgress.objects.select_for_update().get_or_create(user=user)[0]
+    lc = LangChainProgress.objects.select_for_update().get_or_create(user=user)[0]
+    remaining = amount
+    if k8s.stars >= remaining:
+        k8s.stars -= remaining
+        k8s.save(update_fields=['stars'])
+        remaining = 0
+    else:
+        remaining -= k8s.stars
+        k8s.stars = 0
+        k8s.save(update_fields=['stars'])
+        if lc.stars >= remaining:
+            lc.stars -= remaining
+            lc.save(update_fields=['stars'])
+            remaining = 0
+        else:
+            remaining -= lc.stars
+            lc.stars = 0
+            lc.save(update_fields=['stars'])
+    return k8s.stars + lc.stars
+
+
+def _add_stars_to_k8s(user, amount):
+    """给 K8s 进度加星星（对战奖励等）。"""
+    k8s = K8sProgress.objects.get_or_create(user=user)[0]
+    k8s.stars += amount
+    k8s.save(update_fields=['stars'])
+    return k8s.stars
 
 
 def _age_text(seconds):
@@ -175,11 +222,10 @@ def shop_page(request):
 @csrf_exempt
 @_api_login_required
 def api_pet_status(request):
-    prog = _stars_of(request.user)
     pet = Pet.objects.filter(user=request.user).first()
     inv = _inventory_map(request.user)
     return JsonResponse({
-        'stars': prog.stars,
+        'stars': _total_stars(request.user),
         'pet': _pet_payload(pet),
         'species': [_species_payload(s) for s in PET_SPECIES],
         'shop': [_item_payload(it, inv.get(it['id'], 0)) for it in SHOP_ITEMS],
@@ -203,15 +249,13 @@ def api_pet_adopt(request):
 
     price = int(sp.get('price', 0) or 0)
     with transaction.atomic():
-        prog = K8sProgress.objects.select_for_update().get_or_create(user=request.user)[0]
-        if prog.stars < price:
-            return JsonResponse({'success': False, 'reason': 'stars', 'error': '星星不足', 'stars': prog.stars})
+        if _total_stars(request.user) < price:
+            return JsonResponse({'success': False, 'reason': 'stars', 'error': '星星不足', 'stars': _total_stars(request.user)})
         if price > 0:
-            prog.stars -= price
-            prog.save(update_fields=['stars', 'updated_at'])
-            StarLedger.objects.create(user=request.user, delta=-price, balance=prog.stars, reason='adopt', ref=species_id)
+            balance = _deduct_stars(request.user, price)
+            StarLedger.objects.create(user=request.user, delta=-price, balance=balance, reason='adopt', ref=species_id)
         pet = Pet.objects.create(user=request.user, species=species_id, name=name)
-    return JsonResponse({'success': True, 'stars': prog.stars, 'pet': _pet_payload(pet)})
+    return JsonResponse({'success': True, 'stars': _total_stars(request.user), 'pet': _pet_payload(pet)})
 
 
 @csrf_exempt
@@ -263,7 +307,7 @@ def _consume_for_pet(request, expect):
     return JsonResponse({
         'success': True,
         'pet': _pet_payload(pet),
-        'stars': _stars_of(request.user).stars,
+        'stars': _total_stars(request.user),
     })
 
 
@@ -382,11 +426,10 @@ def api_pet_equip(request):
 @csrf_exempt
 @_api_login_required
 def api_shop_items(request):
-    prog = _stars_of(request.user)
     inv = _inventory_map(request.user)
     catalog = [_item_payload(it, inv.get(it['id'], 0)) for it in SHOP_ITEMS]
     owned = [_item_payload(it, inv[it['id']]) for it in SHOP_ITEMS if inv.get(it['id'], 0) > 0]
-    return JsonResponse({'stars': prog.stars, 'catalog': catalog, 'owned': owned})
+    return JsonResponse({'stars': _total_stars(request.user), 'catalog': catalog, 'owned': owned})
 
 
 @csrf_exempt
@@ -416,14 +459,13 @@ def api_shop_buy(request):
                                      'error': '这件道具已经拥有了，不能重复购买'})
             qty = 1
             cost = int(item['price'])
-        prog = K8sProgress.objects.select_for_update().get_or_create(user=request.user)[0]
-        if prog.stars < cost:
-            return JsonResponse({'success': False, 'reason': 'stars', 'error': '星星不足', 'stars': prog.stars})
-        prog.stars -= cost
-        prog.save(update_fields=['stars', 'updated_at'])
+        prog_stars = _total_stars(request.user)
+        if prog_stars < cost:
+            return JsonResponse({'success': False, 'reason': 'stars', 'error': '星星不足', 'stars': prog_stars})
+        balance = _deduct_stars(request.user, cost)
         row.quantity += qty
         row.save(update_fields=['quantity'])
-        StarLedger.objects.create(user=request.user, delta=-cost, balance=prog.stars, reason='buy', ref=item_id)
+        StarLedger.objects.create(user=request.user, delta=-cost, balance=balance, reason='buy', ref=item_id)
         owned_now = row.quantity
 
         # 装饰类商品买下即摆进布景（可同时布置多件）
@@ -436,7 +478,7 @@ def api_shop_buy(request):
                     pet.decor = ','.join(active)
                     pet.save(update_fields=['decor'])
 
-    return JsonResponse({'success': True, 'stars': prog.stars, 'item_id': item_id, 'owned': owned_now})
+    return JsonResponse({'success': True, 'stars': _total_stars(request.user), 'item_id': item_id, 'owned': owned_now})
 
 
 @csrf_exempt
@@ -483,12 +525,10 @@ def api_shop_sell(request):
             field = 'weapon' if item['category'] == 'weapon' else 'armor'
             Pet.objects.filter(user=request.user, **{field: item_id}).update(**{field: ''})
 
-        prog = K8sProgress.objects.select_for_update().get_or_create(user=request.user)[0]
-        prog.stars += refund
-        prog.save(update_fields=['stars', 'updated_at'])
-        StarLedger.objects.create(user=request.user, delta=refund, balance=prog.stars, reason='sell', ref=item_id)
+        balance = _add_stars_to_k8s(request.user, refund)
+        StarLedger.objects.create(user=request.user, delta=refund, balance=balance, reason='sell', ref=item_id)
 
-    return JsonResponse({'success': True, 'stars': prog.stars, 'item_id': item_id,
+    return JsonResponse({'success': True, 'stars': _total_stars(request.user), 'item_id': item_id,
                          'refund': refund, 'owned': max(0, qty_after)})
 
 
@@ -652,14 +692,12 @@ def api_pet_pk(request):
         if winner == 'me':
             pet.exp += PK_WIN_EXP
             fields.append('exp')
-            prog = K8sProgress.objects.select_for_update().get_or_create(user=request.user)[0]
-            prog.stars += PK_WIN_STARS
-            prog.save(update_fields=['stars', 'updated_at'])
+            balance = _add_stars_to_k8s(request.user, PK_WIN_STARS)
             StarLedger.objects.create(user=request.user, delta=PK_WIN_STARS,
-                                      balance=prog.stars, reason='pk_win', ref=str(opp.id))
+                                      balance=balance, reason='pk_win', ref=str(opp.id))
             rewards = {'stars': PK_WIN_STARS, 'exp': PK_WIN_EXP}
         pet.save(update_fields=fields)
-        stars_now = _stars_of(request.user).stars
+        stars_now = _total_stars(request.user)
         pk_left = max(0, PK_DAILY_LIMIT - int(pet.pk_count))
 
     return JsonResponse({
