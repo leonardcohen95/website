@@ -2402,22 +2402,22 @@
       if (!rows || !rows.length) {
         return '<div class="text-center text-muted py-4">暂无上榜宠物</div>';
       }
+      var me = (window.__petMe || '');
       return rows.map(function (r) {
-        var me = r.username === (petState && petState.pet ? '' : '');
-        var row = '<div class="d-flex align-items-center py-1 px-2 rounded ' +
-                  (r.username === (window.__petMe || '') ? 'bg-primary-subtle' : '') +
-                  '" style="border-bottom:1px solid #f0f0f0;">' +
-                  '<div style="width:42px;text-align:center;font-size:1.1rem;">' + medal(r.rank) + '</div>' +
-                  '<div class="flex-grow-1 ms-1">' +
-                    '<div class="fw-bold" style="font-size:.92rem;line-height:1.2;">' +
-                      (r.username === (window.__petMe || '') ? '<span class="text-primary">『我』</span> ' : '') +
-                      r.pet_name + ' <span class="text-muted fw-normal small">(' + r.username + ')</span>' +
-                    '</div>' +
-                    '<div class="small text-muted">' + r.species_name + '</div>' +
+        var isMe = r.username === me;
+        return '<div style="display:flex;flex-direction:row;align-items:center;flex-wrap:nowrap;padding:5px 6px;border-bottom:1px solid #f0f0f0;' +
+                  (isMe ? 'background:#cfe2ff;' : '') + '">' +
+                  '<div style="width:30px;min-width:30px;text-align:center;font-size:1rem;flex-shrink:0;">' + medal(r.rank) + '</div>' +
+                  '<div class="flex-grow-1" style="min-width:0;margin:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+                    '<span style="font-size:.78rem;font-weight:600;">' +
+                      (isMe ? '<span style="color:#0d6efd;">『我』</span>' : '') +
+                      r.pet_name +
+                    '</span>' +
+                    '<span style="font-size:.68rem;color:#888;margin-left:2px;">(' + r.username + ')</span>' +
+                    '<span style="font-size:.68rem;color:#aaa;margin-left:4px;">' + r.species_name + '</span>' +
                   '</div>' +
-                  '<div class="fw-bold text-end" style="color:#d63384;min-width:70px;">' + r.value_text + '</div>' +
+                  '<div style="flex-shrink:0;font-size:.82rem;font-weight:700;color:#d63384;white-space:nowrap;">' + r.value_text + '</div>' +
                 '</div>';
-        return row;
       }).join('');
     }
 
