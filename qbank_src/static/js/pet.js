@@ -475,6 +475,7 @@
     cao: {
       shell:'#6b5a33', shellLight:'#8b7542', shellDark:'#4a3d22',
       skin:'#8fa05e', skinLight:'#aeb984', skinDark:'#5e6d3f', outline:'#241c10',
+      belly:'#c9b24a', bellyLight:'#dcc868', bellyDark:'#9a8732',
       rx:34, ry:24, dome:0.95, pattern:'keels',
       hsize:1.0, eye:'#1a1a1a', eyeR:2.3, stripe:'#e6d24f', brow:false, ear:null,
       tail:'short', leg:1.0,
@@ -483,6 +484,7 @@
     huangyuan: {
       shell:'#3b3128', shellLight:'#5a4a3c', shellDark:'#241d15',
       skin:'#615f46', skinLight:'#807d60', skinDark:'#3e3d2e', outline:'#14100b',
+      belly:'#e8c33f', bellyLight:'#f0d468', bellyDark:'#b89220',
       rx:31, ry:28, dome:1.34, pattern:'scutes', keel:'#e8c33f',
       hsize:1.0, eye:'#1a1a1a', eyeR:2.2, stripe:'#e8d24a', brow:false, ear:null,
       tail:'short', leg:1.0,
@@ -491,6 +493,7 @@
     eyu: {
       shell:'#5c5548', shellLight:'#7a7261', shellDark:'#3a3428',
       skin:'#6f6a5a', skinLight:'#8c8674', skinDark:'#4a4639', outline:'#1f1c15',
+      belly:'#a89860', bellyLight:'#c2b27a', bellyDark:'#7a6e44',
       rx:38, ry:26, dome:1.12, pattern:'spikes', spike:'#6f6656',
       hsize:1.4, eye:'#0f0f0b', eyeR:1.9, stripe:null, brow:true, ear:null,
       tail:'long', leg:1.3,
@@ -499,6 +502,7 @@
     xiaoqing: {
       shell:'#4fb15c', shellLight:'#7fd08a', shellDark:'#3a8c48',
       skin:'#7bd286', skinLight:'#a6e2ae', skinDark:'#4fa85a', outline:'#123a1c',
+      belly:'#d4e89a', bellyLight:'#e6f2b8', bellyDark:'#a8c068',
       rx:30, ry:26, dome:1.06, pattern:'smooth',
       hsize:1.1, eye:'#1a1a1a', eyeR:3.0, stripe:null, brow:false, ear:null,
       tail:'short', leg:0.95,
@@ -507,6 +511,7 @@
     brazil: {
       shell:'#f0dfa6', shellLight:'#faf0c8', shellDark:'#d8c286',
       skin:'#f6efd6', skinLight:'#fffbe8', skinDark:'#c9bd8c', outline:'#8a7c50',
+      belly:'#f5e6b0', bellyLight:'#fbf3d0', bellyDark:'#d4bf7e',
       rx:33, ry:27, dome:1.0, pattern:'scutes',
       hsize:1.0, eye:'#c0392b', eyeR:2.7, stripe:null, brow:false, ear:'#e59a86',
       tail:'short', leg:1.0,
@@ -1186,132 +1191,255 @@
       ctx.restore();
     }
 
-    /* 外饰：飘动斗篷（站姿专用）。从双肩垂下，底边随 `wind` 相位波浪起伏，
-       走路时 billow 幅度更大。坐标系：直立躯干居中，y 向下。 */
-    function drawFlowingCape(s, wind) {
-      var rx = col.rx * s, ry = col.ry * s;
-      var rw = ry;   // 躯干半宽
-      var rh = rx;   // 躯干半高
+    /* 站姿腹甲（plastron）：乌龟直立正脸时露出的淡黄色腹甲，带盾片线 */
+    function drawBelly(s, tw, th) {
       ctx.save();
-      // 肩部附着点
-      var shL = -rw * 0.78, shR = rw * 0.78;
-      var shY = -rh * 0.52;
-      // 斗篷长度 & billow
-      var capeLen = rh * 2.1;
-      var billow = 1 + Math.sin(wind) * 0.12 + Math.sin(wind * 2.3) * 0.06;
-      // 采样底边，用多段二次曲线形成飘动波浪
-      var segs = 16;
-      var pts = [];
+      // 腹甲主体（竖椭圆）
+      ctx.beginPath();
+      ctx.ellipse(0, 0, tw * 0.82, th * 0.95, 0, 0, Math.PI * 2);
+      var bg = ctx.createRadialGradient(-tw * 0.15, -th * 0.3, 1 * s, 0, 0, tw);
+      bg.addColorStop(0, col.bellyLight);
+      bg.addColorStop(0.55, col.belly);
+      bg.addColorStop(1, col.bellyDark);
+      ctx.fillStyle = bg; ctx.fill();
+      ctx.lineWidth = 1.4 * s; ctx.strokeStyle = col.outline; ctx.stroke();
+      // 腹甲盾片线（中缝 + 横向分节）
+      ctx.strokeStyle = shade(col.bellyDark, -15);
+      ctx.lineWidth = 1.1 * s;
+      ctx.globalAlpha = 0.55;
+      // 中缝
+      ctx.beginPath(); ctx.moveTo(0, -th * 0.8); ctx.lineTo(0, th * 0.8); ctx.stroke();
+      // 横向分节（上胸板、中板、下板）
+      [-0.4, 0.1, 0.55].forEach(function (fy) {
+        ctx.beginPath();
+        ctx.moveTo(-tw * 0.7, fy * th);
+        ctx.quadraticCurveTo(0, fy * th + 2 * s, tw * 0.7, fy * th);
+        ctx.stroke();
+      });
+      ctx.globalAlpha = 1;
+      // 顶部高光
+      ctx.beginPath();
+      ctx.ellipse(-tw * 0.15, -th * 0.4, tw * 0.28, th * 0.16, -0.3, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.fill();
+      ctx.restore();
+    }
+
+    /* 外饰：飘动斗篷（站姿专用，较短）。从双肩垂下，底边随 `wind` 波浪起伏 */
+    function drawFlowingCape(s, wind, tw, th) {
+      ctx.save();
+      var shL = -tw * 0.82, shR = tw * 0.82;
+      var shY = -th * 0.5;
+      var capeLen = th * 1.25;                    // 较短：到腿中部
+      var billow = 1 + Math.sin(wind) * 0.1 + Math.sin(wind * 2.1) * 0.05;
+      var segs = 14, pts = [];
       for (var i = 0; i <= segs; i++) {
         var u = i / segs;
         var bx = shL + (shR - shL) * u;
-        // 底部 y：中间垂得最长，两侧略短；叠加波浪
-        var lenT = capeLen * (0.85 + 0.3 * Math.sin(u * Math.PI));
-        var wave = Math.sin(u * Math.PI * 3 + wind * 1.6) * 3 * s
-                 + Math.sin(u * Math.PI * 5 + wind * 0.9) * 1.6 * s;
-        var by = shY + lenT * billow + wave;
-        pts.push([bx, by]);
+        var lenT = capeLen * (0.82 + 0.26 * Math.sin(u * Math.PI));
+        var wave = Math.sin(u * Math.PI * 3 + wind * 1.5) * 2.4 * s
+                 + Math.sin(u * Math.PI * 5 + wind * 0.8) * 1.2 * s;
+        pts.push([bx, shY + lenT * billow + wave]);
       }
-      // 披风主体
       ctx.beginPath();
       ctx.moveTo(shL, shY);
-      // 左上 billow 弧
-      ctx.quadraticCurveTo(shL - rw * 0.55 * billow, shY + capeLen * 0.35, pts[0][0], pts[0][1]);
+      ctx.quadraticCurveTo(shL - tw * 0.5 * billow, shY + capeLen * 0.32, pts[0][0], pts[0][1]);
       for (var j = 0; j < segs; j++) {
         var midX = (pts[j][0] + pts[j + 1][0]) / 2;
         var midY = (pts[j][1] + pts[j + 1][1]) / 2;
         ctx.quadraticCurveTo(pts[j][0], pts[j][1], midX, midY);
       }
       ctx.quadraticCurveTo(pts[segs][0], pts[segs][1], shR, shY);
-      ctx.quadraticCurveTo(shR + rw * 0.55 * billow, shY + capeLen * 0.35, shL, shY);
+      ctx.quadraticCurveTo(shR + tw * 0.5 * billow, shY + capeLen * 0.32, shL, shY);
       ctx.closePath();
       var cg = ctx.createLinearGradient(0, shY, 0, shY + capeLen);
       cg.addColorStop(0, '#c02020');
       cg.addColorStop(0.45, '#e03838');
       cg.addColorStop(1, '#8a1414');
       ctx.fillStyle = cg; ctx.fill();
-      ctx.lineWidth = 1.2 * s; ctx.strokeStyle = '#5a0e0e'; ctx.stroke();
-      // 内领（深色）
+      ctx.lineWidth = 1.1 * s; ctx.strokeStyle = '#5a0e0e'; ctx.stroke();
+      // 内领
       ctx.beginPath();
-      ctx.moveTo(shL * 0.78, shY);
-      ctx.quadraticCurveTo(0, shY + rh * 0.22, shR * 0.78, shY);
-      ctx.lineTo(shR * 0.5, shY + rh * 0.28);
-      ctx.quadraticCurveTo(0, shY + rh * 0.34, -shR * 0.5, shY + rh * 0.28);
+      ctx.moveTo(shL * 0.72, shY);
+      ctx.quadraticCurveTo(0, shY + th * 0.2, shR * 0.72, shY);
+      ctx.lineTo(shR * 0.46, shY + th * 0.26);
+      ctx.quadraticCurveTo(0, shY + th * 0.32, -shR * 0.46, shY + th * 0.26);
       ctx.closePath();
       ctx.fillStyle = '#3a0a0a'; ctx.fill();
-      // 披风褶皱高光（随风动）
-      ctx.strokeStyle = 'rgba(255,180,180,.28)';
-      ctx.lineWidth = 0.9 * s;
+      // 褶皱高光
+      ctx.strokeStyle = 'rgba(255,180,180,.26)'; ctx.lineWidth = 0.8 * s;
       for (var f = 1; f <= 2; f++) {
         ctx.beginPath();
         var fx = shL + (shR - shL) * (f / 3);
-        ctx.moveTo(fx, shY + rh * 0.4);
-        ctx.quadraticCurveTo(fx + Math.sin(wind + f) * 4 * s, shY + capeLen * 0.6, fx + Math.sin(wind * 1.3 + f) * 6 * s, shY + capeLen * 0.95);
+        ctx.moveTo(fx, shY + th * 0.35);
+        ctx.quadraticCurveTo(fx + Math.sin(wind + f) * 3 * s, shY + capeLen * 0.6,
+                             fx + Math.sin(wind * 1.2 + f) * 5 * s, shY + capeLen * 0.92);
         ctx.stroke();
       }
       ctx.restore();
     }
 
-    /* 装备超人斗篷时的站姿：乌龟直立行走，斗篷在身后随风飘逸。
-       复用 drawStandingArmor 的"直立本体"部分，但不画武士甲胄。 */
+    /* 装备超人斗篷时的站姿：乌龟直立、正脸朝镜头（露腹甲），斗篷在身后飘逸。
+       完全自绘正脸头部（眼睛左右排列），外饰坐标直接对齐，不依赖俯视图的旋转变换。 */
     function drawStandingCape(r, s, wid) {
       var rx = col.rx * s;
       var ry = col.ry * s;
       var hs = col.hsize;
-      var rw = ry, rh = rx;
+      var tw = ry;      // 躯干半宽（壳竖径 → 正脸宽度）
+      var th = rx;      // 躯干半高（壳横径 → 正脸高度）
       ctx.save();
 
       var accs = r.isOpp ? (r.accessories || [])
                         : ((petState && petState.pet && petState.pet.accessories) || []);
       var wearBoots = accs.indexOf('acc_boots') >= 0;
-
-      // 风速相位：呼吸驱动的微风 + 走路时的强风
       var wind = performance.now() / 500 + (r.state === 'walk' ? r.walkPhase * 1.2 : 0);
 
-      // ---- 飘动斗篷（最底层，在腿和躯干之后）----
-      drawFlowingCape(s, wind);
+      // ---- 飘动斗篷（最底层）----
+      drawFlowingCape(s, wind, tw, th);
 
       // ---- 后腿（站立支撑）----
-      var legHipY = ry * 0.55;
-      var legFootY = ry + 20 * s;
-      var legSpread = rx * 0.42;
-      drawLeg(-legSpread, legHipY, legFootY, r.walkPhase, s, false, wearBoots);
-      drawLeg(legSpread, legHipY, legFootY, r.walkPhase + Math.PI, s, false, wearBoots);
+      var legSpread = tw * 0.42;
+      var hipY = th * 0.55;
+      var footY = th + 15 * s;
+      drawLeg(-legSpread, hipY, footY, r.walkPhase, s, false, wearBoots);
+      drawLeg(legSpread, hipY, footY, r.walkPhase + Math.PI, s, false, wearBoots);
 
-      // ---- 躯干（龟壳直立）----
-      ctx.save();
-      ctx.rotate(-Math.PI / 2);
-      drawShell(s, 0.55);
-      ctx.restore();
+      // ---- 腹甲（正脸躯干）----
+      drawBelly(s, tw, th);
 
       // ---- 前腿（化为双臂，垂在躯干两侧）----
-      var armY = -rh * 0.60;
-      drawLeg(-rw * 1.0, armY, armY + 17 * s, r.walkPhase + Math.PI, s, false, wearBoots);
-      drawLeg(rw * 1.0, armY, armY + 17 * s, r.walkPhase, s, false, wearBoots);
+      var armY = -th * 0.5;
+      drawLeg(-tw * 0.9, armY, armY + 13 * s, r.walkPhase + Math.PI, s, false, wearBoots);
+      drawLeg(tw * 0.9, armY, armY + 13 * s, r.walkPhase, s, false, wearBoots);
 
-      // ---- 头（抬到躯干上方，正视）----
+      // ---- 正脸头部（眼睛左右排列）+ 外饰 ----
+      var headCY = -th - 1.5 * hs * s;     // 头顶位于躯干上缘上方
       ctx.save();
-      var headX = (col.rx * 0.86 + r.headExt * 7 + (r.headPeck || 0)) * s;
-      ctx.translate(0, -rh * 0.58);
-      ctx.rotate(-Math.PI / 2);
-      ctx.translate(-headX, 0);
-      drawHead(r, s, 0, true);
-      // 头部外饰摆正
+      ctx.translate(0, headCY);
+      var headRX = 9.5 * hs * s, headRY = 8.5 * hs * s;
+
+      // 脖子（连接头与躯干）
+      ctx.beginPath();
+      ctx.moveTo(-3.5 * hs * s, headRY - 1 * s);
+      ctx.quadraticCurveTo(-3 * hs * s, headRY + 4 * s, -2 * hs * s, headRY + 6 * s);
+      ctx.lineTo(2 * hs * s, headRY + 6 * s);
+      ctx.quadraticCurveTo(3 * hs * s, headRY + 4 * s, 3.5 * hs * s, headRY - 1 * s);
+      ctx.closePath();
+      ctx.fillStyle = col.skin; ctx.fill();
+      ctx.lineWidth = 1.2 * s; ctx.strokeStyle = col.outline; ctx.stroke();
+
+      // 头主体（正脸椭圆）
+      ctx.beginPath();
+      ctx.ellipse(0, 0, headRX, headRY, 0, 0, Math.PI * 2);
+      var hg = ctx.createRadialGradient(-2 * s, -3 * s, 1 * s, 0, 0, headRX);
+      hg.addColorStop(0, col.skinLight); hg.addColorStop(1, col.skin);
+      ctx.fillStyle = hg; ctx.fill();
+      ctx.lineWidth = 1.4 * s; ctx.strokeStyle = col.outline; ctx.stroke();
+
+      // 头侧条纹（草龟/黄缘）：左右脸颊各一条
+      if (col.stripe) {
+        ctx.strokeStyle = col.stripe; ctx.lineWidth = 1.6 * s;
+        [-1, 1].forEach(function (sgn) {
+          ctx.beginPath();
+          ctx.moveTo(sgn * headRX * 0.5, -headRY * 0.55);
+          ctx.quadraticCurveTo(sgn * headRX * 0.85, -headRY * 0.1, sgn * headRX * 0.6, headRY * 0.45);
+          ctx.stroke();
+        });
+      }
+      // 耳斑（巴西龟）
+      if (col.ear) {
+        ctx.fillStyle = col.ear;
+        [-1, 1].forEach(function (sgn) {
+          ctx.beginPath();
+          ctx.ellipse(sgn * headRX * 0.78, 0, 2.2 * s, 1.7 * s, 0, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      // 眼睛（左右排列，正视）
+      var eyeX = 4.6 * hs * s, eyeY = -1.4 * hs * s, eyeR = col.eyeR * s;
+      [-1, 1].forEach(function (sgn) {
+        var ex = sgn * eyeX, ey = eyeY;
+        ctx.beginPath();
+        ctx.ellipse(ex, ey, eyeR * 1.05, eyeR * 1.15, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.lineWidth = 0.8 * s; ctx.strokeStyle = col.outline; ctx.stroke();
+        var lookX = Math.cos(r.headTurn) * 0.5 * s;
+        ctx.beginPath(); ctx.arc(ex + lookX, ey, eyeR * 0.78, 0, Math.PI * 2);
+        ctx.fillStyle = col.eye; ctx.fill();
+        ctx.beginPath(); ctx.arc(ex + lookX, ey, eyeR * 0.36, 0, Math.PI * 2);
+        ctx.fillStyle = '#141414'; ctx.fill();
+        ctx.beginPath(); ctx.arc(ex + lookX + 0.5 * s, ey - 0.6 * s, 0.6 * s, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff'; ctx.fill();
+      });
+
+      // 鼻孔 + 嘴
+      ctx.fillStyle = col.outline;
+      ctx.beginPath(); ctx.arc(-0.8 * s, 2.4 * hs * s, 0.55 * s, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(0.8 * s, 2.4 * hs * s, 0.55 * s, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-3 * hs * s, 5 * hs * s);
+      ctx.quadraticCurveTo(0, 6.2 * hs * s, 3 * hs * s, 5 * hs * s);
+      ctx.lineWidth = 1.2 * s; ctx.strokeStyle = shade(col.skinDark, -20); ctx.stroke();
+
+      // ---- 头部外饰（正脸坐标直接对齐）----
+      // 帽子：头顶正上方。帽子函数以 cx≈4.6hs 为中心，故左移 4.6hs 使其中线对齐 x=0
       ctx.save();
-      ctx.translate(headX, 0);
-      ctx.rotate(r.headTurn * 0.35);
-      ctx.translate(9.8 * hs * s, -4.6 * hs * s);
-      ctx.rotate(Math.PI / 2);
+      ctx.translate(-4.6 * hs * s, -headRY - 0.5 * hs * s);
       if (accs.indexOf('acc_santa') >= 0) drawHat(s);
       if (accs.indexOf('acc_crown') >= 0) drawCrown(s);
       if (accs.indexOf('acc_bamboo') >= 0) drawBambooHat(s);
       if (accs.indexOf('acc_wizard') >= 0) drawWizardHat(s);
-      if (accs.indexOf('acc_glasses') >= 0) drawGlasses(s, 0);
-      if (accs.indexOf('acc_scarf') >= 0) drawScarf(s);
-      ctx.restore();
       ctx.restore();
 
-      ctx.restore();
+      // 墨镜：眼睛高度，旋转 90° 让镜片从上下变为左右排列
+      if (accs.indexOf('acc_glasses') >= 0) {
+        ctx.save();
+        // drawGlasses 镜片在 (7hs, ±4.4hs)；旋转 π/2 后 → (∓4.4hs, 7hs)
+        // 需平移使 y=7hs 落到 eyeY=-1.4hs，故 ty = eyeY - 7hs
+        ctx.translate(0, eyeY - 7 * hs * s);
+        ctx.rotate(Math.PI / 2);
+        drawGlasses(s, 0);
+        ctx.restore();
+      }
+
+      // 围巾：脖子根部水平环绕，两条尾端垂在胸前（正脸专用）
+      if (accs.indexOf('acc_scarf') >= 0) {
+        ctx.save();
+        var sy = headRY + 0.5 * hs * s;
+        // 环绕脖子的横带
+        ctx.beginPath();
+        ctx.ellipse(0, sy, headRX * 0.82, 3.2 * hs * s, 0, 0, Math.PI * 2);
+        var sg = ctx.createLinearGradient(0, sy - 3 * hs * s, 0, sy + 3 * hs * s);
+        sg.addColorStop(0, '#d64040'); sg.addColorStop(0.5, '#e86565'); sg.addColorStop(1, '#a82828');
+        ctx.fillStyle = sg; ctx.fill();
+        ctx.lineWidth = 1 * s; ctx.strokeStyle = '#7a1818'; ctx.stroke();
+        // 针织横纹
+        ctx.strokeStyle = 'rgba(120,20,20,.4)'; ctx.lineWidth = 0.7 * s;
+        for (var k = -1; k <= 1; k++) {
+          ctx.beginPath();
+          ctx.ellipse(0, sy + k * 1.1 * s, headRX * 0.78, 2.6 * hs * s, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        // 两条尾端垂在胸前
+        ctx.fillStyle = sg;
+        ctx.beginPath();
+        ctx.moveTo(-headRX * 0.45, sy + 2 * hs * s);
+        ctx.quadraticCurveTo(-headRX * 0.55, sy + 7 * hs * s, -headRX * 0.35, sy + 10 * hs * s);
+        ctx.lineTo(-headRX * 0.05, sy + 9.5 * hs * s);
+        ctx.quadraticCurveTo(-headRX * 0.15, sy + 6 * hs * s, -headRX * 0.1, sy + 2 * hs * s);
+        ctx.closePath(); ctx.fill();
+        ctx.lineWidth = 0.8 * s; ctx.strokeStyle = '#7a1818'; ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(headRX * 0.05, sy + 2 * hs * s);
+        ctx.quadraticCurveTo(headRX * 0.15, sy + 7 * hs * s, headRX * 0.4, sy + 11 * hs * s);
+        ctx.lineTo(headRX * 0.6, sy + 10.5 * hs * s);
+        ctx.quadraticCurveTo(headRX * 0.4, sy + 6.5 * hs * s, headRX * 0.4, sy + 2 * hs * s);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.restore();
+      }
+
+      ctx.restore();   // head context
+      ctx.restore();   // standing context
     }
 
     /* 外饰：小皮靴。套在一只脚上（footX, footYF 为脚底坐标） */
