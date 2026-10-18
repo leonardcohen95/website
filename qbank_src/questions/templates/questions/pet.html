@@ -9,6 +9,7 @@
         <div class="card shadow-lg rounded-4 overflow-hidden">
             <div class="card-header bg-gradient-primary text-white text-center py-4 position-relative">
                 <button id="pet-leaderboard-btn" class="btn btn-light rounded-pill position-absolute"
+                        onclick="window.showLeaderboard && window.showLeaderboard()"
                         style="top:8px;right:10px;font-size:.72rem;padding:3px 10px;z-index:5;touch-action:manipulation;box-shadow:0 2px 8px rgba(0,0,0,.15);">
                     <i class="bi bi-trophy me-1"></i>排行榜
                 </button>
@@ -33,5 +34,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/pet.js' %}?v=20261017pk9"></script>
+<script src="{% static 'js/pet.js' %}?v=20261018lb2"></script>
 {% endblock %}

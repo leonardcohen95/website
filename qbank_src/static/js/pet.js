@@ -2459,6 +2459,8 @@
     }
     switchTab('power');
   }
+  // 暴露到全局，供 inline onclick 兜底调用（防止事件绑定因缓存/时序失效）
+  window.showLeaderboard = showLeaderboard;
 
   // 排行榜按钮：按钮在静态 HTML 中，脚本加载时已存在，直接绑定（兼容移动端）
   var _lbBtn = document.getElementById('pet-leaderboard-btn');
