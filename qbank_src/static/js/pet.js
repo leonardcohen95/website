@@ -1510,10 +1510,14 @@
         drawLeg(-shX, shY, shY + 16 * s, r.walkPhase + Math.PI, s, false, wearBoots, 1.5);
         drawLeg(shX, shY, shY + 16 * s, r.walkPhase, s, false, wearBoots, 1.5);
 
-        // 武器：握在右手
+        // 武器：握在右手（跟随右手的走路摆动，避免手挥武器不动）
         if (wid === 'wpn_laser' || wid === 'wpn_cleaver') {
+          var rArmPhase = r.walkPhase;
+          var rSinP = Math.sin(rArmPhase);
+          var rHandX = shX + rSinP * 7 * s;
+          var rHandY = (shY + 16 * s) - Math.max(0, -rSinP) * 6 * s;
           ctx.save();
-          ctx.translate(shX, shY + 16 * s);
+          ctx.translate(rHandX, rHandY);
           var wpnAng2 = -1.15 + (r.swing || 0) * 2.2;
           ctx.rotate(wpnAng2);
           var L2 = 30 * s;
@@ -2405,10 +2409,12 @@
       ctx.lineWidth = 1.1 * s; ctx.strokeStyle = gold; ctx.stroke();
       ctx.restore();
 
-      // ---- 武器：握在右手（右侧前腿）----
+      // ---- 武器：握在右手（右侧前腿，跟随右手摆动）----
       if (wid === 'wpn_laser' || wid === 'wpn_cleaver') {
         ctx.save();
-        var handX = rw * 1.0, handY = armY + 17 * s;
+        var aSinP = Math.sin(r.walkPhase);
+        var handX = rw * 1.0 + aSinP * 7 * s;
+        var handY = (armY + 17 * s) - Math.max(0, -aSinP) * 6 * s;
         ctx.translate(handX, handY);
         var ang = -1.15 + (r.swing || 0) * 2.2;
         ctx.rotate(ang);
