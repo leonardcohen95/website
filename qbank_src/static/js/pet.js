@@ -1303,19 +1303,26 @@
 
       if (side > 0.5) {
         // ============ 侧身视角 ============
-        var flip = r.angle > 0 ? 1 : -1;   // 面朝方向
-        // 斗篷（在身后）
-        ctx.save();
-        ctx.scale(flip, 1);
-        drawFlowingCape(s, wind, tw, th);
-        ctx.restore();
-
-        // 后腿（远侧先画，近侧后画）
-        var legSpread = tw * 0.32;
+        var flip = r.angle > 0 ? 1 : -1;   // 面朝方向：1=朝右, -1=朝左
+        // 在翻转坐标系中，负 x 恒为背部（斗篷、远侧肢体所在侧）
+        var armX = tw * 0.46;
+        var armY = -th * 0.38;
+        var armLen = 15 * s;
+        var legX = tw * 0.3;
         var hipY = th * 0.5;
         var footY = th + 14 * s;
-        drawLeg(-legSpread, hipY, footY, r.walkPhase, s, true, wearBoots);
-        drawLeg(legSpread, hipY, footY, r.walkPhase + Math.PI, s, false, wearBoots);
+
+        // 斗篷（在身后）：偏移到背部一侧，肩部收窄、挂点上移到背顶
+        ctx.save();
+        ctx.scale(flip, 1);
+        ctx.translate(-tw * 0.28, 0);
+        drawFlowingCape(s, wind, tw, th, tw * 0.52, -th * 0.7);
+        ctx.restore();
+
+        // 远侧后腿（在壳后）
+        drawLeg(-legX, hipY, footY, r.walkPhase, s, true, wearBoots);
+        // 远侧前腿（手臂，在壳后）
+        drawLeg(-armX, armY, armY + armLen, r.walkPhase + Math.PI, s, true, wearBoots);
 
         // 躯干：龟壳侧面直立
         ctx.save();
@@ -1323,9 +1330,10 @@
         drawShell(s, 1);
         ctx.restore();
 
-        // 前腿（双臂）
-        drawLeg(-tw * 0.7, shY, shY + 14 * s, r.walkPhase + Math.PI, s, true, wearBoots);
-        drawLeg(tw * 0.7, shY, shY + 14 * s, r.walkPhase, s, false, wearBoots);
+        // 近侧前腿（手臂，在壳前）
+        drawLeg(armX, armY, armY + armLen, r.walkPhase, s, false, wearBoots);
+        // 近侧后腿（在壳前）
+        drawLeg(legX, hipY, footY, r.walkPhase + Math.PI, s, false, wearBoots);
 
         // 头部（侧视）
         ctx.save();
@@ -1340,7 +1348,7 @@
         ctx.closePath();
         ctx.fillStyle = col.skin; ctx.fill();
         ctx.lineWidth = 1.2 * s; ctx.strokeStyle = col.outline; ctx.stroke();
-        // 头（侧视椭圆）
+        // 头（侧视椭圆），中心在 (6*hs*s, 0)
         ctx.beginPath();
         ctx.ellipse(6 * hs * s, 0, 9 * hs * s, 7.5 * hs * s, 0, 0, Math.PI * 2);
         var hg = ctx.createRadialGradient(4 * hs * s, -2 * hs * s, 1 * s, 6 * hs * s, 0, 9 * hs * s);
@@ -1372,20 +1380,35 @@
         ctx.moveTo(14 * hs * s, 3 * hs * s);
         ctx.quadraticCurveTo(11 * hs * s, 4.5 * hs * s, 8 * hs * s, 3.5 * hs * s);
         ctx.lineWidth = 1.2 * s; ctx.strokeStyle = shade(col.skinDark, -20); ctx.stroke();
-        // 帽子（侧视，居中在头顶）
+        // 帽子（侧视）：平移使帽檐中心 (cx=4.6hs, cy=-6.2hs) 落到头顶 (6hs, -7.5hs)
         ctx.save();
-        ctx.translate(-4.6 * hs * s, 0);
+        ctx.translate(1.4 * hs * s, -1.3 * hs * s);
         if (accs.indexOf('acc_santa') >= 0) drawHat(s);
         if (accs.indexOf('acc_crown') >= 0) drawCrown(s);
         if (accs.indexOf('acc_bamboo') >= 0) drawBambooHat(s);
         if (accs.indexOf('acc_wizard') >= 0) drawWizardHat(s);
         ctx.restore();
-        // 墨镜（侧视，单片）
+        // 墨镜（侧视单片）：直接画在侧眼上，不再旋转 drawGlasses
         if (accs.indexOf('acc_glasses') >= 0) {
+          var lensR = (col.eyeR || 2.2) * s * 1.4;
           ctx.save();
-          ctx.translate(0, -1 * hs * s);
-          ctx.rotate(Math.PI / 2);
-          drawGlasses(s, 1);
+          // 镜片
+          ctx.beginPath();
+          ctx.ellipse(ex, ey, lensR, lensR * 1.05, 0, 0, Math.PI * 2);
+          var lg = ctx.createLinearGradient(ex, ey - lensR, ex, ey + lensR);
+          lg.addColorStop(0, '#1a1a1a'); lg.addColorStop(1, '#4a4a4a');
+          ctx.fillStyle = lg; ctx.fill();
+          ctx.lineWidth = 1.1 * s; ctx.strokeStyle = '#000'; ctx.stroke();
+          // 镜腿（连到后脑勺）
+          ctx.beginPath();
+          ctx.moveTo(ex - lensR * 0.9, ey);
+          ctx.lineTo(ex - lensR - 5 * hs * s, ey + 1.2 * hs * s);
+          ctx.lineWidth = 1.2 * s; ctx.strokeStyle = '#000'; ctx.stroke();
+          // 高光
+          ctx.fillStyle = 'rgba(255,255,255,.35)';
+          ctx.beginPath();
+          ctx.ellipse(ex - lensR * 0.3, ey - lensR * 0.35, lensR * 0.35, lensR * 0.18, -0.4, 0, Math.PI * 2);
+          ctx.fill();
           ctx.restore();
         }
         // 围巾
