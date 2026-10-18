@@ -1310,9 +1310,10 @@
         // ============ 侧身视角 ============
         var flip = Math.cos(r.angle) < 0 ? -1 : 1;   // 与 drawTurtle 全局 flip 定义一致，确保二次 scale 抵消
         // 在翻转坐标系中，负 x 恒为背部（斗篷、远侧肢体所在侧）
-        var armX = tw * 0.8;          // 手臂根部贴到壳前缘，避免悬空
+        var armX = tw * 0.28;          // 手臂根部贴在腹甲前缘（侧身腹甲只到 ~0.28*tw），无缝衔接
         var armY = -th * 0.38;
-        var armLen = 15 * s;
+        var armLen = 18 * s;           // 手臂长度：从肩垂到髋部附近，避免手悬空在躯干中部
+        var armPhase = 0;              // 手臂静止下垂（不跟随走路相位摆动，防止手凌空）
         var legX = tw * 0.3;
         var hipY = th * 0.5;
         var footY = th + 14 * s;
@@ -1331,7 +1332,7 @@
         // 远侧后腿（在壳后）
         drawLeg(-legX, hipY, footY, r.walkPhase, s, true, wearBoots, 1.5);
         // 远侧前腿（手臂，在壳后）
-        drawLeg(-armX, armY, armY + armLen, r.walkPhase + Math.PI, s, true, wearBoots, 1.5);
+        drawLeg(-armX, armY, armY + armLen, armPhase + Math.PI, s, true, wearBoots, 1.5);
 
         // 躯干：龟壳侧面直立（rotate 后背甲拱弧落在左侧 = 背部）
         ctx.save();
@@ -1340,7 +1341,7 @@
         ctx.restore();
 
         // 近侧前腿（手臂，在壳前）
-        drawLeg(armX, armY, armY + armLen, r.walkPhase, s, false, wearBoots, 1.5);
+        drawLeg(armX, armY, armY + armLen, armPhase, s, false, wearBoots, 1.5);
         // 近侧后腿（在壳前）
         drawLeg(legX, hipY, footY, r.walkPhase + Math.PI, s, false, wearBoots, 1.5);
 
