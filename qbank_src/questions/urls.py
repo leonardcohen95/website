@@ -79,6 +79,9 @@ urlpatterns = [
     path('api/pet/pk-opponents', pet_views.api_pet_pk_opponents, name='api_pet_pk_opponents'),
     path('api/pet/pk', pet_views.api_pet_pk, name='api_pet_pk'),
 
+    # 宠物龟排行榜：武力值 / 等级 / 龟龄 / 对战胜场
+    path('api/pet/leaderboard', pet_views.api_pet_leaderboard, name='api_pet_leaderboard'),
+
 
     # ================ RAG 知识库路由（统一前缀 knowledge-base/） ================
     # 页面

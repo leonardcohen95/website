@@ -2348,8 +2348,122 @@
     });
   }
 
+  /* ---------------- 宠物排行榜弹窗 ---------------- */
+  function showLeaderboard() {
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2100;display:flex;align-items:center;justify-content:center;';
+
+    var tabs = [
+      { key: 'power', label: '⚔️ 武力值', icon: '⚔️' },
+      { key: 'level', label: '⭐ 等级', icon: '⭐' },
+      { key: 'age', label: '⏳ 龟龄', icon: '⏳' },
+      { key: 'wins', label: '🏆 胜场', icon: '🏆' }
+    ];
+
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fff;border-radius:16px;padding:18px;max-width:460px;width:92%;max-height:82vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.3);';
+
+    var title = document.createElement('div');
+    title.className = 'fw-bold text-center mb-2';
+    title.style.fontSize = '1.15rem';
+    title.innerHTML = '<i class="bi bi-trophy me-1"></i>宠物龟排行榜';
+    box.appendChild(title);
+
+    var tabBar = document.createElement('div');
+    tabBar.className = 'd-flex gap-1 mb-2 flex-wrap justify-content-center';
+    box.appendChild(tabBar);
+
+    var body = document.createElement('div');
+    body.style.minHeight = '120px';
+    box.appendChild(body);
+
+    var myRankBar = document.createElement('div');
+    myRankBar.className = 'text-center small text-muted mt-2';
+    box.appendChild(myRankBar);
+
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'btn btn-outline-secondary rounded-pill w-100 mt-3';
+    closeBtn.textContent = '关闭';
+    closeBtn.addEventListener('click', function () { ov.remove(); });
+    box.appendChild(closeBtn);
+
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
+
+    function medal(rank) {
+      if (rank === 1) return '🥇';
+      if (rank === 2) return '🥈';
+      if (rank === 3) return '🥉';
+      return '<span class="text-muted" style="font-weight:600;min-width:1.5em;display:inline-block;">' + rank + '</span>';
+    }
+
+    function renderRows(rows) {
+      if (!rows || !rows.length) {
+        return '<div class="text-center text-muted py-4">暂无上榜宠物</div>';
+      }
+      return rows.map(function (r) {
+        var me = r.username === (petState && petState.pet ? '' : '');
+        var row = '<div class="d-flex align-items-center py-1 px-2 rounded ' +
+                  (r.username === (window.__petMe || '') ? 'bg-primary-subtle' : '') +
+                  '" style="border-bottom:1px solid #f0f0f0;">' +
+                  '<div style="width:42px;text-align:center;font-size:1.1rem;">' + medal(r.rank) + '</div>' +
+                  '<div class="flex-grow-1 ms-1">' +
+                    '<div class="fw-bold" style="font-size:.92rem;line-height:1.2;">' +
+                      (r.username === (window.__petMe || '') ? '<span class="text-primary">『我』</span> ' : '') +
+                      r.pet_name + ' <span class="text-muted fw-normal small">(' + r.username + ')</span>' +
+                    '</div>' +
+                    '<div class="small text-muted">' + r.species_name + '</div>' +
+                  '</div>' +
+                  '<div class="fw-bold text-end" style="color:#d63384;min-width:70px;">' + r.value_text + '</div>' +
+                '</div>';
+        return row;
+      }).join('');
+    }
+
+    function switchTab(key) {
+      tabBar.querySelectorAll('.lb-tab').forEach(function (t) {
+        if (t.dataset.key === key) {
+          t.className = 'lb-tab btn btn-sm btn-primary rounded-pill';
+        } else {
+          t.className = 'lb-tab btn btn-sm btn-outline-secondary rounded-pill';
+        }
+      });
+      body.innerHTML = '<div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm"></div> 加载中…</div>';
+      myRankBar.textContent = '';
+      api('/api/pet/leaderboard').then(function (data) {
+        if (!data) return;
+        var section = data[key];
+        if (!section) { body.innerHTML = '<div class="text-center text-muted py-4">数据异常</div>'; return; }
+        body.innerHTML = renderRows(section.rows);
+        if (section.my_rank > 0) {
+          myRankBar.textContent = '我的排名：第 ' + section.my_rank + ' 名';
+        } else {
+          myRankBar.textContent = '我还未上榜（快去领养一只宠物龟吧）';
+        }
+      });
+    }
+
+    tabs.forEach(function (t) {
+      var b = document.createElement('button');
+      b.className = 'lb-tab btn btn-sm rounded-pill';
+      b.dataset.key = t.key;
+      b.textContent = t.label;
+      b.addEventListener('click', function () { switchTab(t.key); });
+      tabBar.appendChild(b);
+    });
+
+    // 记录当前用户名，用于高亮"我"
+    if (petState && petState.pet) {
+      window.__petMe = petState.pet.owner || '';
+    }
+    switchTab('power');
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     if (document.getElementById('pet-root')) renderPet();
     if (document.getElementById('shop-root')) renderShop();
+    var lbBtn = document.getElementById('pet-leaderboard-btn');
+    if (lbBtn) lbBtn.addEventListener('click', showLeaderboard);
   });
 })();

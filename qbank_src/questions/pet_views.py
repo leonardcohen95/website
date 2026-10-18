@@ -201,6 +201,7 @@ def _pet_payload(pet):
         # 对战次数
         'pk_left': _pk_left(pet),
         'pk_limit': PK_DAILY_LIMIT,
+        'pk_wins': int(pet.pk_wins or 0),
         'pk_refresh_left': _refresh_left(pet),
         'pk_refresh_limit': PK_REFRESH_LIMIT,
         'created_at': pet.created_at.isoformat(),
@@ -691,7 +692,8 @@ def api_pet_pk(request):
         rewards = None
         if winner == 'me':
             pet.exp += PK_WIN_EXP
-            fields.append('exp')
+            pet.pk_wins = int(pet.pk_wins or 0) + 1
+            fields.extend(['exp', 'pk_wins'])
             balance = _add_stars_to_k8s(request.user, PK_WIN_STARS)
             StarLedger.objects.create(user=request.user, delta=PK_WIN_STARS,
                                       balance=balance, reason='pk_win', ref=str(opp.id))
@@ -711,4 +713,78 @@ def api_pet_pk(request):
         'pet': _pet_payload(pet),
         'me': _fighter(pet, me_st),
         'opp': _fighter(opp, op_st),
+    })
+
+
+# ---------------- 宠物排行榜 ----------------
+@csrf_exempt
+@_api_login_required
+def api_pet_leaderboard(request):
+    """宠物龟排行榜：武力值 / 等级 / 龟龄 / 对战胜场 四个榜。
+
+    武力值 = 品种基础武力 + 武力加点 * POW_PER_POINT + 武器加成（与对战口径一致）。
+    每个榜返回前 limit 名，以及当前用户在该榜的排名（0 表示未上榜）。
+    """
+    try:
+        limit = int(request.GET.get('limit', 20))
+    except (TypeError, ValueError):
+        limit = 20
+    limit = max(1, min(limit, 100))
+
+    pets = list(Pet.objects.select_related('user'))
+    me_username = request.user.username
+
+    def _row(pet):
+        st = pet_stats(pet)
+        sp = get_species(pet.species) or {}
+        return {
+            'username': pet.user.username,
+            'pet_name': pet.name,
+            'species_name': sp.get('name', pet.species),
+            'power': st['power'],
+            'level': level_from_exp(pet.exp),
+            'age_seconds': int(pet.age_seconds or 0),
+            'age_text': _age_text(pet.age_seconds),
+            'pk_wins': int(pet.pk_wins or 0),
+        }
+
+    rows = [_row(p) for p in pets]
+
+    def _ranked(metric, reverse=True):
+        """按 metric 排序，返回 (榜单前 limit 名, 我的排名)。"""
+        sorted_rows = sorted(rows, key=lambda r: (-r[metric] if reverse else r[metric]))
+        top = []
+        my_rank = 0
+        for idx, r in enumerate(sorted_rows, start=1):
+            if r['username'] == me_username:
+                my_rank = idx
+            if idx <= limit:
+                entry = {
+                    'rank': idx,
+                    'username': r['username'],
+                    'pet_name': r['pet_name'],
+                    'species_name': r['species_name'],
+                    'value': r[metric],
+                }
+                if metric == 'age_seconds':
+                    entry['value_text'] = r['age_text']
+                if metric == 'power':
+                    entry['value_text'] = str(r['power'])
+                if metric == 'level':
+                    entry['value_text'] = 'Lv.' + str(r['level'])
+                if metric == 'pk_wins':
+                    entry['value_text'] = str(r['pk_wins']) + ' 胜'
+                top.append(entry)
+        return top, my_rank
+
+    power_top, power_me = _ranked('power')
+    level_top, level_me = _ranked('level')
+    age_top, age_me = _ranked('age_seconds')
+    wins_top, wins_me = _ranked('pk_wins')
+
+    return JsonResponse({
+        'power': {'rows': power_top, 'my_rank': power_me},
+        'level': {'rows': level_top, 'my_rank': level_me},
+        'age': {'rows': age_top, 'my_rank': age_me},
+        'wins': {'rows': wins_top, 'my_rank': wins_me},
     })

@@ -176,6 +176,7 @@ class Pet(models.Model):
     pk_count = models.IntegerField(default=0, verbose_name='当日已对战次数')
     pk_refresh_date = models.DateField(null=True, blank=True, verbose_name='上次刷新对手日期')
     pk_refresh_count = models.IntegerField(default=0, verbose_name='当日已刷新对手次数')
+    pk_wins = models.IntegerField(default=0, verbose_name='对战胜场(累计)')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='领养时间')
 
     class Meta:
