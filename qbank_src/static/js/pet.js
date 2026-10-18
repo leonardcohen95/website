@@ -1310,18 +1310,18 @@
         // ============ 侧身视角 ============
         var flip = r.angle > 0 ? 1 : -1;   // 面朝方向：1=朝右, -1=朝左
         // 在翻转坐标系中，负 x 恒为背部（斗篷、远侧肢体所在侧）
-        var armX = tw * 0.46;
+        var armX = tw * 0.8;          // 手臂根部贴到壳前缘，避免悬空
         var armY = -th * 0.38;
         var armLen = 15 * s;
         var legX = tw * 0.3;
         var hipY = th * 0.5;
         var footY = th + 14 * s;
 
-        // 斗篷（在身后）：偏移到背部一侧，肩部收窄、挂点上移到背顶
+        // 斗篷（在身后）：整体左移到背部之外，让左缘 + 鼓起的侧边露出壳外
         ctx.save();
         ctx.scale(flip, 1);
-        ctx.translate(-tw * 0.28, 0);
-        drawFlowingCape(s, wind, tw, th, tw * 0.52, -th * 0.7);
+        ctx.translate(-tw * 0.62, 0);
+        drawFlowingCape(s, wind, tw, th, tw * 0.5, -th * 0.62);
         ctx.restore();
 
         // 远侧后腿（在壳后）
@@ -1385,9 +1385,9 @@
         ctx.moveTo(14 * hs * s, 3 * hs * s);
         ctx.quadraticCurveTo(11 * hs * s, 4.5 * hs * s, 8 * hs * s, 3.5 * hs * s);
         ctx.lineWidth = 1.2 * s; ctx.strokeStyle = shade(col.skinDark, -20); ctx.stroke();
-        // 帽子（侧视）：平移使帽檐中心 (cx=4.6hs, cy=-6.2hs) 落到头顶 (6hs, -7.5hs)
+        // 帽子（侧视）：帽檐中心下压贴住头顶，避免悬空
         ctx.save();
-        ctx.translate(1.4 * hs * s, -1.3 * hs * s);
+        ctx.translate(1.4 * hs * s, 0.4 * hs * s);
         if (accs.indexOf('acc_santa') >= 0) drawHat(s);
         if (accs.indexOf('acc_crown') >= 0) drawCrown(s);
         if (accs.indexOf('acc_bamboo') >= 0) drawBambooHat(s);
