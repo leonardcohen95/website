@@ -1066,31 +1066,46 @@
       ctx.restore();
     }
 
-    /* 外饰：黑超墨镜。两眼深色镜片 + 鼻梁架，贴在脸部 */
-    function drawGlasses(s) {
+    /* 外饰：黑超墨镜。镜片贴在眼睛上；侧身时远侧镜片淡出，只留近侧一片 */
+    function drawGlasses(s, side) {
       var hs = col.hsize;
-      // 眼睛大约在头部椭圆中心 (5hs,0) 两侧
-      var eyeY = 0.5 * hs * s;
-      var lensR = 2.6 * hs * s;
-      var lx = 2.6 * hs * s, rx = 7.2 * hs * s;
+      // 与 drawHead 中眼睛定位保持一致：两眼同 X，上下分布，侧身时收拢+远侧淡出
+      var eyeSpread = 1 - 0.85 * side;
+      var eyeDrop = side * 0.6 * hs * s;
+      var eyeX = 7 * hs * s;
+      var eyeY = 4.4 * hs * s;
+      var lensR = (col.eyeR || 2.2) * s * 1.35;   // 镜片略大于眼睛
       ctx.save();
-      // 左镜片
-      ctx.beginPath(); ctx.ellipse(lx, eyeY, lensR, lensR * 0.8, 0, 0, Math.PI * 2);
-      var lg = ctx.createLinearGradient(lx, eyeY - lensR, lx, eyeY + lensR);
-      lg.addColorStop(0, '#1a1a1a'); lg.addColorStop(1, '#4a4a4a');
-      ctx.fillStyle = lg; ctx.fill();
-      ctx.lineWidth = 1.1 * s; ctx.strokeStyle = '#000'; ctx.stroke();
-      // 右镜片
-      ctx.beginPath(); ctx.ellipse(rx, eyeY, lensR, lensR * 0.8, 0, 0, Math.PI * 2);
-      ctx.fillStyle = lg; ctx.fill();
-      ctx.lineWidth = 1.1 * s; ctx.strokeStyle = '#000'; ctx.stroke();
-      // 鼻梁架
-      ctx.beginPath(); ctx.moveTo(lx + lensR * 0.8, eyeY); ctx.lineTo(rx - lensR * 0.8, eyeY);
-      ctx.lineWidth = 1.2 * s; ctx.strokeStyle = '#000'; ctx.stroke();
-      // 高光
-      ctx.fillStyle = 'rgba(255,255,255,.35)';
-      ctx.beginPath(); ctx.ellipse(lx - lensR * 0.3, eyeY - lensR * 0.35, lensR * 0.35, lensR * 0.18, -0.4, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(rx - lensR * 0.3, eyeY - lensR * 0.35, lensR * 0.35, lensR * 0.18, -0.4, 0, Math.PI * 2); ctx.fill();
+      // 两片镜片（上下各一），远侧随视角淡出
+      var lensCx = [];
+      [-1, 1].forEach(function (sgn) {
+        var farAlpha = sgn < 0 ? Math.max(0, 1 - 2 * side) : 1;
+        if (farAlpha <= 0.01) return;
+        var ey = sgn * eyeY * eyeSpread + eyeDrop;
+        ctx.save();
+        ctx.globalAlpha = farAlpha;
+        // 镜片
+        ctx.beginPath();
+        ctx.ellipse(eyeX, ey, lensR, lensR * 1.05, 0, 0, Math.PI * 2);
+        var lg = ctx.createLinearGradient(eyeX, ey - lensR, eyeX, ey + lensR);
+        lg.addColorStop(0, '#1a1a1a'); lg.addColorStop(1, '#4a4a4a');
+        ctx.fillStyle = lg; ctx.fill();
+        ctx.lineWidth = 1.1 * s; ctx.strokeStyle = '#000'; ctx.stroke();
+        // 高光
+        ctx.fillStyle = 'rgba(255,255,255,.35)';
+        ctx.beginPath();
+        ctx.ellipse(eyeX - lensR * 0.3, ey - lensR * 0.35, lensR * 0.35, lensR * 0.18, -0.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        lensCx.push([eyeX, ey, farAlpha]);
+      });
+      // 鼻梁架：连接两片镜片（只有两片都可见时才画）
+      if (lensCx.length === 2) {
+        ctx.beginPath();
+        ctx.moveTo(lensCx[0][0], lensCx[0][1]);
+        ctx.lineTo(lensCx[1][0], lensCx[1][1]);
+        ctx.lineWidth = 1.2 * s; ctx.strokeStyle = '#000'; ctx.stroke();
+      }
       ctx.restore();
     }
 
@@ -1384,7 +1399,7 @@
         if (accs.indexOf('acc_crown') >= 0) drawCrown(s);
         if (accs.indexOf('acc_bamboo') >= 0) drawBambooHat(s);
         if (accs.indexOf('acc_wizard') >= 0) drawWizardHat(s);
-        if (accs.indexOf('acc_glasses') >= 0) drawGlasses(s);
+        if (accs.indexOf('acc_glasses') >= 0) drawGlasses(s, side);
         if (accs.indexOf('acc_scarf') >= 0) drawScarf(s);
       }
 
@@ -1712,7 +1727,7 @@
       if (accs.indexOf('acc_crown') >= 0) drawCrown(s);
       if (accs.indexOf('acc_bamboo') >= 0) drawBambooHat(s);
       if (accs.indexOf('acc_wizard') >= 0) drawWizardHat(s);
-      if (accs.indexOf('acc_glasses') >= 0) drawGlasses(s);
+      if (accs.indexOf('acc_glasses') >= 0) drawGlasses(s, 0);
       if (accs.indexOf('acc_scarf') >= 0) drawScarf(s);
       ctx.restore();
       ctx.restore();
