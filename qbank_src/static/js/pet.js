@@ -1345,6 +1345,42 @@
         // 近侧后腿（在壳前）
         drawLeg(legX, hipY, footY, r.walkPhase + Math.PI, s, false, wearBoots, 1.5);
 
+        // 武器：握在近侧前手
+        if (wid === 'wpn_laser' || wid === 'wpn_cleaver') {
+          ctx.save();
+          ctx.translate(armX, armY + armLen);
+          var wpnAng = -1.15 + (r.swing || 0) * 2.2;
+          ctx.rotate(wpnAng);
+          var L = 30 * s;
+          ctx.lineCap = 'round';
+          if (wid === 'wpn_laser') {
+            ctx.lineWidth = 4.4 * s; ctx.strokeStyle = '#2b3036';
+            ctx.beginPath(); ctx.moveTo(-5 * s, 0); ctx.lineTo(4 * s, 0); ctx.stroke();
+            ctx.lineWidth = 3 * s; ctx.strokeStyle = '#cfd6dd';
+            ctx.beginPath(); ctx.moveTo(4 * s, -3.4 * s); ctx.lineTo(4 * s, 3.4 * s); ctx.stroke();
+            var lg = ctx.createLinearGradient(5 * s, 0, 5 * s + L, 0);
+            lg.addColorStop(0, '#eafffb'); lg.addColorStop(0.4, '#78f0ff'); lg.addColorStop(1, '#2ea8ff');
+            ctx.shadowColor = '#78f0ff'; ctx.shadowBlur = 10 * s;
+            ctx.lineWidth = 5.2 * s; ctx.strokeStyle = lg;
+            ctx.beginPath(); ctx.moveTo(5 * s, 0); ctx.lineTo(5 * s + L, 0); ctx.stroke();
+            ctx.shadowBlur = 0;
+          } else {
+            ctx.lineWidth = 5 * s; ctx.strokeStyle = '#7a4a24';
+            ctx.beginPath(); ctx.moveTo(-6 * s, 0); ctx.lineTo(6 * s, 0); ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(6 * s, -3.4 * s);
+            ctx.lineTo(6 * s + L * 0.86, -6.4 * s);
+            ctx.quadraticCurveTo(6 * s + L, 0, 6 * s + L * 0.86, 6.4 * s);
+            ctx.lineTo(6 * s, 3.4 * s);
+            ctx.closePath();
+            var sg = ctx.createLinearGradient(6 * s, -6.4 * s, 6 * s + L, 6.4 * s);
+            sg.addColorStop(0, '#eef2f5'); sg.addColorStop(0.5, '#c3ccd4'); sg.addColorStop(1, '#8f99a2');
+            ctx.fillStyle = sg; ctx.fill();
+            ctx.lineWidth = 1.4 * s; ctx.strokeStyle = '#5c646c'; ctx.stroke();
+          }
+          ctx.restore();
+        }
+
         ctx.restore();
 
         // 头部（侧视）
@@ -1463,6 +1499,42 @@
         // 前腿（双臂，从肩部接到腹甲边缘，略向外下）
         drawLeg(-shX, shY, shY + 16 * s, r.walkPhase + Math.PI, s, false, wearBoots, 1.5);
         drawLeg(shX, shY, shY + 16 * s, r.walkPhase, s, false, wearBoots, 1.5);
+
+        // 武器：握在右手
+        if (wid === 'wpn_laser' || wid === 'wpn_cleaver') {
+          ctx.save();
+          ctx.translate(shX, shY + 16 * s);
+          var wpnAng2 = -1.15 + (r.swing || 0) * 2.2;
+          ctx.rotate(wpnAng2);
+          var L2 = 30 * s;
+          ctx.lineCap = 'round';
+          if (wid === 'wpn_laser') {
+            ctx.lineWidth = 4.4 * s; ctx.strokeStyle = '#2b3036';
+            ctx.beginPath(); ctx.moveTo(-5 * s, 0); ctx.lineTo(4 * s, 0); ctx.stroke();
+            ctx.lineWidth = 3 * s; ctx.strokeStyle = '#cfd6dd';
+            ctx.beginPath(); ctx.moveTo(4 * s, -3.4 * s); ctx.lineTo(4 * s, 3.4 * s); ctx.stroke();
+            var lg2 = ctx.createLinearGradient(5 * s, 0, 5 * s + L2, 0);
+            lg2.addColorStop(0, '#eafffb'); lg2.addColorStop(0.4, '#78f0ff'); lg2.addColorStop(1, '#2ea8ff');
+            ctx.shadowColor = '#78f0ff'; ctx.shadowBlur = 10 * s;
+            ctx.lineWidth = 5.2 * s; ctx.strokeStyle = lg2;
+            ctx.beginPath(); ctx.moveTo(5 * s, 0); ctx.lineTo(5 * s + L2, 0); ctx.stroke();
+            ctx.shadowBlur = 0;
+          } else {
+            ctx.lineWidth = 5 * s; ctx.strokeStyle = '#7a4a24';
+            ctx.beginPath(); ctx.moveTo(-6 * s, 0); ctx.lineTo(6 * s, 0); ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(6 * s, -3.4 * s);
+            ctx.lineTo(6 * s + L2 * 0.86, -6.4 * s);
+            ctx.quadraticCurveTo(6 * s + L2, 0, 6 * s + L2 * 0.86, 6.4 * s);
+            ctx.lineTo(6 * s, 3.4 * s);
+            ctx.closePath();
+            var sg2 = ctx.createLinearGradient(6 * s, -6.4 * s, 6 * s + L2, 6.4 * s);
+            sg2.addColorStop(0, '#eef2f5'); sg2.addColorStop(0.5, '#c3ccd4'); sg2.addColorStop(1, '#8f99a2');
+            ctx.fillStyle = sg2; ctx.fill();
+            ctx.lineWidth = 1.4 * s; ctx.strokeStyle = '#5c646c'; ctx.stroke();
+          }
+          ctx.restore();
+        }
 
         // 头部
         var headCY = -th - 1.5 * hs * s;
