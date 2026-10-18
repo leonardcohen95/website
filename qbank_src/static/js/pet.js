@@ -1308,7 +1308,7 @@
 
       if (side > 0.5) {
         // ============ 侧身视角 ============
-        var flip = r.angle > 0 ? 1 : -1;   // 面朝方向：1=朝右, -1=朝左
+        var flip = Math.cos(r.angle) < 0 ? -1 : 1;   // 与 drawTurtle 全局 flip 定义一致，确保二次 scale 抵消
         // 在翻转坐标系中，负 x 恒为背部（斗篷、远侧肢体所在侧）
         var armX = tw * 0.8;          // 手臂根部贴到壳前缘，避免悬空
         var armY = -th * 0.38;
@@ -1324,12 +1324,16 @@
         drawFlowingCape(s, wind, tw, th, tw * 0.5, -th * 0.62);
         ctx.restore();
 
+        // 四肢 + 躯干：抵消外层全局 flip，保证背甲恒在左（斗篷侧）、头/腹甲恒在右
+        ctx.save();
+        ctx.scale(flip, 1);
+
         // 远侧后腿（在壳后）
         drawLeg(-legX, hipY, footY, r.walkPhase, s, true, wearBoots, 1.5);
         // 远侧前腿（手臂，在壳后）
         drawLeg(-armX, armY, armY + armLen, r.walkPhase + Math.PI, s, true, wearBoots, 1.5);
 
-        // 躯干：龟壳侧面直立
+        // 躯干：龟壳侧面直立（rotate 后背甲拱弧落在左侧 = 背部）
         ctx.save();
         ctx.rotate(-Math.PI / 2);
         drawShell(s, 1);
@@ -1339,6 +1343,8 @@
         drawLeg(armX, armY, armY + armLen, r.walkPhase, s, false, wearBoots, 1.5);
         // 近侧后腿（在壳前）
         drawLeg(legX, hipY, footY, r.walkPhase + Math.PI, s, false, wearBoots, 1.5);
+
+        ctx.restore();
 
         // 头部（侧视）
         ctx.save();
