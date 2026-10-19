@@ -100,6 +100,25 @@ footer{text-align:center;padding:40px 20px;color:var(--text-light);font-size:.9e
   section{padding:25px 18px}
   .card-grid{grid-template-columns:1fr}
 }
+
+.quiz-order a.q-row{text-decoration:none;color:inherit;cursor:pointer}
+.quiz-order a.q-row:hover{background:#eef3ff;box-shadow:0 2px 8px rgba(41,128,185,.15)}
+.quiz-order a.q-row .q-title::after{content:" \2192";color:var(--secondary);font-weight:700}
+.solution{margin-top:22px}
+.solution .sol-title{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between}
+.solution .sol-back{font-size:.72em;font-weight:500;color:var(--secondary);text-decoration:none;white-space:nowrap}
+.solution .sol-back:hover{text-decoration:underline}
+.sol-label{display:inline-block;background:var(--secondary);color:#fff;font-size:.82em;font-weight:600;padding:2px 12px;border-radius:6px;margin:14px 0 6px}
+.sol-step{display:flex;gap:10px;align-items:flex-start;font-weight:600;color:var(--primary);margin:18px 0 6px}
+.sol-step .sol-num{flex-shrink:0;width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:.82em;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.sol-p{margin:6px 0;color:var(--text)}
+.sol-note{margin:6px 0;color:var(--text-light);font-size:.92em}
+.sol-ref{margin:12px 0 4px;font-weight:600;color:var(--secondary)}
+.sol-url{margin:4px 0;word-break:break-all;font-size:.88em}
+.sol-url a{color:var(--secondary)}
+.sol-divider{margin:18px 0 8px;font-weight:700;color:var(--success);border-top:2px dashed var(--border);padding-top:12px}
+pre.code-block{white-space:pre-wrap;word-break:break-word}
+.sol-intro{margin-top:40px;border-left:5px solid var(--primary)}
 </style>
 </head>
 <body>
@@ -129,6 +148,7 @@ footer{text-align:center;padding:40px 20px;color:var(--text-light);font-size:.9e
       <li><a href="#topics">高频真题与知识点分布</a></li>
       <li><a href="#cmd">高频命令速查</a></li>
       <li><a href="#time">时间管理红线</a></li>
+      <li><a href="#solutions">详细解题说明（逐题，点题目跳转）</a></li>
     </ol>
   </div>
 
@@ -252,34 +272,34 @@ footer{text-align:center;padding:40px 20px;color:var(--text-light);font-size:.9e
 
     <h3>第一轮：秒拿分题（≈30 min）</h3>
     <div class="quiz-order">
-      <div class="q-row"><div class="q-num">5</div><div class="q-info"><div class="q-title">Service NodePort</div><div class="q-meta">纯 expose 一条命令，3 分钟搞定</div></div></div>
-      <div class="q-row"><div class="q-num">1</div><div class="q-info"><div class="q-title">HPA 自动扩缩容</div><div class="q-meta">kubectl autoscale + edit 改窗口</div></div></div>
-      <div class="q-row"><div class="q-num">11</div><div class="q-info"><div class="q-title">CRD 列表 + explain 字段</div><div class="q-meta">grep cert-manager + kubectl explain 保存文件</div></div></div>
-      <div class="q-row"><div class="q-num">12</div><div class="q-info"><div class="q-title">ConfigMap immutable</div><div class="q-meta">edit ssl_protocols + immutable:true + rollout</div></div></div>
-      <div class="q-row"><div class="q-num">4</div><div class="q-info"><div class="q-title">StorageClass + 默认 SC</div><div class="q-meta">WaitForFirstConsumer + 默认注解</div></div></div>
+      <a class="q-row" href="#q5"><div class="q-num">5</div><div class="q-info"><div class="q-title">Service NodePort</div><div class="q-meta">纯 expose 一条命令，3 分钟搞定</div></div></a>
+      <a class="q-row" href="#q1"><div class="q-num">1</div><div class="q-info"><div class="q-title">HPA 自动扩缩容</div><div class="q-meta">kubectl autoscale + edit 改窗口</div></div></a>
+      <a class="q-row" href="#q11"><div class="q-num">11</div><div class="q-info"><div class="q-title">CRD 列表 + explain 字段</div><div class="q-meta">grep cert-manager + kubectl explain 保存文件</div></div></a>
+      <a class="q-row" href="#q12"><div class="q-num">12</div><div class="q-info"><div class="q-title">ConfigMap immutable</div><div class="q-meta">edit ssl_protocols + immutable:true + rollout</div></div></a>
+      <a class="q-row" href="#q4"><div class="q-num">4</div><div class="q-info"><div class="q-title">StorageClass + 默认 SC</div><div class="q-meta">WaitForFirstConsumer + 默认注解</div></div></a>
     </div>
 
     <h3>第二轮：中等难度（≈40 min）</h3>
     <div class="quiz-order">
-      <div class="q-row"><div class="q-num">6</div><div class="q-info"><div class="q-title">RBAC Role + RoleBinding</div><div class="q-meta">导出改资源名，别从零写</div></div></div>
-      <div class="q-row"><div class="q-num">2</div><div class="q-info"><div class="q-title">Ingress</div><div class="q-meta">查 ingressclasses 是 edge-proxy（不是旧 nginx）</div></div></div>
-      <div class="q-row"><div class="q-num">14</div><div class="q-info"><div class="q-title">Resources 均分 WordPress</div><div class="q-meta">先 scale 0 再算，requests 改小就稳，limits 别动</div></div></div>
-      <div class="q-row"><div class="q-num">10</div><div class="q-info"><div class="q-title">NetworkPolicy 选示例</div><div class="q-meta">先看 label，选 netpol2（双重限定）</div></div></div>
-      <div class="q-row"><div class="q-num">3</div><div class="q-info"><div class="q-title">Sidecar 日志容器</div><div class="q-meta">导出 YAML → status 上面加 volumes，dnsPolicy 上面加 sidecar</div></div></div>
+      <a class="q-row" href="#q6"><div class="q-num">6</div><div class="q-info"><div class="q-title">Pod 优先级 PriorityClass</div><div class="q-meta">创建 PriorityClass + 给 Deployment 加 priorityClassName</div></div></a>
+      <a class="q-row" href="#q2"><div class="q-num">2</div><div class="q-info"><div class="q-title">Ingress</div><div class="q-meta">查 ingressclasses 是 edge-proxy（不是旧 nginx）</div></div></a>
+      <a class="q-row" href="#q14"><div class="q-num">14</div><div class="q-info"><div class="q-title">Resources 均分 WordPress</div><div class="q-meta">先 scale 0 再算，requests 改小就稳，limits 别动</div></div></a>
+      <a class="q-row" href="#q10"><div class="q-num">10</div><div class="q-info"><div class="q-title">NetworkPolicy 选示例</div><div class="q-meta">先看 label，选 netpol2（双重限定）</div></div></a>
+      <a class="q-row" href="#q3"><div class="q-num">3</div><div class="q-info"><div class="q-title">Sidecar 日志容器</div><div class="q-meta">导出 YAML → status 上面加 volumes，dnsPolicy 上面加 sidecar</div></div></a>
     </div>
 
     <h3>第三轮：root/安装/恢复（≈35 min）</h3>
     <div class="quiz-order">
-      <div class="q-row"><div class="q-num">16</div><div class="q-info"><div class="q-title">cri-dockerd + sysctl</div><div class="q-meta">sudo dpkg -i → systemctl enable → sysctl.conf 四条</div></div></div>
-      <div class="q-row"><div class="q-num">15</div><div class="q-info"><div class="q-title">etcd 修复</div><div class="q-meta">sudo -i → 改 apiserver manifest → restart kubelet → scheduler requests 改小</div></div></div>
-      <div class="q-row"><div class="q-num">13</div><div class="q-info"><div class="q-title">Calico CNI</div><div class="q-meta">两条 kubectl create -f URL，Flannel 不支持 NetworkPolicy 排除</div></div></div>
+      <a class="q-row" href="#q16"><div class="q-num">16</div><div class="q-info"><div class="q-title">cri-dockerd + sysctl</div><div class="q-meta">sudo dpkg -i → systemctl enable → sysctl.conf 四条</div></div></a>
+      <a class="q-row" href="#q15"><div class="q-num">15</div><div class="q-info"><div class="q-title">etcd 修复</div><div class="q-meta">sudo -i → 改 apiserver manifest → restart kubelet → scheduler requests 改小</div></div></a>
+      <a class="q-row" href="#q13"><div class="q-num">13</div><div class="q-info"><div class="q-title">Calico CNI</div><div class="q-meta">两条 kubectl create -f URL，Flannel 不支持 NetworkPolicy 排除</div></div></a>
     </div>
 
     <h3>第四轮：收尾攻坚战（≈15 min）</h3>
     <div class="quiz-order">
-      <div class="q-row"><div class="q-num">8</div><div class="q-info"><div class="q-title">MariaDB Retain PV 恢复</div><div class="q-meta">kubectl get pv 找 Retain → PVC 绑 volumeName → Deployment 加挂载</div></div></div>
-      <div class="q-row"><div class="q-num">7</div><div class="q-info"><div class="q-title">Helm ArgoCD template</div><div class="q-meta">helm repo add argo → helm template --set crds.install=false</div></div></div>
-      <div class="q-row" style="border-left:4px solid var(--danger);background:#fff5f5"><div class="q-num">9</div><div class="q-info"><div class="q-title">Gateway API（最难，留最后）</div><div class="q-meta">先查旧 Ingress 的 tls/host/path → Gateway → HTTPRoute → delete 旧 Ingress</div></div></div>
+      <a class="q-row" href="#q8"><div class="q-num">8</div><div class="q-info"><div class="q-title">MariaDB Retain PV 恢复</div><div class="q-meta">kubectl get pv 找 Retain → PVC 绑 volumeName → Deployment 加挂载</div></div></a>
+      <a class="q-row" href="#q7"><div class="q-num">7</div><div class="q-info"><div class="q-title">Helm ArgoCD template</div><div class="q-meta">helm repo add argo → helm template --set crds.install=false</div></div></a>
+      <a class="q-row" href="#q9" style="border-left:4px solid var(--danger);background:#fff5f5"><div class="q-num">9</div><div class="q-info"><div class="q-title">Gateway API（最难，留最后）</div><div class="q-meta">先查旧 Ingress 的 tls/host/path → Gateway → HTTPRoute → delete 旧 Ingress</div></div></a>
     </div>
   </section>
 
@@ -288,7 +308,7 @@ footer{text-align:center;padding:40px 20px;color:var(--text-light);font-size:.9e
     <table>
       <tr><th>难度</th><th>题数</th><th>预估总分</th><th>代表题目</th></tr>
       <tr><td><span class="badge b-easy">★☆☆☆☆</span></td><td>2</td><td>~130</td><td>#5 Service, #1 HPA</td></tr>
-      <tr><td><span class="badge b-med">★★☆☆☆</span></td><td>5</td><td>~250</td><td>#6 RBAC, #2 Ingress, #12 ConfigMap</td></tr>
+      <tr><td><span class="badge b-med">★★☆☆☆</span></td><td>5</td><td>~250</td><td>#6 PriorityClass, #2 Ingress, #12 ConfigMap</td></tr>
       <tr><td><span class="badge b-core">★★★☆☆</span></td><td>7</td><td>~420</td><td>#3 Sidecar, #10 NetworkPolicy, #14 Resources</td></tr>
       <tr><td><span class="badge b-hard">★★★★☆</span></td><td>2</td><td>~200</td><td>#15 etcd 修复, #9 Gateway API</td></tr>
       <tr style="font-weight:600;background:#f1f2f6"><td>合计</td><td>16</td><td>~1000</td><td>做对 11–12 题 ≈ 700 分</td></tr>
@@ -352,6 +372,709 @@ kubectl rollout undo deploy/xxx</div>
     </div>
   </section>
 
+
+  <section id="solutions" class="sol-intro">
+    <h2>📖 详细解题说明</h2>
+    <p>点击上方「推荐做题顺序」中的题目可跳转到对应解题步骤。内容整理自《CKA 题库及答案讲解 · 最新 1.37 版本》。</p>
+  </section>
+
+  <section id="q1" class="solution">
+      <h2 class="sol-title">1、HPA 自动扩缩容 <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">你必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000001</pre>
+      <p class="sol-label">Task</p>
+      <p class="sol-p">在 autoscale namespace 中创建一个名为 apache-server 的新HorizontalPodAutoscaler(HPA)此 HPA 必须定位到 autoscale namespace 中名为 apache-server</p>
+      <p class="sol-p">的现有 Deployment 。</p>
+      <p class="sol-p">将 HPA 设置为每个 Pod 的 CPU 使用率旨在 50% 。将其配置为至少有 1 个 Pod，且不超过 4 个 Pod 。此外，将缩小稳定窗口设置为 30 秒。</p>
+      <p class="sol-ref">参考链接</p>
+      <p class="sol-url"><a href="https://kubernetes.io/zh-cn/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/" target="_blank" rel="noopener">https://kubernetes.io/zh-cn/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/</a></p>
+      <div class="sol-divider">解答</div>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <p class="sol-p">确保在 student@k8s-master1:~$下,再执行切换集群的命令</p>
+      <pre class="code-block">ssh cka000001  MAC模拟环境直接做题，所有题都不需要SSH</pre>
+      <div class="sol-step"><span class="sol-num">2</span><span>创建 HorizontalPodAutoscaler</span></div>
+      <pre class="code-block">kubectl -n autoscale autoscale deployment apache-server --cpu=50% --min=1 --max=4</pre>
+      <p class="sol-note">提示 autoscaled,表示成功</p>
+      <p class="sol-p">第一个 autoscale 是 namespace 的名字,这个题目里要求的“在 autoscale namespace 中”第二个 autoscale 是指要自动扩容 deployment</p>
+      <div class="sol-step"><span class="sol-num">3</span><span>修改 HorizontalPodAutoscaler 缩小稳定窗口为 30 秒</span></div>
+      <pre class="code-block">kubectl -n autoscale edit hpa apache-server</pre>
+      <p class="sol-p">在 maxReplicas: 4 这一行下面新增 3 行</p>
+      <pre class="code-block">behavior:
+scaleDown:
+stabilizationWindowSeconds: 30</pre>
+      <p class="sol-note">提示 edited,表示修改成功。如需查看再次edit，字段的位置是移动到后面。因为字段会自动按规则排序</p>
+      <p class="sol-p">考试时会显示如下多余的字段是原来或自动生成的，不用管：</p>
+      <div class="sol-step"><span class="sol-num">4</span><span>检查 HorizontalPodAutoscaler</span></div>
+      <pre class="code-block">kubectl -n autoscale get hpa apache-server</pre>
+      <div class="sol-step"><span class="sol-num">5</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退出 cka000000 节点,返回到 student@k8s-master1 用户和节点下
+exit</pre>
+    </section>
+
+  <section id="q2" class="solution">
+      <h2 class="sol-title">2、Ingress <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">您必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000002</pre>
+      <p class="sol-p">如下创建新的 Ingress 资源：</p>
+      <p class="sol-p">名称： echo</p>
+      <p class="sol-p">Namespace： sound-repeater</p>
+      <p class="sol-p">使用 Service 端口 8080 在 http://example.org/echo 上公开 echoserver-service Service。</p>
+      <p class="sol-ref">参考链接</p>
+      <p class="sol-url"><a href="https://kubernetes.io/zh-cn/docs/concepts/services-networking/ingress/" target="_blank" rel="noopener">https://kubernetes.io/zh-cn/docs/concepts/services-networking/ingress/</a></p>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <pre class="code-block">ssh cka000002</pre>
+      <div class="sol-step"><span class="sol-num">2</span><span>查询ingressClassName,发现名字为 nginx,这个下面要用到</span></div>
+      <p class="sol-note">！20260109更新 注意ingress-nginx停止维护，目前考试环境最新更新为edge-proxy</p>
+      <pre class="code-block">kubectl get ingressclasses.networking.k8s.io</pre>
+      <div class="sol-step"><span class="sol-num">3</span><span>创建ingress</span></div>
+      <pre class="code-block">vim ingress.yaml</pre>
+      <p class="sol-p">添加如下内容</p>
+      <pre class="code-block">apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+name: echo
+namespace: sound-repeater
+spec:
+ingressClassName: edge-proxy  # 上一步查询到的名字，最新的考试是edge-proxy。模拟环境用nginx！！！
+rules:
+- host: &quot;example.org&quot;
+http:		#与上一行对齐，word排版有问题，复制此段是正常的，考试时如果是复制官网的，记得删掉前面的 - 。
+paths:
+- path: /echo
+pathType: Prefix
+backend:
+service:
+name: echoserver-service
+port:
+number: 8080</pre>
+      <p class="sol-p">创建</p>
+      <pre class="code-block">kubectl apply -f ingress.yaml</pre>
+      <p class="sol-note">提示 created,表示创建成功</p>
+      <div class="sol-step"><span class="sol-num">4</span><span>检查，模拟环境使用以下命令测试，考试时用题目中的命令测试。不用管30080端口哪来的，考试时他给什么链接你就复制什么链接。他是不带30080。</span></div>
+      <pre class="code-block">curl http://example.org:30080/echo</pre>
+      <div class="sol-step"><span class="sol-num">5</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退出cka000000 节点,返回到 student@k8s-master1 用户和节点下
+exit</pre>
+    </section>
+
+  <section id="q3" class="solution">
+      <h2 class="sol-title">3、sidecar <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">您必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000003</pre>
+      <p class="sol-label">Context</p>
+      <p class="sol-p">您需要将一个传统应用程序集成到 Kubernetes 的日志架构(例如 kubectl logs)中。实现这个要求的通常方法是添加一个流式传输并置容器。</p>
+      <p class="sol-label">Task</p>
+      <p class="sol-p">更新现有的 synergy-leverager Deployment，</p>
+      <p class="sol-p">将使用 busybox:stable 镜像，且名为 sidecar 的并置容器，添加到现有的 Pod 。新的并置容器必须运行以下命令：</p>
+      <p class="sol-p">/bin/sh -c &quot;tail -n+1 -f /var/log/synergy-leverager.log&quot;</p>
+      <p class="sol-p">使用挂载在 /var/log 的 Volume，使日志文件 synergy-leverager.log 可供并置容器使用。</p>
+      <p class="sol-p">除了添加所需的卷挂载之外，请勿修改现有容器的规范。</p>
+      <p class="sol-ref">参考链接</p>
+      <p class="sol-url"><a href="https://kubernetes.io/zh-cn/docs/concepts/cluster-administration/logging/" target="_blank" rel="noopener">https://kubernetes.io/zh-cn/docs/concepts/cluster-administration/logging/</a></p>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <pre class="code-block">ssh cka000003</pre>
+      <div class="sol-step"><span class="sol-num">2</span><span>导yaml，也可以在线直接edit，但不建议，如果改错了麻烦。</span></div>
+      <pre class="code-block">kubectl get deployment synergy-leverager -o yaml  &gt; sidecar.yaml</pre>
+      <div class="sol-step"><span class="sol-num">3</span><span>编辑 yaml</span></div>
+      <pre class="code-block">vim sidecar.yaml</pre>
+      <p class="sol-note">注意从官方复制过来的空格不对,每行少 4 个空格。这是因为官网的是 Pod 的示例,而考试要修改的是 Deployment。</p>
+      <p class="sol-p">在 dnsPolicy: ClusterFirst 上面添加的下面,添加如下内容</p>
+      <pre class="code-block">volumeMounts:
+- name: varlog
+mountPath: /var/log
+- name: sidecar
+image: registry.cn-hangzhou.aliyuncs.com/fizz_1024/cka:busybox-unstable #国内环境有这个镜像代替， MAC用registry.cn-hangzhou.aliyuncs.com/fizz_1024/busybox:latest。考试时用题目中提供的镜像！！！
+args: [/bin/sh, -c, &#x27;tail -n+1 -f /var/log/synergy-leverager.log&#x27;]
+volumeMounts:
+- name: varlog
+mountPath: /var/log</pre>
+      <p class="sol-p">在 status: 的上面添加如下内容</p>
+      <pre class="code-block">volumes:
+- name: varlog
+emptyDir: {}</pre>
+      <div class="sol-step"><span class="sol-num">4</span><span>应用更新</span></div>
+      <pre class="code-block">kubectl apply -f sidecar.yaml</pre>
+      <p class="sol-note">提示 configured,表示配置成功</p>
+      <div class="sol-step"><span class="sol-num">5</span><span>检查</span></div>
+      <p class="sol-p">检查新 Pod 是否 Running</p>
+      <pre class="code-block">kubectl get pod | grep synergy-leverager</pre>
+      <p class="sol-p">显示 2/2 Running</p>
+      <div class="sol-step"><span class="sol-num">6</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退出cka000000 节点,返回到 student@k8s-master1 用户和节点下
+exit</pre>
+    </section>
+
+  <section id="q4" class="solution">
+      <h2 class="sol-title">4、StorageClass <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">您必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000004</pre>
+      <p class="sol-label">Task</p>
+      <p class="sol-p">首先，为名为 rancher.io/local-path 的现有制备器，创建一个名为 ran-local-path 的新 StorageClass</p>
+      <p class="sol-p">将卷绑定模式设置为 WaitForFirstConsumer</p>
+      <p class="sol-note">注意，没有设置卷绑定模式，或者将其设置为 WaitForFirstConsumer 之外的其他任何模式，都将导致分数降低。</p>
+      <p class="sol-p">接下来，将 ran-local-path StorageClass 配置为默认的 StorageClass</p>
+      <p class="sol-p">请勿修改任何现有的 Deployment 和 PersistentVolumeClaim，否则将导致分数降低。</p>
+      <p class="sol-ref">参考链接</p>
+      <p class="sol-url"><a href="https://kubernetes.io/zh-cn/docs/concepts/storage/storage-classes/" target="_blank" rel="noopener">https://kubernetes.io/zh-cn/docs/concepts/storage/storage-classes/</a></p>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <p class="sol-p">确保在 student@k8s-master1:~$下,再执行切换集群的命令 ssh cka000004</p>
+      <div class="sol-step"><span class="sol-num">2</span><span>创建 ran-local-path StorageClass</span></div>
+      <pre class="code-block">vim storage.yaml</pre>
+      <p class="sol-p">添加如下内容</p>
+      <pre class="code-block">apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+name: ran-local-path
+annotations:</pre>
+      <p class="sol-p">storageclass.kubernetes.io/is-default-class: &quot;true&quot;</p>
+      <pre class="code-block">provisioner: rancher.io/local-path
+volumeBindingMode: WaitForFirstConsumer</pre>
+      <p class="sol-p">实际考试时要创建的sc的名称叫local-path，但模拟环境已经有了同名的存在，所以换成ran-loca-path来创建</p>
+      <p class="sol-p">创建</p>
+      <pre class="code-block">kubectl apply -f storage.yaml</pre>
+      <p class="sol-note">提示 created,表示创建成功</p>
+      <p class="sol-note">！！！提醒，如果时间来得及，改默认StorageClass true的操作，可以分开做，因为按题目的要求来说是先创建再修改。</p>
+      <div class="sol-step"><span class="sol-num">3</span><span>验证 local-path 是否为默认的 StorageClass</span></div>
+      <pre class="code-block">kubectl get storageclass</pre>
+      <p class="sol-p">ran-local-path 提示 default,表示对的</p>
+      <div class="sol-step"><span class="sol-num">4</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退出cka000000 节点,返回到 student@k8s-master1 用户和节点下
+exit</pre>
+    </section>
+
+  <section id="q5" class="solution">
+      <h2 class="sol-title">5、Service <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">您必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000005</pre>
+      <p class="sol-label">Task</p>
+      <p class="sol-p">重新配置 spline-reticulator namespace 中现有的 front-end Deployment，以公开现有容器 nginx 的端口 80/tcp</p>
+      <p class="sol-p">创建一个名为 front-end-svc 的新 Service ，以公开容器端口 80/tcp</p>
+      <p class="sol-p">配置新的 Service ，以通过 NodePort 公开各个 Pod</p>
+      <p class="sol-ref">参考链接：</p>
+      <p class="sol-ref">无需参考，直接做</p>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <p class="sol-p">确保在 student@k8s-master1:~$下,再执行切换集群的命令 ssh cka000005</p>
+      <div class="sol-step"><span class="sol-num">2</span><span>在线修改 front-end Deployment</span></div>
+      <pre class="code-block">kubectl -n spline-reticulator edit deployment front-end</pre>
+      <p class="sol-note">注意,如果新增的内容不对,哪怕错一个空格。第一次:wq 报错,第二次:wq 回滚并退出,也就是不会保存任何你错误修改的内容。</p>
+      <pre class="code-block">spec:
+containers:
+- image: registry.cn-hangzhou.aliyuncs.com/fizz_1024/cka:httpd-booworm
+imagePullPolicy: Always
+name: nginx
+ports:
+- containerPort: 80</pre>
+      <p class="sol-note">提示 edited,表示修改成功</p>
+      <div class="sol-step"><span class="sol-num">3</span><span>使用 NodePort 类型,暴露 80/tcp 端口</span></div>
+      <pre class="code-block">kubectl -n spline-reticulator expose deployment front-end --type=NodePort --port=80 --target-port=80 --name=front-end-svc</pre>
+      <p class="sol-note">提示 exposed,表示创建 svc 成功</p>
+      <div class="sol-step"><span class="sol-num">4</span><span>最后检查 svc</span></div>
+      <pre class="code-block">kubectl -n spline-reticulator get svc front-end-svc -o wide</pre>
+      <div class="sol-step"><span class="sol-num">5</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退出cka000000 节点,返回到 student@k8s-master1 用户和节点下
+exit</pre>
+    </section>
+
+  <section id="q6" class="solution">
+      <h2 class="sol-title">6、Pod 优先级   PriorityClass <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">您必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000006</pre>
+      <p class="sol-label">Task</p>
+      <p class="sol-p">请执行以下任务：</p>
+      <p class="sol-p">为用户工作负载创建一个名为 high-priority 的新 PriorityClass ，其值比用户定义的现有最高优先级类值小一。</p>
+      <p class="sol-p">修改在 priority namespace 中运行的现有 busybox-logger Deployment ，以使用 high-priority 优先级类。</p>
+      <p class="sol-p">确保 busybox-logger Deployment 在设置了新优先级类后成功部署。</p>
+      <p class="sol-p">请勿修改在 priority namespace 中运行的其他 Deployment，否则可能导致分数降低。</p>
+      <p class="sol-ref">参考链接</p>
+      <p class="sol-url"><a href="https://kubernetes.io/zh-cn/docs/concepts/scheduling-eviction/pod-priority-preemption/" target="_blank" rel="noopener">https://kubernetes.io/zh-cn/docs/concepts/scheduling-eviction/pod-priority-preemption/</a></p>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <p class="sol-p">确保在 student@k8s-master1:~$下,再执行切换集群的命令 ssh cka000006</p>
+      <div class="sol-step"><span class="sol-num">2</span><span>查找现有的用户自定义 PriorityClass</span></div>
+      <pre class="code-block">kubectl get pc</pre>
+      <p class="sol-p">其中 system-cluster-critical 和 system-node-critical 是集群默认带的,而max-user-priority 是用户自定义的。其值为 1000000000(十位数),所以小一就是九个 9(999999999)</p>
+      <div class="sol-step"><span class="sol-num">3</span><span>创建新的PriorityClass</span></div>
+      <pre class="code-block">kubectl create pc high-priority --value=999999999</pre>
+      <p class="sol-note">提示 created,表示创建成功。</p>
+      <div class="sol-step"><span class="sol-num">4</span><span>验证 PriorityClass 是否创建成功：</span></div>
+      <pre class="code-block">kubectl get pc</pre>
+      <div class="sol-step"><span class="sol-num">5</span><span>在线修改 Deployment 的 priorityClassName</span></div>
+      <pre class="code-block">kubectl -n priority edit deployment busybox-logger</pre>
+      <p class="sol-p">在 spec.template.spec 部分,或者说 dnsPolicy: ClusterFirst 上面,添加以下内容,并输入:wq 保存退出。</p>
+      <pre class="code-block">priorityClassName: high-priority</pre>
+      <p class="sol-note">提示 edited,表示更新成功</p>
+      <div class="sol-step"><span class="sol-num">6</span><span>验证 Deployment 是否成功启动</span></div>
+      <pre class="code-block">kubectl -n priority get deployment busybox-logger</pre>
+      <p class="sol-p">考试时,新 busybox-logger Pod 是大约需要 2 分钟,才能从 Pending 或者 Terminating 状态转换成 Running 状态。</p>
+      <p class="sol-p">所以马上新开命令行窗口，做下一题，这个窗口放着，有空回来看下确认就行。</p>
+      <div class="sol-step"><span class="sol-num">7</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退出cka000000 节点,返回到 student@k8s-master1 用户和节点下
+exit</pre>
+    </section>
+
+  <section id="q7" class="solution">
+      <h2 class="sol-title">7、Argo CD <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">您必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000007</pre>
+      <p class="sol-label">Quick Reference</p>
+      <p class="sol-p">文档 Argo Helm Charts</p>
+      <p class="sol-label">Task</p>
+      <p class="sol-p">通过执行以下任务在集群中安装 Argo CD：</p>
+      <p class="sol-p">添加名为 argo 的官方 Argo CD Helm 存储库。注意：Argo CD CRD 已在集群中预安装。</p>
+      <p class="sol-p">为 argocd namespace 生成 Argo CD Helm 图表版本 7.7.3 的模板，并将其保存到 /home/student/argo-helm.yaml ，</p>
+      <p class="sol-p">将图表配置为不安装 CRDs 。使用 Helm 安装 Argo CD ，并设置发布名称为 argocd ，使用与模板中相同的配置和版本（ 7.7.3） ，</p>
+      <p class="sol-p">将其安装在 argocd namespace 中，并配置为不安装 CRDs 。</p>
+      <p class="sol-note">注意：您不需要配置对 Argo CD 服务器 UI 的访问权限。</p>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <p class="sol-p">确保在 student@k8s-master1:~$下,再执行切换集群的命令 ssh cka000007</p>
+      <div class="sol-step"><span class="sol-num">2</span><span>添加官方的 Argo CD Helm 存储库,并更新Helm 存储库</span></div>
+      <p class="sol-p">考试时可以打开题目里给你的 Quick Reference 文档的网址,并复制这一步的命令。</p>
+      <p class="sol-url"><a href="https://argoproj.github.io/argo-helm/" target="_blank" rel="noopener">https://argoproj.github.io/argo-helm/</a></p>
+      <p class="sol-p">添加名为 argo 的官方 Argo CD Helm 存储库,并更新存储库。模拟环境中本题需要临时挂梯子 tun模式，考试不用！！如果不成功，自行解决梯子问题。</p>
+      <p class="sol-p">做完本题请关掉梯子，不然可能会影响激活。</p>
+      <p class="sol-p">练习时出现类似下面的报错，说明你没科学上网或者没有tun模式或换个节点试试。反正是墙的问题，找我也没用。别找</p>
+      <pre class="code-block">Error: INSTALLATION FAILED: Get https://github.com/argoproj/argo-helm/releases/download/argo-cd-7.7.3/argo-cd-7.7.3.tgz : dial tcp 20.205.243.166:443: connect: connection refused</pre>
+      <pre class="code-block">helm repo add argo https://argoproj.github.io/argo-helm
+helm repo update</pre>
+      <div class="sol-step"><span class="sol-num">3</span><span>生成 Argo CD Helm 模板</span></div>
+      <p class="sol-p">这条命令要背！！具体 version 版本号,以题目里要求的为准。而不是上面查出来的版本号。上面查出来的,只是最后一个版本。</p>
+      <pre class="code-block">helm template argocd argo/argo-cd   -n argocd  --version 7.7.3 --set crds.install=false &gt; /home/student/argo-helm.yaml
+cat argo-helm.yaml #查看是一些资源就对了</pre>
+      <div class="sol-step"><span class="sol-num">4</span><span>使用 Helm 安装 Argo CD</span></div>
+      <p class="sol-p">这条命令要背过,跟上一条命令类似，一个是template一个是install</p>
+      <pre class="code-block">helm install argocd argo/argo-cd -n argocd  --version 7.7.3 --set crds.install=false</pre>
+      <div class="sol-step"><span class="sol-num">5</span><span>验证 Argo CD 是否成功安装</span></div>
+      <pre class="code-block">kubectl -n argocd get pods</pre>
+      <p class="sol-p">有 Pod 存在即可,不需要关注他们状态是否 Running，赶紧下一题</p>
+      <div class="sol-step"><span class="sol-num">6</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退出cka000000 节点,返回到 student@k8s-master1 用户和节点下
+exit</pre>
+    </section>
+
+  <section id="q8" class="solution">
+      <h2 class="sol-title">8、PVC <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">您必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000008</pre>
+      <p class="sol-label">Task</p>
+      <p class="sol-p">mariadb namespace 中的 MariaDB Deployment 被误删除。请恢复该 Deployment 并确保数据持久性。请按照以下步骤：</p>
+      <p class="sol-p">如下规格在 mariadb namespace 中创建名为 mariadb 的 PersistentVolumeClaim (PVC)：访问模式为 ReadWriteOnce</p>
+      <p class="sol-p">存储为 250Mi</p>
+      <p class="sol-p">集群中现有一个 PersistentVolume。</p>
+      <p class="sol-p">您必须使用现有的 PersistentVolume (PV)。</p>
+      <p class="sol-p">编辑位于 /home/student/mariadb-deployment.yaml 的 MariaDB Deployment 文件，以使用上一步中创建的 PVC。将更新的 Deployment 文件应用到集群。</p>
+      <p class="sol-p">确保 MariaDB Deployment 正在运行且稳定。</p>
+      <p class="sol-ref">参考链接</p>
+      <p class="sol-url"><a href="https://kubernetes.io/zh-cn/docs/tasks/configure-pod-container/configure-persistent-volume-storage/" target="_blank" rel="noopener">https://kubernetes.io/zh-cn/docs/tasks/configure-pod-container/configure-persistent-volume-storage/</a></p>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <p class="sol-p">确保在 student@k8s-master1:~$下,再执行切换集群的命令 ssh cka000008</p>
+      <div class="sol-step"><span class="sol-num">2</span><span>检查pv 的 StorageClass,下面创建 pvc 要用到</span></div>
+      <pre class="code-block">kubectl get pv</pre>
+      <div class="sol-step"><span class="sol-num">3</span><span>创建 PVC</span></div>
+      <pre class="code-block">vim pvc.yaml</pre>
+      <pre class="code-block">apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+name: mariadb
+namespace: mariadb
+spec:
+storageClassName: local-path
+accessModes:
+- ReadWriteOnce
+resources:
+requests:
+storage: 250Mi</pre>
+      <p class="sol-p">添加如下内容</p>
+      <p class="sol-p">创建</p>
+      <p class="sol-p">这里不需要检查 pvc 绑定状态,因为考试时,只有创建完下面的 Pod 之后,pvc 才会显示绑定。如果考试时,创建完下面的 Pod 后,pvc 还是 pending 的,那么就是你的 pvc 的yaml 写错了。</p>
+      <pre class="code-block">kubectl apply -f pvc.yaml</pre>
+      <p class="sol-note">提示 created,表示创建成功</p>
+      <div class="sol-step"><span class="sol-num">4</span><span>修改并创建 Pod</span></div>
+      <pre class="code-block">vim /home/student/mariadb-deployment.yaml</pre>
+      <p class="sol-p">在最后修改如下红色内容</p>
+      <pre class="code-block">volumes:
+- name: mariadb-data
+persistentVolumeClaim:
+claimName: &quot;mariadb&quot;</pre>
+      <p class="sol-p">创建</p>
+      <pre class="code-block">kubectl apply -f /home/student/mariadb-deployment.yaml</pre>
+      <p class="sol-note">提示 created 表示,表示 deployment 创建成功</p>
+      <div class="sol-step"><span class="sol-num">5</span><span>检查deployment 和pod</span></div>
+      <pre class="code-block">kubectl -n mariadb get pod</pre>
+      <div class="sol-step"><span class="sol-num">6</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退出cka000000 节点,返回到 student@k8s-master1 用户和节点下
+exit</pre>
+    </section>
+
+  <section id="q9" class="solution">
+      <h2 class="sol-title">9、Gateway <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">您必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000009</pre>
+      <p class="sol-label">Task</p>
+      <p class="sol-p">将现有 Web 应用程序从 Ingress 迁移到 Gateway API。您必须维护 HTTPS 访问权限。注意：集群中安装了一个名为 nginx 的 GatewayClass 。</p>
+      <p class="sol-p">首先，创建一个名为 web-gateway 的 Gateway ，主机名为 gateway.web.k8s.local ，并保持现有名为 web 的 Ingress 资源的现有 TLS 和侦听器配置。</p>
+      <p class="sol-p">接下来，创建一个名为 web-route 的 HTTPRoute ，主机名为 gateway.web.k8s.local ，并保持现有名为 web 的 Ingress 资源的现有路由规则。</p>
+      <p class="sol-p">最后，删除名为 web 的现有 Ingress 资源。</p>
+      <p class="sol-ref">参考链接</p>
+      <p class="sol-url"><a href="https://kubernetes.io/zh-cn/docs/concepts/services-networking/gateway/" target="_blank" rel="noopener">https://kubernetes.io/zh-cn/docs/concepts/services-networking/gateway/</a></p>
+      <p class="sol-url"><a href="https://kubernetes.io/blog/2025/11/06/gateway-api-v1-4/" target="_blank" rel="noopener">https://kubernetes.io/blog/2025/11/06/gateway-api-v1-4/</a></p>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <p class="sol-p">确保在 student@k8s-master1:~$下,再执行切换集群的命令</p>
+      <pre class="code-block">ssh cka000009</pre>
+      <div class="sol-step"><span class="sol-num">2</span><span>检查现有的 ingress,确定一些必要信息</span></div>
+      <p class="sol-p">查看里面的 tls secretName,下一步创建 Gateway 时需要,</p>
+      <p class="sol-p">查看里面的 paths path 和 service name 和 port number,再一步创建HTTPRoute 时需要</p>
+      <pre class="code-block">kubectl get ingress web -o yaml</pre>
+      <p class="sol-p">tls这段可以背掉或者下方方式查找</p>
+      <pre class="code-block"># 切换英文环境下可以搜索找到</pre>
+      <p class="sol-p">参考博客: 博客 - 2025 - Gateway API 1.4: New Features</p>
+      <p class="sol-p">搜索关键字: Gateway API 1.4</p>
+      <p class="sol-url"><a href="https://kubernetes.io/blog/2025/11/06/gateway-api-v1-4/#why-sni-based-mtls-is-not-the-answer" target="_blank" rel="noopener">https://kubernetes.io/blog/2025/11/06/gateway-api-v1-4/#why-sni-based-mtls-is-not-the-answer</a></p>
+      <div class="sol-step"><span class="sol-num">3</span><span>创建 Gateway</span></div>
+      <pre class="code-block">vim gateway.yaml</pre>
+      <pre class="code-block">apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+name: web-gateway
+spec:
+gatewayClassName: nginx
+listeners:
+- name: https
+hostname: gateway.web.k8s.local
+port: 443
+protocol: HTTPS
+tls:
+mode: Terminate #在 Gateway 处终止 TLS
+certificateRefs:
+- name: web-cert
+kind: Secret</pre>
+      <p class="sol-p">创建</p>
+      <pre class="code-block">kubectl apply -f gateway.yaml</pre>
+      <p class="sol-note">提示 created,表示创建成功</p>
+      <p class="sol-p">检查kubectl get gateway</p>
+      <div class="sol-step"><span class="sol-num">3</span><span>创建 HTTPRoute</span></div>
+      <pre class="code-block">vim httproute.yaml</pre>
+      <p class="sol-p">添加如下全部内容</p>
+      <pre class="code-block">apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+name: web-route
+spec:
+parentRefs:
+- name: web-gateway
+hostnames:
+- gateway.web.k8s.local
+rules:
+- matches:
+- path:
+type: PathPrefix
+value: /
+backendRefs:
+- name: web
+port: 80</pre>
+      <p class="sol-p">创建</p>
+      <pre class="code-block">kubectl apply -f httproute.yaml</pre>
+      <p class="sol-note">提示 created,表示创建成功</p>
+      <p class="sol-p">检查</p>
+      <pre class="code-block">kubectl get httproute</pre>
+      <div class="sol-step"><span class="sol-num">4</span><span>测试 Gateway API 配置  标红的考试不用操作，仅模拟环境需要</span></div>
+      <pre class="code-block">kubectl get svc -n  nginx-gateway #查看nodeport端口
+curl -k https://11.0.1.201:32673 -H &quot;Host: gateway.web.k8s.local&quot; #测试环境用这个验证，如果提示证书问题说明就成功了。因为用的是双向HTTPS。</pre>
+      <p class="sol-p">考试用这个：</p>
+      <pre class="code-block">curl  https://gateway.web.k8s.local</pre>
+      <div class="sol-step"><span class="sol-num">5</span><span>删除 web ingress</span></div>
+      <pre class="code-block">kubectl delete ingress web</pre>
+      <div class="sol-step"><span class="sol-num">6</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退出cka000000 节点,返回到 student@k8s-master1 用户和节点下
+exit</pre>
+    </section>
+
+  <section id="q10" class="solution">
+      <h2 class="sol-title">10、NetworkPolicy <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">您必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000010</pre>
+      <p class="sol-label">Task</p>
+      <p class="sol-p">从提供的 YAML 样本中查看并应用适当的 NetworkPolicy。</p>
+      <p class="sol-p">确保选择的 NetworkPolicy 不过于宽松，同时允许运行在 frontend 和 backend namespaces 中的 frontend 和 backend Deployment 之间的通信。</p>
+      <p class="sol-p">首先，分析 frontend 和 backend Deployment，以确定需要应用的 NetworkPolicy 的具体要求。</p>
+      <p class="sol-p">接下来，检查位于 /home/student/netpol 文件夹中的 NetworkPolicy YAML 示例。</p>
+      <p class="sol-note">注意：请勿删除或修改提供的示例。仅应用其中一个。否则可能会导致分数降低。</p>
+      <p class="sol-p">最后，应用启用 frontend 和 backend Deployment 之间的通信的 NetworkPolicy，但不要过于宽容。</p>
+      <p class="sol-note">注意：请勿删除或修改现有的默认拒绝所有入站流量或出口流量 NetworkPolicy。否则可能导致零分。</p>
+      <p class="sol-ref">无需参考</p>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <p class="sol-p">确保在 student@k8s-master1:~$下,再执行切换集群的命令</p>
+      <pre class="code-block">ssh cka000010</pre>
+      <div class="sol-step"><span class="sol-num">2</span><span>先检查 frontend 和 backend 两个 namespace 的标签</span></div>
+      <pre class="code-block">kubectl get ns frontend backend --show-labels</pre>
+      <p class="sol-p">所以 NetworkPolicy 如果作用于 Namespace,则需要使用以下两个 namespace 的标签</p>
+      <div class="sol-step"><span class="sol-num">3</span><span>再检查 frontend 和 backend 两个 namespace 下的所有pod 的标签</span></div>
+      <pre class="code-block">kubectl -n frontend get pod --show-labels
+kubectl -n backend get pod --show-labels</pre>
+      <p class="sol-p">所以 NetworkPolicy 如果作用于 Pod,则需要使用以下两个 Pod 的标签</p>
+      <p class="sol-p">app=frontend app=backend</p>
+      <div class="sol-step"><span class="sol-num">4</span><span>查看默认拒绝策略</span></div>
+      <pre class="code-block">kubectl -n backend get networkpolicies</pre>
+      <p class="sol-p">集群中,有一个拒绝所有访问的默认 NetworkPolicy。所以 frontend 和 backend 两个 namespace 下的所有 pod 互相不能通信。</p>
+      <div class="sol-step"><span class="sol-num">5</span><span>查看题目给的 NetworkPolicy 的 yaml,选择最合适的一个,创建</span></div>
+      <pre class="code-block">cat /home/student/netpol/netpol1.yaml</pre>
+      <p class="sol-p">第一个策略：允许 frontend  namespace 下的所有 Pod,访问 backend  namespace 下的所有 Pod。</p>
+      <p class="sol-p">第二个策略：允许 frontend namespace 下有 app=frontend 标签的 Pod,访问 backend namespace 下有 app=backend 标签的 Pod。第二个显然比第一个策略更合适,第一个太宽松了。</p>
+      <p class="sol-p">第三个策略：看到 backend namespace 下有 app=database 标签的 Pod,就不用看了。这个显然是错误的。因为我们上面查过的,backend namespace 下的 Pod,标签是 app=backend,而不是 app=database</p>
+      <p class="sol-p">所以,最终选择 netpol2.yaml 创建</p>
+      <pre class="code-block">kubectl apply -f /home/student/netpol/netpol2.yaml</pre>
+      <p class="sol-note">提示 created,表示创建成功。</p>
+      <div class="sol-step"><span class="sol-num">6</span><span>检查 NetworkPolicy</span></div>
+      <pre class="code-block">kubectl -n backend get networkpolicies</pre>
+      <div class="sol-step"><span class="sol-num">7</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退出cka000000 节点,返回到 student@k8s-master1 用户和节点下
+exit</pre>
+    </section>
+
+  <section id="q11" class="solution">
+      <h2 class="sol-title">11、定制资源定义 CRD <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">您必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000011</pre>
+      <p class="sol-label">Task</p>
+      <p class="sol-p">验证已部署到集群的 cert-manager 应用程序。</p>
+      <p class="sol-p">使用 kubectl ，将 cert-manager 所有定制资源定义（CRD）的列表，保存到 /home/student/resources.yaml 。</p>
+      <p class="sol-note">注意：您必须使用 kubectl 的默认输出格式。请勿设置输出格式。否则将导致分数降低。</p>
+      <p class="sol-p">使用 kubectl ，提取定制资源 Certificate 的 subject 规范字段的文档，并将其保存到 /home/student/subject.yaml 。</p>
+      <p class="sol-note">注意：您可以使用 kubectl 支持的任何输出格式。如果不确定，请使用默认输出格式。</p>
+      <p class="sol-ref">无参考链接</p>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <p class="sol-p">确保在 student@k8s-master1:~$下,再执行切换集群的命令 ssh cka000011</p>
+      <div class="sol-step"><span class="sol-num">2</span><span>检查 cert-manager 资源</span></div>
+      <pre class="code-block">kubectl -n cert-manager get pods</pre>
+      <div class="sol-step"><span class="sol-num">3</span><span>获取定制资源定义(CRD)的列表</span></div>
+      <p class="sol-p">通过 grep</p>
+      <pre class="code-block">kubectl get crd | grep cert-manager &gt;  /home/student/resources.yaml</pre>
+      <p class="sol-p">检查文件内容</p>
+      <pre class="code-block">cat resources.yaml</pre>
+      <div class="sol-step"><span class="sol-num">4</span><span>获取定制资源 Certificate 的 subject 规范字段</span></div>
+      <pre class="code-block">kubectl explain certificate.spec.subject
+kubectl explain certificate.spec.subject  &gt; /home/student/subject.yaml</pre>
+      <p class="sol-p">检查文件内容</p>
+      <pre class="code-block">cat subject.yaml</pre>
+      <div class="sol-step"><span class="sol-num">5</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退出cka000000 节点,返回到 student@k8s-master1 用户和节点下
+exit</pre>
+    </section>
+
+  <section id="q12" class="solution">
+      <h2 class="sol-title">12、ConfigMap <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">您必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000012</pre>
+      <p class="sol-label">Task</p>
+      <p class="sol-p">名为 nginx-static 的 NGINX Deployment 正在 nginx-static namespace 中运行。它通过名为 nginx-config 的 ConfigMap 进行配置。</p>
+      <p class="sol-p">更新 nginx-config ConfigMap 以仅允许TLSv1.2 TLSv1.3 连接。注意：您可以根据需要重新创建、重新启动或扩展资源。</p>
+      <p class="sol-p">您可以使用以下命令测试更改:</p>
+      <pre class="code-block">student@cka000048$ curl -k --tls-max 1.2 https://web.k8snginx.local</pre>
+      <p class="sol-p">最后请将nginx-config ConfigMap设置为不可变</p>
+      <p class="sol-ref">无需参考</p>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <p class="sol-p">确保在 student@k8s-master1:~$下,再执行切换集群的命令</p>
+      <pre class="code-block">ssh cka000012</pre>
+      <div class="sol-step"><span class="sol-num">2</span><span>直接编辑nginx-config ConfigMap</span></div>
+      <pre class="code-block">kubectl -n nginx-static edit configmap nginx-config</pre>
+      <div class="sol-step"><span class="sol-num">3</span><span>修改 nginx-config ConfigMap</span></div>
+      <p class="sol-p">在 data 部分中,修改 ssl_protocols 配置,将其值设置为 TLSv1.2 TLSv1.3;</p>
+      <p class="sol-p">ssl_protocols TLSv1.2 TLSv1.3;</p>
+      <p class="sol-p">添加不可变配置：</p>
+      <pre class="code-block">immutable: true #背掉这个单词</pre>
+      <div class="sol-step"><span class="sol-num">4</span><span>需要重建 nginx-static Deployment。</span></div>
+      <pre class="code-block">kubectl -n nginx-static rollout restart deployment nginx-static</pre>
+      <div class="sol-step"><span class="sol-num">5</span><span>检查</span></div>
+      <p class="sol-p">确保新的 pod 是 running 的</p>
+      <pre class="code-block">kubectl -n nginx-static get pod</pre>
+      <p class="sol-p">使用 1.2 测试,正常，考试时题目会给测试命令，这里不用记：</p>
+      <pre class="code-block">curl -k --tls-max 1.2 https://web.k8snginx.local</pre>
+      <p class="sol-p">MAC用户将使用kubectl get pod -n nginx-static  -owide 查出 pod IP后，sudo vim /etc/hosts 修改web.k8snginx.local对应的IP再访问</p>
+      <div class="sol-step"><span class="sol-num">7</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退出cka00000 节点,返回到 student@k8s-master1 用户和节点下
+exit</pre>
+    </section>
+
+  <section id="q13" class="solution">
+      <h2 class="sol-title">13、Calico <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">您必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000013</pre>
+      <p class="sol-ref">文档地址</p>
+      <p class="sol-p">Flannel Manifest</p>
+      <p class="sol-url"><a href="https://github.com/flannel-io/flannel/releases/download/v0.26.1/kube-flannel.yml" target="_blank" rel="noopener">https://github.com/flannel-io/flannel/releases/download/v0.26.1/kube-flannel.yml</a></p>
+      <p class="sol-p">Calico Manifest</p>
+      <p class="sol-url"><a href="https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/tigera-operator.yaml" target="_blank" rel="noopener">https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/tigera-operator.yaml</a></p>
+      <p class="sol-label">Context</p>
+      <p class="sol-p">集群的 CNI 未通过安全审核，已被移除。您必须安装一个可以实施网络策略的新 CNI。</p>
+      <p class="sol-label">Task</p>
+      <p class="sol-p">安装并设置满足以下要求的容器网络接口（CNI）：</p>
+      <p class="sol-p">选择并安装以下 CNI 选项之一：</p>
+      <p class="sol-p">Flannel 版本 0.26.1</p>
+      <p class="sol-p">Calico 版本 3.28.2</p>
+      <p class="sol-p">选择的 CNI 必须：</p>
+      <p class="sol-p">让 Pod 相互通信</p>
+      <p class="sol-p">支持 Network Policy 实施</p>
+      <p class="sol-p">从清单文件安装（请勿使用 Helm）</p>
+      <p class="sol-p">参考：题目上方会提供calico文档链接</p>
+      <p class="sol-url"><a href="https://archive-os-3-28.netlify.app/calico/3.28/getting-started/kubernetes/quickstart/" target="_blank" rel="noopener">https://archive-os-3-28.netlify.app/calico/3.28/getting-started/kubernetes/quickstart/</a></p>
+      <p class="sol-p">执行这两条命令就可以了，记得按题目要求的版本，修改一下命令中的版本号。</p>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <p class="sol-p">确保在 student@k8s-master1:~$下,再执行切换集群的命令</p>
+      <pre class="code-block">ssh cka000013</pre>
+      <div class="sol-step"><span class="sol-num">2</span><span>下载题目要求的 tigera-operator.yaml 文件,并创建</span></div>
+      <p class="sol-p">因为题目要求支持 Network Policy 实施,而 Flannel 不支持 Network Policy,所以选择支持的 Calico 部署。</p>
+      <pre class="code-block">kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/tigera-operator.yaml</pre>
+      <p class="sol-p">模拟环境里创建时会报错 already exists ,忽略即可,因为模拟环境已经提前部署过了。考试时会正常显示</p>
+      <div class="sol-step"><span class="sol-num">3</span><span>部署 Calico 自定义资源 CRD</span></div>
+      <p class="sol-p">下载 CRD</p>
+      <pre class="code-block">kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/custom-resources.yaml</pre>
+      <p class="sol-p">模拟环境里创建时会报错 already exists ,忽略即可,因为模拟环境已经提前部署过了。</p>
+      <div class="sol-step"><span class="sol-num">4</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退出cka000000 节点,返回到 student@k8s-master1 用户和节点下
+exit</pre>
+    </section>
+
+  <section id="q14" class="solution">
+      <h2 class="sol-title">14、resources    cpu 和memory <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">您必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000014</pre>
+      <p class="sol-label">Context</p>
+      <p class="sol-p">您管理一个 WordPress 应用程序。由于资源请求过高，某些 Pod 无法启动。</p>
+      <p class="sol-label">Task</p>
+      <p class="sol-p">relative-fawn namespace 中的 WordPress 应用程序包含：</p>
+      <p class="sol-p">具有 3 个副本的 WordPress Deployment</p>
+      <p class="sol-p">按如下方式调整所有 Pod 资源请求：</p>
+      <p class="sol-p">将节点资源平均分配给这 3 个 Pod</p>
+      <p class="sol-p">为每个 Pod 分配公平的 CPU 和内存份额</p>
+      <p class="sol-p">添加足够的开销以保持节点稳定</p>
+      <p class="sol-p">请确保，对容器和初始化容器使用完全相同的请求。您无需更改任何资源限制。</p>
+      <p class="sol-p">在更新资源请求时，暂时将 WordPress Deployment 缩放为 0 个副本可能会有所帮助。</p>
+      <p class="sol-p">更新后，请确认：</p>
+      <p class="sol-p">WordPress 保持 3 个副本</p>
+      <p class="sol-p">所有 Pod 都在运行并准备就绪</p>
+      <p class="sol-ref">无参考链接</p>
+      <pre class="code-block">#本题只需要修改requests，千万不要动Limits，如果考试时间不够用，直接改小requests，不用计算。</pre>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <pre class="code-block">ssh cka000014</pre>
+      <div class="sol-step"><span class="sol-num">2</span><span>将 WordPress Deployment 缩放为 0 个副本</span></div>
+      <p class="sol-p">题目里提示了,要先将 Deployment 缩放为 0。</p>
+      <p class="sol-p">真正考试时,如果你不将其缩小为 0,而是直接修改cpu 和 memory 值,会导致新 Pod 起不来,因为考试环境提前做了一些限制。</p>
+      <pre class="code-block">kubectl -n relative-fawn scale deployment wordpress --replicas=0</pre>
+      <p class="sol-note">提示 scaled,表示缩放成功</p>
+      <div class="sol-step"><span class="sol-num">3</span><span>检查 nodes 资源请求情况</span></div>
+      <p class="sol-p">考试时,只有一个 node 节点。而模拟环境里,我们假设是k8s-master1这个 node 节点即可。要先缩为 0 后,再检查 node 资源请求情况。</p>
+      <pre class="code-block">kubectl get nodes
+kubectl describe node k8s-master1</pre>
+      <p class="sol-p">以下数字只是举例,实际以查出来的数字为准。</p>
+      <p class="sol-p">真实考试时的资源如下：</p>
+      <div class="sol-step"><span class="sol-num">4</span><span>更新 WordPress Deployment 的资源请求</span></div>
+      <p class="sol-p">很多同学问，这个requests值是怎么数的。</p>
+      <p class="sol-p">首先实际考试时不用计算，直接按我的改即可,或者更小一点都可以。</p>
+      <p class="sol-p">其次计算方式是：考试时是单台k8s集群。通过kubectl describe node xxxx查询到这台主机的requests使用情况，比如CPU 1100m(55%) MEM 240Mi(8%),就是说现在可以申请的CPU约为900m（45%）MEM为2760Mi（92%）。</p>
+      <p class="sol-p">那现在wordpress是三个副本，那就是可用的除以3，当然不能完全用完，还要留一些。</p>
+      <p class="sol-p">CPU 900m/3pod = 300m</p>
+      <p class="sol-p">MEM 2760Mi/3pod = 900Mi</p>
+      <p class="sol-p">上面是模拟环境的，考试时按他的资源情况计算，当然，设置更小一点总是没错的。</p>
+      <pre class="code-block">kubectl -n relative-fawn edit deployment wordpress</pre>
+      <p class="sol-p">将配置文件里, containers 的 requests cpu 设置为 80m,内存设置为 200Mi limits 不需要改,因为题目里写了“您无需更改任何资源限制”,指的就是不要改limits。</p>
+      <div class="sol-step"><span class="sol-num">5</span><span>将 WordPress Deployment 副本恢复为 3 个</span></div>
+      <pre class="code-block">kubectl -n relative-fawn scale deployment wordpress --replicas=3</pre>
+      <div class="sol-step"><span class="sol-num">6</span><span>检查</span></div>
+      <p class="sol-p">检查 wordpress pod 是否都是 running</p>
+      <p class="sol-p">这里大约需要等 2 分钟,Pod 才会 Running。(考试时也这样)</p>
+      <pre class="code-block">kubectl -n relative-fawn get pod</pre>
+      <div class="sol-step"><span class="sol-num">7</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退出cka000000 节点,返回到 student@k8s-master1 用户和节点下
+exit</pre>
+    </section>
+
+  <section id="q15" class="solution">
+      <h2 class="sol-title">15、etcd 修复 <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">您必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000015</pre>
+      <p class="sol-label">Context</p>
+      <p class="sol-p">kubeadm 配置的集群已迁移到新机器。它需要更改配置才能成功运行。</p>
+      <p class="sol-label">Task</p>
+      <p class="sol-p">修复在机器迁移过程中损坏的单节点集群。</p>
+      <p class="sol-p">首先，确定损坏的集群组件，并调查导致其损坏的原因。注意：已停用的集群使用外部 etcd 服务器。</p>
+      <p class="sol-p">接下来，修复所有损坏的集群组件的配置。</p>
+      <p class="sol-note">注意：确保重新启动所有必要的服务和组件，以使更改生效。否则可能导致分数降低。</p>
+      <p class="sol-p">最后，确保集群运行正常。确保：</p>
+      <p class="sol-p">每个节点 和 所有 Pod 都处于 Ready 状态。</p>
+      <p class="sol-p">模拟环境ETCD是正常的，做此题目时sudo -i 执行一下/root下的脚本，将etcd修改成考试状态。</p>
+      <pre class="code-block">sh etcd-set.sh</pre>
+      <p class="sol-ref">无需参考</p>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <p class="sol-p">因为这道题需要切到 root 下操作,所以需要执行 sudo -i 从普通用户 student切到 root。所以退出时,要执行 2 次exit。</p>
+      <p class="sol-p">确保在 student@k8s-master1:~$下,再执行切换集群的命令</p>
+      <pre class="code-block">ssh cka000015
+sudo -i</pre>
+      <p class="sol-note">注意,这道题要切到 root 用户下。</p>
+      <div class="sol-step"><span class="sol-num">2</span><span>执行题目里要求的初始化脚本</span></div>
+      <p class="sol-note">注意仅模拟环境里需要执行这个脚本。真正考试时,你 ssh 到这个节点的集群,这个集群本身就是这样异常的</p>
+      <pre class="code-block">sh etcd-set.sh</pre>
+      <p class="sol-p">此时集群异常,命令报错,或者卡住</p>
+      <pre class="code-block">kubectl get nodes</pre>
+      <div class="sol-step"><span class="sol-num">3</span><span>修复 etcd</span></div>
+      <p class="sol-p">编辑 kube-apiserver 的静态 Pod 清单文件,修正 --etcd-servers 参数。</p>
+      <pre class="code-block">vim /etc/kubernetes/manifests/kube-apiserver.yaml</pre>
+      <p class="sol-p">找到 --etcd-servers 参数,确保其指向本地 etcd 服务器地址</p>
+      <p class="sol-p">--etcd-servers=https://127.0.0.1:2379</p>
+      <p class="sol-p">修改完成后,必须要重启一下kubelet 服务</p>
+      <pre class="code-block">systemctl daemon-reload
+systemctl restart kubelet</pre>
+      <p class="sol-p">此时虽然 node Ready 了,但是kube-scheduler-master01 还是有异常的,需要继续操作。</p>
+      <pre class="code-block">kubectl get nodes
+kubectl -n kube-system get pod</pre>
+      <div class="sol-step"><span class="sol-num">3</span><span>修复 kube-scheduler-master01</span></div>
+      <pre class="code-block">vim /etc/kubernetes/manifests/kube-scheduler.yaml</pre>
+      <p class="sol-p">将改 requests cpu 成 100m(其实只要低于这个 node 的 request cpu 的剩余量,都是可以的,跟 resources cpu 和 memory 类似)</p>
+      <pre class="code-block">cpu: 100m</pre>
+      <div class="sol-step"><span class="sol-num">4</span><span>验证集群状态</span></div>
+      <pre class="code-block">kubectl get nodes
+kubectl -n kube-system get pod</pre>
+      <div class="sol-step"><span class="sol-num">5</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退root 用户,退回到 student用户下
+exit</pre>
+    </section>
+
+  <section id="q16" class="solution">
+      <h2 class="sol-title">16、cri-dockerd <a class="sol-back" href="#order">↑ 返回做题顺序</a></h2>
+      <p class="sol-p">您必须连接到正确的主机。不这样做可能导致零分。</p>
+      <pre class="code-block">[student@k8s-master1] $ ssh cka000016</pre>
+      <p class="sol-label">Context</p>
+      <p class="sol-p">您的任务是为 Kubernetes 准备一个 Linux 系统。 Docker 已被安装，但您需要为 kubeadm 配置它。</p>
+      <p class="sol-label">Task</p>
+      <p class="sol-p">完成以下任务，为 Kubernetes 准备系统：</p>
+      <p class="sol-p">设置 cri-dockerd ：</p>
+      <p class="sol-p">安装 Debian 软件包 /home/student/cri-dockerd_0.3.6.3-0.ubuntu-jammy_amd64.deb Debian 软件包使用 dpkg 安装。</p>
+      <p class="sol-p">启用并启动 cri-docker 服务</p>
+      <p class="sol-p">配置以下系统参数:</p>
+      <p class="sol-p">net.bridge.bridge-nf-call-iptables 设置为 1</p>
+      <p class="sol-p">net.ipv6.conf.all.forwarding 设置为 1</p>
+      <p class="sol-p">net.ipv4.ip_forward 设置为 1</p>
+      <p class="sol-p">net.netfilter.nf_conntrack_max 设置为 131072</p>
+      <p class="sol-p">确保这些系统参数在系统重启后仍然存在，并应用于正在运行的系统。</p>
+      <p class="sol-ref">无需参考</p>
+      <div class="sol-step"><span class="sol-num">1</span><span>按照题目要求,在base 节点上执行,切换到题目要求节点</span></div>
+      <p class="sol-p">确保在 student@k8s-master1:~$下,再执行切换集群的命令 ssh cka000016</p>
+      <div class="sol-step"><span class="sol-num">2</span><span>在 student用户下,使用dpkg 安装软件包  MAC arm版本未找到合适的软件包，这里记下操作就行。安装失败无所谓</span></div>
+      <pre class="code-block">sudo dpkg -i /home/student/cri-dockerd_0.3.6.3-0.ubuntu-jammy_amd64.deb</pre>
+      <p class="sol-p">启用并启动 cri-docker 服务</p>
+      <pre class="code-block">sudo systemctl enable --now cri-docker
+sudo systemctl status cri-docker</pre>
+      <div class="sol-step"><span class="sol-num">3</span><span>配置系统参数</span></div>
+      <p class="sol-p">配置系统参数</p>
+      <pre class="code-block">sudo vim /etc/sysctl.conf</pre>
+      <p class="sol-p">在文件最末尾,添加,按G自动跳转到文件最后</p>
+      <p class="sol-p">net.bridge.bridge-nf-call-iptables = 1</p>
+      <p class="sol-p">net.ipv6.conf.all.forwarding = 1</p>
+      <p class="sol-p">net.ipv4.ip_forward = 1</p>
+      <p class="sol-p">net.netfilter.nf_conntrack_max = 131072</p>
+      <p class="sol-p">使其立即生效</p>
+      <pre class="code-block">sudo sysctl -p</pre>
+      <div class="sol-step"><span class="sol-num">4</span><span>别忘记,做完后,退回到base 节点,这样下一道题才能继续切节点。</span></div>
+      <pre class="code-block"># 退出cka000000 节点,返回到 student@k8s-master1 用户和节点下
+exit</pre>
+    </section>
 </div>
 
 <footer>
