@@ -1,3 +1,4 @@
 #!/bin/bash
-rm -rf /opt/KUSC00402
+source /opt/cka/lib/setup.sh
+
 true

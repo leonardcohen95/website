@@ -1,38 +1,33 @@
 #!/bin/bash
 source /opt/cka/lib/setup.sh
-ensure_ns nginx-static
-kubectl delete deployment nginx-static -n nginx-static --ignore-not-found >/dev/null 2>&1
-cat > /tmp/nginx-default.conf <<'CONF'
-server {
-    listen 80;
-    ssl_protocols TLSv1.1;
-    location / { return 200 "ok"; }
-}
-CONF
-kubectl create configmap nginx-config -n nginx-static --from-file=default.conf=/tmp/nginx-default.conf --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+
+ensure_ns relative-fawn
+kubectl delete deployment wordpress -n relative-fawn >/dev/null 2>&1 || true
 cat <<'YAML' | kubectl apply -f - >/dev/null
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nginx-static
-  namespace: nginx-static
+  name: wordpress
+  namespace: relative-fawn
 spec:
-  replicas: 1
-  selector:
-    matchLabels: {app: nginx-static}
+  replicas: 3
+  selector: {matchLabels: {app: wordpress}}
   template:
-    metadata:
-      labels: {app: nginx-static}
+    metadata: {labels: {app: wordpress}}
     spec:
+      initContainers:
+      - name: init
+        image: busybox:1.36
+        command: ["sh","-c","echo init"]
+        resources:
+          requests: {cpu: "8", memory: "8Gi"}
+          limits:   {cpu: "8", memory: "8Gi"}
       containers:
-      - name: nginx
+      - name: wordpress
         image: nginx:1.25
-        volumeMounts:
-        - name: conf
-          mountPath: /etc/nginx/conf.d
-      volumes:
-      - name: conf
-        configMap:
-          name: nginx-config
+        resources:
+          requests: {cpu: "8", memory: "8Gi"}
+          limits:   {cpu: "8", memory: "8Gi"}
 YAML
+
 true

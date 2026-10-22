@@ -1,22 +1,18 @@
 #!/bin/bash
-TITLE='给 Pod 添加 init container'
-CATEGORY='工作负载'
-WEIGHT=3
+TITLE='更新 ConfigMap TLS 配置 + rollout restart'
+CATEGORY='服务与网络'
+WEIGHT=6
 DESCRIPTION=$(cat <<'CKA_META_EOF'
-修改 `/opt/KUCC00108/pod-spec-KUCC00108.yaml`，为 Pod `hungry-bear` 添加 init container：
-- init 容器用 busybox，创建空文件 `/workdir/calm.txt`
-- 主容器检测不到该文件则退出
-然后创建该 Pod（命名空间 cka-init）。
+nginx-static namespace 的 nginx-static Deployment 用 ConfigMap nginx-config。
+1. 修改 nginx-config：ssl_protocols 改为 TLSv1.2 TLSv1.3
+2. 设置 nginx-config 为 immutable
+3. rollout restart Deployment nginx-static 让配置生效
 CKA_META_EOF
 )
 HINT=$(cat <<'CKA_META_EOF'
-在 spec 中加入：
-initContainers:
-- name: init
-  image: busybox
-  command: ["sh","-c","touch /workdir/calm.txt"]
-  volumeMounts: [{name: workdir, mountPath: /workdir}]
-并在主容器挂载同一个 emptyDir 卷 workdir。
-最后 kubectl apply -f /opt/KUCC00108/pod-spec-KUCC00108.yaml
+kubectl -n nginx-static edit configmap nginx-config
+# data.default.conf 里把 ssl_protocols 改成 TLSv1.2 TLSv1.3
+# 顶层加 immutable: true
+kubectl -n nginx-static rollout restart deployment nginx-static
 CKA_META_EOF
 )

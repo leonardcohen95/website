@@ -1,21 +1,25 @@
 #!/bin/bash
-TITLE='etcd 数据备份'
-CATEGORY='集群架构'
-WEIGHT=0
+TITLE='StorageClass + 默认类'
+CATEGORY='存储'
+WEIGHT=7
 DESCRIPTION=$(cat <<'CKA_META_EOF'
-将 etcd 数据备份到 /opt/etcd-snapshot.db。
-etcd 端点 https://127.0.0.1:2379，证书位于 /etc/kubernetes/pki/etcd/。
-
-本题为理论题：当前 k3s 使用 sqlite（/var/lib/rancher/k3s/server/db/state.db），没有独立 etcdctl 端点。
-请阅读解题步骤后运行：cka done 04 标记完成。
+创建 StorageClass ran-local-path：
+- provisioner: rancher.io/local-path
+- volumeBindingMode: WaitForFirstConsumer
+- 设置为集群默认 StorageClass
 CKA_META_EOF
 )
 HINT=$(cat <<'CKA_META_EOF'
-ETCDCTL_API=3 etcdctl snapshot save /opt/etcd-snapshot.db \
-  --endpoints=https://127.0.0.1:2379 \
-  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
-  --cert=/etc/kubernetes/pki/etcd/server.crt \
-  --key=/etc/kubernetes/pki/etcd/server.key
-ETCDCTL_API=3 etcdctl snapshot status /opt/etcd-snapshot.db --write-out=table
+kubectl get storageclass
+# YAML：
+# apiVersion: storage.k8s.io/v1
+# kind: StorageClass
+# metadata:
+#   name: ran-local-path
+#   annotations: {storageclass.kubernetes.io/is-default-class: "true"}
+# provisioner: rancher.io/local-path
+# volumeBindingMode: WaitForFirstConsumer
+kubectl apply -f storage.yaml
+kubectl get storageclass
 CKA_META_EOF
 )

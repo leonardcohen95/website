@@ -1,14 +1,17 @@
 #!/bin/bash
-TITLE='创建含两个容器的 Pod'
-CATEGORY='工作负载'
-WEIGHT=3
+TITLE='Argo CD Helm 安装 + 模板输出'
+CATEGORY='生态工具'
+WEIGHT=8
 DESCRIPTION=$(cat <<'CKA_META_EOF'
-创建 Pod `kucc1`（default 命名空间），包含 2 个应用容器，镜像分别为 `redis` 和 `memcached`。
+1. helm repo add argo https://argoproj.github.io/argo-helm
+2. helm template argocd argo/argo-cd --namespace argocd --version 7.7.3 --set crds.install=false > ~/argo-helm.yaml
+3. helm install argocd argo/argo-cd -n argocd --version 7.7.3 --set crds.install=false
 CKA_META_EOF
 )
 HINT=$(cat <<'CKA_META_EOF'
-kubectl run kucc1 --image=redis --restart=Never --dry-run=client -o yaml > kucc1.yaml
-# 手动在 containers 下追加 memcached 容器，然后：
-kubectl apply -f kucc1.yaml
+helm repo add argo https://argoproj.github.io/argo-helm
+helm repo update argo    # 若 EOF/超时重试一次
+helm template argocd argo/argo-cd -n argocd --version 7.7.3 --set crds.install=false > ~/argo-helm.yaml
+helm install argocd argo/argo-cd -n argocd --version 7.7.3 --set crds.install=false
 CKA_META_EOF
 )

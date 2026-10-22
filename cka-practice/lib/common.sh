@@ -50,3 +50,8 @@ mark_done(){
   grep -qx "$id" "$PROGRESS_FILE" 2>/dev/null || echo "$id" >> "$PROGRESS_FILE"
 }
 is_done(){ grep -qx "$1" "$PROGRESS_FILE" 2>/dev/null; }
+
+# assert_ne 描述 不应等于 实际
+assert_ne(){
+  if [ "$2" != "$3" ]; then pass "$1"; else fail "$1   ${C_DIM}(不应等于:[$2])${C_RST}"; fi
+}

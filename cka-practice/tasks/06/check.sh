@@ -1,17 +1,13 @@
 #!/bin/bash
 source /opt/cka/lib/common.sh
-if [ -s "$HOME/resources.yaml" ]; then
-  pass "resources.yaml 已创建"
-  assert_contains "resources.yaml 含 cert-manager CRD" "certificates.cert-manager.io" "$(cat "$HOME/resources.yaml")"
-  assert_not_contains "resources.yaml 未使用 -o 自定义输出" "apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition" "$(head -3 "$HOME/resources.yaml")"
-else
-  fail "resources.yaml 不存在或为空"
+
+PC=$(kubectl get priorityclass high-priority -o json 2>/dev/null)
+if [ -z "$PC" ]; then fail "PriorityClass high-priority 不存在"; else
+  assert_eq "value=999999999" "999999999" "$(echo "$PC" | jq -r '.value')"
 fi
-if [ -s "$HOME/subject.yaml" ]; then
-  pass "subject.yaml 已创建"
-  assert_contains "subject.yaml 含 subject 字段说明" "subject" "$(cat "$HOME/subject.yaml")"
-else
-  fail "subject.yaml 不存在或为空"
+D=$(kubectl get deployment busybox-logger -n priority -o json 2>/dev/null)
+if [ -z "$D" ]; then fail "Deployment busybox-logger 不存在"; else
+  assert_eq "priorityClassName=high-priority" "high-priority" "$(echo "$D" | jq -r '.spec.template.spec.priorityClassName // ""')"
 fi
+
 true

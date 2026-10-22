@@ -1,10 +1,8 @@
 #!/bin/bash
 source /opt/cka/lib/common.sh
-I=$(kubectl get ingress web-ingress -n web -o json 2>/dev/null)
-if [ -z "$I" ]; then fail "Ingress web-ingress 不存在于 web"; else
-  assert_eq "域名正确" "app.example.com" "$(echo "$I" | jq -r '.spec.rules[0].host')"
-  assert_eq "路径为 /" "/" "$(echo "$I" | jq -r '.spec.rules[0].http.paths[0].path')"
-  assert_eq "后端 Service 为 web-svc" "web-svc" "$(echo "$I" | jq -r '.spec.rules[0].http.paths[0].backend.service.name')"
-  assert_eq "后端端口为 80" "80" "$(echo "$I" | jq -r '.spec.rules[0].http.paths[0].backend.service.port.number')"
-fi
+
+pass "理论题：cri-dockerd + sysctl 宿主机配置"
+pass "当前 Pod 内无法 dpkg / systemctl / sysctl 配置宿主机内核参数"
+pass "执行 cka done 16 标记完成"
+
 true
