@@ -118,14 +118,29 @@
     '#cka-selectbox .actions{display:flex;justify-content:flex-end;gap:10px;margin-top:10px;flex:none}',
     '#cka-selectbox button{padding:11px 18px;border-radius:8px;border:1px solid #394050;background:#2b3140;',
     'color:#eaeaea;font-size:15px;font-family:inherit;touch-action:manipulation}',
-    '#cka-selectbox button.primary{background:#3b6fd4;border-color:#3b6fd4;color:#fff}'
+    '#cka-selectbox button.primary{background:#3b6fd4;border-color:#3b6fd4;color:#fff}',
+
+    /* 虚拟方向/vi 键盘面板 */
+    '#cka-vkbd{position:fixed;right:10px;bottom:0;z-index:2147483645;background:rgba(22,24,30,.97);',
+    'border:1px solid #394050;border-radius:12px 12px 0 0;padding:8px 10px;',
+    'box-shadow:0 -6px 24px rgba(0,0,0,.5);display:none;flex-direction:column;gap:6px;',
+    'backdrop-filter:blur(6px)}',
+    '#cka-vkbd.open{display:flex}',
+    '#cka-vkbd .row{display:flex;gap:6px;justify-content:center}',
+    '#cka-vkbd button{min-width:40px;height:40px;padding:0 10px;border-radius:8px;border:1px solid #4a5163;',
+    'background:#2b3140;color:#e8e8e8;font-size:14px;font-family:ui-monospace,Menlo,Consolas,monospace;',
+    '-webkit-tap-highlight-color:transparent;touch-action:manipulation;cursor:pointer}',
+    '#cka-vkbd button:active{background:#3b6fd4;border-color:#5b9bff}',
+    '#cka-vkbd button.wide{min-width:72px}',
+    '#cka-vkbd .sep{width:1px;background:#394050;margin:4px 2px}'
   ].join('');
   document.head.appendChild(style);
 
   var wrap = document.createElement('div');
   wrap.id = 'cka-tools';
   wrap.innerHTML = '<button type="button" id="cka-copy" title="复制屏幕内容">复制</button>' +
-                   '<button type="button" id="cka-paste" title="把剪贴板内容粘到终端">粘贴</button>';
+                   '<button type="button" id="cka-paste" title="把剪贴板内容粘到终端">粘贴</button>' +
+                   '<button type="button" id="cka-kbd" title="打开虚拟键盘（方向键、Esc、vi 快捷键）">键盘</button>';
   document.body.appendChild(wrap);
 
   var toastEl = document.createElement('div');
@@ -141,6 +156,11 @@
     var bottom = 14 + hidden;
     wrap.style.bottom = bottom + 'px';
     toastEl.style.bottom = (80 + hidden) + 'px';
+    if (vkbdEl && vkbdEl.classList.contains('open')) {
+      vkbdEl.style.bottom = hidden + 'px';
+    } else if (vkbdEl) {
+      vkbdEl.style.bottom = '0px';
+    }
   }
   function watchViewport() {
     place();
@@ -326,6 +346,87 @@
     toast('已发送 ' + text.length + ' 个字符，按回车执行');
   }
 
+  // 发送含控制字符的原始按键给终端（方向键 / Esc / Ctrl+C 等）
+  // ttyd 输入帧：首字节 0，后跟 UTF-8 编码的按键序列
+  function sendKey(str) {
+    var ws = window.__ckaWS;
+    if (!ws || ws.readyState !== 1) { toast('终端未连接'); return; }
+    try {
+      var data = new TextEncoder().encode('\u0030' + str);
+      ws.send(data);
+    } catch (e) {
+      ws.send('0' + str);
+    }
+  }
+
+  // 按键名到控制序列的映射
+  var KEYS = {
+    up: '\x1b[A', down: '\x1b[B', right: '\x1b[C', left: '\x1b[D',
+    home: '\x1b[H', end: '\x1b[F',
+    esc: '\x1b', enter: '\r', backspace: '\x7f', tab: '\t',
+    'ctrl-c': '\x03', 'ctrl-z': '\x1a', 'ctrl-d': '\x04', 'ctrl-l': '\x0c',
+    pgup: '\x1b[5~', pgdn: '\x1b[6~'
+  };
+
+  function pressKey(name) {
+    var seq = KEYS[name];
+    if (seq !== undefined) sendKey(seq);
+    else sendKey(name); // 普通字符直接发送
+  }
+
+  // ---------- 虚拟方向/vi 键盘面板 ----------
+  var vkbdEl = null;
+  function buildVkbd() {
+    if (document.getElementById('cka-vkbd')) return document.getElementById('cka-vkbd');
+    var el = document.createElement('div');
+    el.id = 'cka-vkbd';
+    el.innerHTML =
+      '<div class="row">' +
+        '<button type="button" data-k="esc">Esc</button>' +
+        '<button type="button" data-k="ctrl-c">Ctrl+C</button>' +
+        '<button type="button" data-k="ctrl-z">Ctrl+Z</button>' +
+        '<button type="button" data-k="ctrl-l">清屏</button>' +
+        '<button type="button" data-k="backspace">⌫</button>' +
+        '<button type="button" class="wide" data-k="enter">Enter ↵</button>' +
+      '</div>' +
+      '<div class="row">' +
+        '<button type="button" data-k=":">:</button>' +
+        '<button type="button" data-k="i">i</button>' +
+        '<button type="button" data-k="a">a</button>' +
+        '<button type="button" data-k="o">o</button>' +
+        '<button type="button" data-k="x">x</button>' +
+        '<button type="button" data-k="dd">dd</button>' +
+        '<button type="button" class="wide" data-k=":wq">:wq</button>' +
+        '<button type="button" class="wide" data-k=":q!">:q!</button>' +
+      '</div>' +
+      '<div class="row">' +
+        '<button type="button" data-k="home">⇤</button>' +
+        '<button type="button" data-k="up">↑</button>' +
+        '<button type="button" data-k="end">⇥</button>' +
+      '</div>' +
+      '<div class="row">' +
+        '<button type="button" data-k="left">←</button>' +
+        '<button type="button" data-k="down">↓</button>' +
+        '<button type="button" data-k="right">→</button>' +
+      '</div>';
+    document.body.appendChild(el);
+    el.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('button') : null;
+      if (!b) return;
+      var k = b.getAttribute('data-k');
+      if (!k) return;
+      if (KEYS[k] !== undefined) sendKey(KEYS[k]);
+      else sendKey(k); // 文本（:wq 之类）直接发
+    });
+    vkbdEl = el;
+    return el;
+  }
+  function toggleVkbd() {
+    var el = buildVkbd();
+    el.classList.toggle('open');
+  }
+  function hideVkbd() { if (vkbdEl) vkbdEl.classList.remove('open'); }
+
   function doPaste() {
     if (!navigator.clipboard || !navigator.clipboard.readText || !window.isSecureContext) {
       appendPasteBox();
@@ -350,6 +451,7 @@
         '<button type="button" data-act="copy">复制屏幕内容</button>' +
         '<button type="button" data-act="select">选择复制</button>' +
         '<button type="button" data-act="paste">粘贴命令</button>' +
+        '<button type="button" data-act="kbd">虚拟键盘（方向键 / Esc / vi 命令）</button>' +
         '<button type="button" class="cancel" data-act="cancel">取消</button>' +
       '</div>';
     document.body.appendChild(sheet);
@@ -362,6 +464,7 @@
       if (act === 'copy') doCopy();
       else if (act === 'select') showSelectBox();
       else if (act === 'paste') doPaste();
+      else if (act === 'kbd') toggleVkbd();
       if (navigator.vibrate) { try { navigator.vibrate(10); } catch (err) {} }
     });
   }
@@ -415,6 +518,7 @@
 
   document.getElementById('cka-copy').addEventListener('click', doCopy);
   document.getElementById('cka-paste').addEventListener('click', doPaste);
+  document.getElementById('cka-kbd').addEventListener('click', toggleVkbd);
 
   // 桌面端快捷键：Ctrl/⌘+Shift+C 复制屏幕，Ctrl/⌘+Shift+V 粘贴
   document.addEventListener('keydown', function (e) {
@@ -422,6 +526,8 @@
       e.preventDefault(); doCopy();
     } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'V' || e.key === 'v')) {
       e.preventDefault(); doPaste();
+    } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'K' || e.key === 'k')) {
+      e.preventDefault(); toggleVkbd();
     }
   });
 })();
