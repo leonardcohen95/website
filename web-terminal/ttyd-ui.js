@@ -1,19 +1,38 @@
-/* 终端复制 / 粘贴工具栏 */
+/* 终端复制 / 粘贴：悬浮按钮 + 长按菜单（手机端适配） */
 (function () {
   if (document.getElementById('cka-tools')) return;
 
   var style = document.createElement('style');
   style.textContent = [
-    '#cka-tools{position:fixed;right:10px;bottom:14px;display:flex;flex-direction:column;gap:8px;z-index:2147483647;opacity:.72;transition:opacity .2s}',
-    '#cka-tools:hover,#cka-tools:focus-within{opacity:1}',
-    '#cka-tools button{width:52px;height:40px;border-radius:10px;border:1px solid rgba(255,255,255,.28);',
-    'background:rgba(38,42,52,.9);color:#eaeaea;font-size:13px;line-height:1;font-family:inherit;',
-    'box-shadow:0 2px 8px rgba(0,0,0,.35);-webkit-tap-highlight-color:transparent;cursor:pointer}',
-    '#cka-tools button:active{background:rgba(80,140,255,.9);border-color:#5b9bff}',
+    /* 终端区域禁用系统长按菜单，改由我们的长按菜单接管 */
+    '#terminal-container,#terminal-container *{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}',
+
+    '#cka-tools{position:fixed;right:10px;bottom:14px;display:flex;flex-direction:column;gap:8px;',
+    'z-index:2147483646;opacity:.78;transition:opacity .2s}',
+    '#cka-tools button{width:56px;height:44px;border-radius:12px;border:1px solid rgba(255,255,255,.28);',
+    'background:rgba(38,42,52,.92);color:#eaeaea;font-size:13px;line-height:1;font-family:inherit;',
+    'box-shadow:0 2px 8px rgba(0,0,0,.35);-webkit-tap-highlight-color:transparent;cursor:pointer;',
+    'touch-action:manipulation}',
+    '#cka-tools button:active{background:rgba(80,140,255,.92);border-color:#5b9bff}',
+
     '#cka-toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:rgba(20,22,28,.94);',
     'color:#fff;font-size:13px;padding:8px 14px;border-radius:8px;z-index:2147483647;pointer-events:none;',
     'opacity:0;transition:opacity .18s;white-space:nowrap;max-width:88vw;overflow:hidden;text-overflow:ellipsis}',
     '#cka-toast.show{opacity:1}',
+
+    /* 长按弹出的操作菜单 */
+    '#cka-sheet{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2147483647;display:flex;',
+    'align-items:flex-end;justify-content:center}',
+    '#cka-sheet .panel{width:100%;max-width:560px;background:#1f232b;border-radius:14px 14px 0 0;',
+    'padding:10px 12px calc(12px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px;',
+    'box-shadow:0 -6px 24px rgba(0,0,0,.5)}',
+    '#cka-sheet .tip{color:#8b94a7;font-size:12px;text-align:center;padding:4px 0 2px}',
+    '#cka-sheet button{width:100%;padding:14px 12px;border-radius:10px;border:1px solid #394050;',
+    'background:#2b3140;color:#eaeaea;font-size:16px;font-family:inherit;touch-action:manipulation;',
+    '-webkit-tap-highlight-color:transparent}',
+    '#cka-sheet button:active{background:#3b6fd4;border-color:#3b6fd4}',
+    '#cka-sheet button.cancel{background:#16191f;color:#aab2c0;font-size:15px}',
+
     '#cka-pastebox{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2147483647;display:flex;',
     'align-items:center;justify-content:center;padding:16px}',
     '#cka-pastebox .box{background:#1f232b;border:1px solid #394050;border-radius:12px;width:100%;max-width:560px;padding:14px}',
@@ -22,8 +41,8 @@
     'border:1px solid #394050;border-radius:8px;padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace;',
     'font-size:16px;resize:vertical}',
     '#cka-pastebox .actions{display:flex;justify-content:flex-end;gap:10px;margin-top:10px}',
-    '#cka-pastebox button{padding:9px 16px;border-radius:8px;border:1px solid #394050;background:#2b3140;',
-    'color:#eaeaea;font-size:14px}',
+    '#cka-pastebox button{padding:11px 18px;border-radius:8px;border:1px solid #394050;background:#2b3140;',
+    'color:#eaeaea;font-size:15px;font-family:inherit;touch-action:manipulation}',
     '#cka-pastebox button.primary{background:#3b6fd4;border-color:#3b6fd4;color:#fff}'
   ].join('');
   document.head.appendChild(style);
@@ -38,6 +57,28 @@
   toastEl.id = 'cka-toast';
   document.body.appendChild(toastEl);
   var toastTimer = null;
+
+  // 手机键盘弹出时，position:fixed 的按钮会被挡住，按 visualViewport 抬到底部上方
+  function place() {
+    var vv = window.visualViewport;
+    var hidden = 0;
+    if (vv) hidden = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    var bottom = 14 + hidden;
+    wrap.style.bottom = bottom + 'px';
+    toastEl.style.bottom = (80 + hidden) + 'px';
+  }
+  function watchViewport() {
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('orientationchange', place);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', place);
+      window.visualViewport.addEventListener('scroll', place);
+    }
+    setTimeout(place, 300);
+    setTimeout(place, 1000);
+  }
+  watchViewport();
 
   function toast(msg) {
     toastEl.textContent = msg;
@@ -61,8 +102,7 @@
     var lines = text.split('\n');
     for (var i = 0; i < lines.length; i++) {
       var parts = lines[i].split('\r');
-      var line = parts[parts.length - 1];
-      out.push(line.replace(/[ \t]+$/, ''));
+      out.push(parts[parts.length - 1].replace(/[ \t]+$/, ''));
     }
     return out.join('\n');
   }
@@ -105,33 +145,37 @@
   }
 
   function copyText(text) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
+    if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
       return navigator.clipboard.writeText(text);
     }
     return new Promise(function (resolve, reject) {
       var ta = document.createElement('textarea');
       ta.value = text;
+      ta.setAttribute('readonly', '');
       ta.style.position = 'fixed';
-      ta.style.top = '-1000px';
+      ta.style.top = '0';
+      ta.style.left = '0';
+      ta.style.width = '1px';
+      ta.style.height = '1px';
+      ta.style.opacity = '0';
       document.body.appendChild(ta);
+      ta.focus();
       ta.select();
-      try {
-        document.execCommand('copy') ? resolve() : reject(new Error('execCommand failed'));
-      } catch (e) {
-        reject(e);
-      } finally {
-        document.body.removeChild(ta);
-      }
+      ta.setSelectionRange(0, text.length);
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      ok ? resolve() : reject(new Error('copy failed'));
     });
   }
 
   function doCopy() {
     var text = screenText();
-    if (!text) { toast('暂时没有可复制的内容，先在终端里执行条命令'); return; }
+    if (!text) { toast('暂时没有可复制的内容'); return; }
     copyText(text).then(function () {
       toast('已复制 ' + text.split('\n').length + ' 行');
     }, function () {
-      appendPasteBox(text, '自动复制失败，请长按下方文本手动复制');
+      appendPasteBox(text, '自动复制被浏览器拦截，请长按下方文本选择「全选 → 复制」');
     });
   }
 
@@ -169,11 +213,11 @@
     if (!ws || ws.readyState !== 1) { toast('终端未连接，请刷新页面'); return; }
     text = text.replace(/\r\n/g, '\n');
     ws.send('0' + text);
-    toast('已发送 ' + text.length + ' 个字符');
+    toast('已发送 ' + text.length + ' 个字符，按回车执行');
   }
 
   function doPaste() {
-    if (!navigator.clipboard || !navigator.clipboard.readText) {
+    if (!navigator.clipboard || !navigator.clipboard.readText || !window.isSecureContext) {
       appendPasteBox();
       return;
     }
@@ -184,6 +228,78 @@
       appendPasteBox();
     });
   }
+
+  // 长按 / 右键弹出的操作菜单
+  function showSheet() {
+    if (document.getElementById('cka-sheet')) return;
+    var sheet = document.createElement('div');
+    sheet.id = 'cka-sheet';
+    sheet.innerHTML =
+      '<div class="panel">' +
+        '<div class="tip">终端操作</div>' +
+        '<button type="button" data-act="copy">复制屏幕内容</button>' +
+        '<button type="button" data-act="paste">粘贴命令</button>' +
+        '<button type="button" class="cancel" data-act="cancel">取消</button>' +
+      '</div>';
+    document.body.appendChild(sheet);
+    sheet.addEventListener('click', function (e) {
+      if (e.target === sheet) { sheet.remove(); return; }
+      var b = e.target.closest ? e.target.closest('button') : null;
+      if (!b) return;
+      var act = b.getAttribute('data-act');
+      sheet.remove();
+      if (act === 'copy') doCopy();
+      else if (act === 'paste') doPaste();
+      if (navigator.vibrate) { try { navigator.vibrate(10); } catch (err) {} }
+    });
+  }
+
+  // 触摸长按：550ms 不动即弹出菜单
+  var pressTimer = null, sx = 0, sy = 0;
+  function cancelPress() {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+  }
+  function onTouchStart(e) {
+    if (e.touches.length !== 1) { cancelPress(); return; }
+    if (e.target.closest && e.target.closest('#cka-sheet,#cka-pastebox,#cka-tools')) return;
+    var t = e.touches[0];
+    sx = t.clientX; sy = t.clientY;
+    cancelPress();
+    pressTimer = setTimeout(function () {
+      pressTimer = null;
+      showSheet();
+    }, 550);
+  }
+  function onTouchMove(e) {
+    if (!pressTimer || e.touches.length !== 1) return;
+    var t = e.touches[0];
+    if (Math.abs(t.clientX - sx) > 12 || Math.abs(t.clientY - sy) > 12) cancelPress();
+  }
+
+  function bindTerminal() {
+    var c = document.getElementById('terminal-container');
+    if (!c) return false;
+    c.addEventListener('touchstart', onTouchStart, { passive: true });
+    c.addEventListener('touchmove', onTouchMove, { passive: true });
+    c.addEventListener('touchend', cancelPress);
+    c.addEventListener('touchcancel', cancelPress);
+    return true;
+  }
+  if (!bindTerminal()) {
+    var tries = 0;
+    var timer = setInterval(function () {
+      if (bindTerminal() || ++tries > 50) clearInterval(timer);
+    }, 100);
+  }
+
+  // 桌面右键 / 安卓长按 contextmenu 也走同一个菜单
+  document.addEventListener('contextmenu', function (e) {
+    if (e.target.closest && e.target.closest('#terminal-container')) {
+      e.preventDefault();
+      cancelPress();
+      showSheet();
+    }
+  });
 
   document.getElementById('cka-copy').addEventListener('click', doCopy);
   document.getElementById('cka-paste').addEventListener('click', doPaste);
