@@ -45,4 +45,19 @@
   Hooked.CLOSED = 3;
   Hooked.__ckaHooked = true;
   window.WebSocket = Hooked;
+
+  // 切回页面时，如果连接已断，立即自动重连
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible') return;
+    var x = window.__ttydXterm;
+    if (!x) return;
+    // 连接正常时什么都不做
+    if (x.socket && (x.socket.readyState === Native.OPEN || x.socket.readyState === Native.CONNECTING)) return;
+    // 清理可能的重连定时器，避免重复
+    if (x._reconnectTimer) { clearTimeout(x._reconnectTimer); x._reconnectTimer = null; }
+    x._pendingReconnect = !1;
+    if (typeof x.refreshToken === 'function' && typeof x.connect === 'function') {
+      x.refreshToken().then(x.connect.bind(x));
+    }
+  });
 })();
