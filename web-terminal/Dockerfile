@@ -22,6 +22,11 @@ RUN ln -sf /opt/cka/bin/cka /usr/local/bin/cka && \
     echo 'source /etc/bash_completion' >> /root/.bashrc && \
     echo 'export EDITOR=vim' >> /root/.bashrc
 
+# 自定义前端：加复制/粘贴工具栏
+COPY index.html /opt/ttyd/index.html
+
 ENV EDITOR=vim KUBE_EDITOR=vim
 WORKDIR /root
-ENTRYPOINT ["ttyd", "-W", "-c", "root:Gmcc@345", "-p", "7681", "-b", "/terminal", "-t", "titleFixed=CKA 练习终端", "bash"]
+ENTRYPOINT ["ttyd", "-W", "-c", "root:Gmcc@345", "-p", "7681", "-b", "/terminal", \
+            "-I", "/opt/ttyd/index.html", \
+            "-t", "titleFixed=CKA 练习终端", "bash"]
