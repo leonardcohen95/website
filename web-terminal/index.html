@@ -106,7 +106,19 @@
     '#cka-pastebox .actions{display:flex;justify-content:flex-end;gap:10px;margin-top:10px}',
     '#cka-pastebox button{padding:11px 18px;border-radius:8px;border:1px solid #394050;background:#2b3140;',
     'color:#eaeaea;font-size:15px;font-family:inherit;touch-action:manipulation}',
-    '#cka-pastebox button.primary{background:#3b6fd4;border-color:#3b6fd4;color:#fff}'
+    '#cka-pastebox button.primary{background:#3b6fd4;border-color:#3b6fd4;color:#fff}',
+
+    '#cka-selectbox{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2147483647;display:flex;',
+    'align-items:center;justify-content:center;padding:16px}',
+    '#cka-selectbox .box{background:#1f232b;border:1px solid #394050;border-radius:12px;width:100%;max-width:560px;padding:14px;display:flex;flex-direction:column;max-height:80vh}',
+    '#cka-selectbox .title{color:#cfd6e4;font-size:13px;margin-bottom:8px;line-height:1.5;flex:none}',
+    '#cka-selectbox textarea{width:100%;flex:1;min-height:220px;box-sizing:border-box;background:#12151b;color:#e8e8e8;',
+    'border:1px solid #394050;border-radius:8px;padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace;',
+    'font-size:16px;resize:vertical;overflow:auto}',
+    '#cka-selectbox .actions{display:flex;justify-content:flex-end;gap:10px;margin-top:10px;flex:none}',
+    '#cka-selectbox button{padding:11px 18px;border-radius:8px;border:1px solid #394050;background:#2b3140;',
+    'color:#eaeaea;font-size:15px;font-family:inherit;touch-action:manipulation}',
+    '#cka-selectbox button.primary{background:#3b6fd4;border-color:#3b6fd4;color:#fff}'
   ].join('');
   document.head.appendChild(style);
 
@@ -271,6 +283,41 @@
     box.addEventListener('click', function (e) { if (e.target === box) box.remove(); });
   }
 
+  function showSelectBox() {
+    var text = screenText();
+    if (!text) { toast('暂时没有可复制的内容'); return; }
+    if (document.getElementById('cka-selectbox')) return;
+    var box = document.createElement('div');
+    box.id = 'cka-selectbox';
+    box.innerHTML =
+      '<div class="box">' +
+        '<div class="title">长按下方文本自由选择想要复制的部分，然后点「复制选中」</div>' +
+        '<textarea id="cka-sb-ta" readonly></textarea>' +
+        '<div class="actions">' +
+          '<button type="button" id="cka-sb-cancel">取消</button>' +
+          '<button type="button" class="primary" id="cka-sb-copy">复制选中</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(box);
+    var ta = document.getElementById('cka-sb-ta');
+    ta.value = text;
+    setTimeout(function () { ta.focus(); }, 50);
+
+    document.getElementById('cka-sb-cancel').onclick = function () { box.remove(); };
+    document.getElementById('cka-sb-copy').onclick = function () {
+      var start = ta.selectionStart, end = ta.selectionEnd;
+      var selected = (start === end) ? text : text.substring(start, end);
+      if (!selected.trim()) { toast('请先选择要复制的内容'); return; }
+      copyText(selected).then(function () {
+        toast('已复制 ' + selected.split('\n').length + ' 行');
+        box.remove();
+      }, function () {
+        toast('复制失败，请长按文本手动复制');
+      });
+    };
+    box.addEventListener('click', function (e) { if (e.target === box) box.remove(); });
+  }
+
   function sendInput(text) {
     var ws = window.__ckaWS;
     if (!ws || ws.readyState !== 1) { toast('终端未连接，请刷新页面'); return; }
@@ -301,6 +348,7 @@
       '<div class="panel">' +
         '<div class="tip">终端操作</div>' +
         '<button type="button" data-act="copy">复制屏幕内容</button>' +
+        '<button type="button" data-act="select">选择复制</button>' +
         '<button type="button" data-act="paste">粘贴命令</button>' +
         '<button type="button" class="cancel" data-act="cancel">取消</button>' +
       '</div>';
@@ -312,6 +360,7 @@
       var act = b.getAttribute('data-act');
       sheet.remove();
       if (act === 'copy') doCopy();
+      else if (act === 'select') showSelectBox();
       else if (act === 'paste') doPaste();
       if (navigator.vibrate) { try { navigator.vibrate(10); } catch (err) {} }
     });
