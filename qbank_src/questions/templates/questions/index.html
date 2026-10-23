@@ -57,6 +57,16 @@
                                     <small>用答题赚到的星星，养一只电子乌龟，还能在商店买龟粮、玩具和装饰</small>
                                 </div>
                                 {% endif %}
+                                {% if not user.is_authenticated %}
+                                <div class="alert alert-light border rounded-4 text-start mb-1">
+                                    <div class="fw-semibold mb-2"><i class="bi bi-lock me-2 text-warning"></i>登录后可解锁以下功能</div>
+                                    <div class="text-muted small mb-3">模拟面试 · K8s 学习中心 · LangChain 学习中心 · 我的宠物 · 星星商店 · 个人中心</div>
+                                    <div class="d-flex gap-2">
+                                        <a href="{% url 'login' %}" class="btn btn-primary rounded-pill px-4 flex-fill">登录</a>
+                                        <a href="{% url 'register' %}" class="btn btn-outline-primary rounded-pill px-4 flex-fill">注册</a>
+                                    </div>
+                                </div>
+                                {% endif %}
                                 <a href="/cka/" class="btn btn-lg px-5 py-3 rounded-pill shadow min-height-44 text-white" style="background:#ff6b35;border-color:#ff6b35;">
                                     <i class="bi bi-mortarboard me-2"></i><span>CKA 考试指南</span>
                                 </a>
