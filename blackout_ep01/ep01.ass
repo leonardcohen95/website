@@ -1,0 +1,25 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+YCbCr Matrix: TV.709
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Main,Noto Sans CJK SC,54,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,0,0,0,0,100,100,1.5,0,1,2.6,1.2,2,80,80,230,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, Effect, Text
+Dialogue: 0,0:00:03.40,0:00:07.60,Main,,0,0,0,{\fad(150,150)}雨下了一整晚。\N没人知道，这栋楼已经出事了。
+Dialogue: 0,0:00:08.30,0:00:12.60,Main,,0,0,0,{\fad(150,150)}林夏是被冷醒的。\N宿舍里，只剩她一个人。
+Dialogue: 0,0:00:13.30,0:00:17.60,Main,,0,0,0,{\fad(150,150)}下铺的被子被拖到了门口。\N她的室友，不见了。
+Dialogue: 0,0:00:18.30,0:00:22.60,Main,,0,0,0,{\fad(150,150)}走廊尽头，传来一声\N不像人能发出的声音。
+Dialogue: 0,0:00:23.30,0:00:26.80,Main,,0,0,0,{\fad(150,150)}有人在转她的门把手。
+Dialogue: 0,0:00:27.30,0:00:31.60,Main,,0,0,0,{\fad(150,150)}猫眼里那个人，\N穿着室友的校服。
+Dialogue: 0,0:00:32.30,0:00:36.60,Main,,0,0,0,{\fad(150,150)}手机响了。\N来电显示：室友。
+Dialogue: 0,0:00:37.30,0:00:41.60,Main,,0,0,0,{\fad(150,150)}门，开始被撞。
+Dialogue: 0,0:00:42.30,0:00:46.60,Main,,0,0,0,{\fad(150,150)}她抓起了离手边最近的东西。
+Dialogue: 0,0:00:47.60,0:00:52.60,Main,,0,0,0,{\fad(150,150)}门开了一条缝。\N门外，只有一只鞋。
+Dialogue: 0,0:00:53.30,0:00:57.60,Main,,0,0,0,{\fad(150,150)}玻璃上的手印，\N是刚刚才留下的。
