@@ -1,0 +1,1539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>南方电网 · 数据库运维工程师面试突击手册</title>
+<style>
+:root{
+  --brand:#0b5d4a; --brand-2:#0f7a60; --brand-3:#e6f2ee; --brand-4:#cfe6de;
+  --gold:#b9822f; --gold-bg:#fbf3e4;
+  --ink:#16241f; --muted:#5d6f68; --line:#dce8e3;
+  --bg:#f4f7f5; --card:#ffffff;
+  --danger:#ae3f38; --danger-bg:#fbeeed;
+  --radius:14px;
+  --shadow:0 1px 2px rgba(16,42,34,.05),0 8px 24px rgba(16,42,34,.06);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:86px}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  font-size:15px;line-height:1.75;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+a{color:var(--brand-2);text-decoration:none}
+
+/* ---------- Hero ---------- */
+.hero{position:relative;overflow:hidden;background:
+  radial-gradient(900px 400px at 85% -10%,rgba(201,160,80,.22),transparent 60%),
+  linear-gradient(135deg,#083f33 0%,#0b5d4a 55%,#0e6b55 100%);
+  color:#eaf5f1;padding:56px 0 44px}
+.hero::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.16;
+  background-image:linear-gradient(rgba(255,255,255,.16) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.16) 1px,transparent 1px);
+  background-size:34px 34px;
+  mask-image:linear-gradient(to bottom,black,transparent 78%)}
+.hero .wrap{position:relative;z-index:1}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:#cfe8df;border:1px solid rgba(255,255,255,.28);
+  padding:5px 12px;border-radius:999px;background:rgba(255,255,255,.06)}
+.hero h1{font-size:38px;line-height:1.25;margin:18px 0 10px;font-weight:800;letter-spacing:-.5px;color:#fff}
+.hero h1 em{font-style:normal;color:#f0c778}
+.hero p.sub{margin:0;color:#c9e0d8;font-size:16px;max-width:860px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.chip{font-size:12.5px;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.16);color:#e6f3ee}
+.chip.gold{background:rgba(240,199,120,.16);border-color:rgba(240,199,120,.4);color:#f6d9a4}
+.elevator{margin-top:26px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.18);
+  border-left:4px solid #f0c778;border-radius:12px;padding:16px 20px;backdrop-filter:blur(6px);max-width:980px}
+.elevator b{color:#f6d9a4;font-size:13px;letter-spacing:.08em}
+.elevator p{margin:6px 0 0;font-size:14.5px;color:#e8f4ef}
+
+/* ---------- Nav ---------- */
+nav{position:sticky;top:0;z-index:50;background:rgba(244,247,245,.92);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;gap:6px;overflow-x:auto;padding:10px 24px;scrollbar-width:none}
+nav .wrap::-webkit-scrollbar{display:none}
+nav a{flex:none;font-size:13px;color:#3f564e;padding:6px 11px;border-radius:8px;white-space:nowrap}
+nav a:hover{background:var(--brand-3);color:var(--brand)}
+
+/* ---------- Layout ---------- */
+main{padding:34px 0 70px}
+section{margin:0 0 42px}
+.sec-head{display:flex;align-items:baseline;gap:12px;margin:0 0 16px}
+.sec-no{flex:none;width:34px;height:34px;border-radius:10px;background:var(--brand);color:#fff;
+  font-size:14px;font-weight:700;display:grid;place-items:center;transform:translateY(2px)}
+.sec-head h2{font-size:23px;margin:0;letter-spacing:-.3px}
+.sec-head span.desc{color:var(--muted);font-size:13px}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px 22px;box-shadow:var(--shadow);margin-bottom:14px}
+.card h3{margin:0 0 10px;font-size:17px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h4{margin:16px 0 8px;font-size:14.5px;color:var(--brand)}
+.card p{margin:8px 0}
+.card ul,.card ol{margin:8px 0;padding-left:20px}
+.card li{margin:4px 0}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+
+.tag{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:6px;
+  vertical-align:middle;line-height:1.6;white-space:nowrap}
+.tag.hot{background:var(--danger-bg);color:var(--danger);border:1px solid #f0d3d0}
+.tag.must{background:var(--brand-3);color:var(--brand);border:1px solid var(--brand-4)}
+.tag.plus{background:var(--gold-bg);color:var(--gold);border:1px solid #f0e0c2}
+
+.note{border-left:4px solid var(--brand-2);background:var(--brand-3);border-radius:0 10px 10px 0;
+  padding:12px 16px;margin:12px 0;font-size:14px}
+.note.warn{border-left-color:var(--danger);background:var(--danger-bg)}
+.note.gold{border-left-color:var(--gold);background:var(--gold-bg)}
+.note b{color:var(--brand)}
+.note.warn b{color:var(--danger)}
+
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:10px 0;background:#fff}
+th,td{border:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}
+th{background:var(--brand-3);color:#123f34;font-weight:700;white-space:nowrap}
+tbody tr:nth-child(even){background:#fbfdfc}
+td code,p code,li code{background:#eef4f1;color:#0a5341;padding:1px 5px;border-radius:4px;
+  font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:12.5px}
+
+pre{background:#10231d;color:#d9f2e8;border-radius:12px;padding:15px 17px;overflow:auto;
+  font-size:12.8px;line-height:1.65;margin:12px 0;border:1px solid #1b3a30}
+pre code{background:none;color:inherit;padding:0;font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+.code-label{font-size:11.5px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin:12px 0 -6px}
+
+.kv{display:flex;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line)}
+.kv:last-child{border-bottom:0}
+.kv b{flex:none;min-width:92px;color:var(--brand);font-size:13.5px}
+.kv span{font-size:13.5px}
+
+.qa{border:1px solid var(--line);border-radius:12px;background:#fff;padding:14px 17px;margin-bottom:10px}
+.qa .q{font-weight:700;color:#123f34;display:flex;gap:9px;align-items:flex-start}
+.qa .q .num{flex:none;font-size:12px;color:#fff;background:var(--brand-2);border-radius:6px;
+  padding:1px 7px;margin-top:3px;font-weight:600}
+.qa .a{margin:8px 0 0 0;padding-left:26px;font-size:14px}
+.qa .a ul{margin:4px 0;padding-left:18px}
+.qa .a li{margin:3px 0}
+.qa .a .key{color:var(--danger);font-weight:600}
+
+.scene{border-left:4px solid var(--gold);background:#fff;border-radius:0 12px 12px 0;
+  padding:14px 18px;margin-bottom:12px;box-shadow:var(--shadow);border-top:1px solid var(--line);
+  border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.scene h4{margin:0 0 8px;color:var(--gold);font-size:15px}
+.scene ol{margin:6px 0;padding-left:20px}
+.scene li{margin:3px 0;font-size:14px}
+
+.matrix{display:grid;grid-template-columns:110px 1fr 1fr;grid-template-rows:52px 1fr 1fr;
+  gap:8px;margin:14px 0}
+.matrix .cell{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px;font-size:13px}
+.matrix .head{background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:700;border:0}
+.matrix .axis{background:var(--brand-3);display:grid;place-items:center;font-weight:700;color:var(--brand);border:0}
+.matrix .good{background:#eef8f3}
+
+footer{border-top:1px solid var(--line);padding:26px 0 40px;color:var(--muted);font-size:12.5px;text-align:center}
+
+@media (max-width:900px){
+  .g2,.g3,.g4{grid-template-columns:1fr}
+  .hero h1{font-size:29px}
+  .hero{padding:40px 0 34px}
+  .matrix{grid-template-columns:80px 1fr 1fr}
+}
+@media print{
+  body{background:#fff;font-size:12px}
+  nav{display:none}
+  .hero{padding:22px 0;background:#0b5d4a!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .card,.qa,.scene,.matrix{break-inside:avoid;box-shadow:none}
+  section{break-inside:auto;margin-bottom:24px}
+  pre{white-space:pre-wrap;word-break:break-all}
+  a{color:inherit}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Interview Prep · Database Operations</span>
+    <h1>南方电网 · <em>数据库运维工程师</em><br>面试突击手册</h1>
+    <p class="sub">Oracle · 达梦 DM8 · 金仓 KingbaseES · GaussDB · PolarDB —— 高可用、性能调优、备份恢复、国产化迁移、云原生与自动化，一份按 JD 逐条拆解的实战速览。</p>
+    <div class="chips">
+      <span class="chip">面试时间：今天下午</span>
+      <span class="chip">依据岗位 JD 定制</span>
+      <span class="chip">45 道高频问答 + 6 个情景题</span>
+      <span class="chip gold">重点：国产库 + 高可用 + 迁移 + 自动化</span>
+    </div>
+    <div class="elevator">
+      <b>30 秒电梯陈述（先背这一版）</b>
+      <p>“我有 X 年数据库运维经验，主要管 Oracle 和国产库（达梦/金仓/GaussDB），做过核心库的日常巡检、备份恢复、主备切换和性能调优。最近两年重点做国产化迁移和自动化运维：参与过 X 套 Oracle 到达梦/金仓的迁移割接，把停机窗口从 X 小时压到 X 分钟；用 Python + Shell 把巡检、备份校验、主备演练做成脚本和定时任务，巡检从 X 小时降到 X 分钟。我熟悉 RAC、Data Guard、主备集群，也在 K8s 环境里部署和排查过数据库。看到南网项目在做核心系统国产化替代和上云，和我的经历比较匹配。”</p>
+    </div>
+  </div>
+</header>
+
+<nav>
+  <div class="wrap">
+    <a href="#s0">岗位解码</a>
+    <a href="#s1">各库对比</a>
+    <a href="#s2">核心考点</a>
+    <a href="#s3">高可用与容灾</a>
+    <a href="#s4">性能调优</a>
+    <a href="#s5">备份恢复</a>
+    <a href="#s6">国产化迁移</a>
+    <a href="#s7">云原生</a>
+    <a href="#s8">自动化脚本</a>
+    <a href="#s9">45 道问答</a>
+    <a href="#s10">情景排障</a>
+    <a href="#s11">南网特色</a>
+    <a href="#s12">反问与禁忌</a>
+    <a href="#s13">命令速查</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+<!-- ================= 0 岗位解码 ================= -->
+<section id="s0">
+  <div class="sec-head"><div class="sec-no">0</div><h2>岗位解码：面试官到底想确认什么</h2><span class="desc">先看局，再看题</span></div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>项目背景：南网为什么需要这个岗</h3>
+      <ul>
+        <li><b>数字电网 / 数字南网：</b>核心业务系统持续上云、数据集中，数据库规模和重要性同步上升。</li>
+        <li><b>信创国产化替代：</b>存量 Oracle 逐步迁移到达梦、金仓、GaussDB、PolarDB，形成“多库并存”的混合格局。</li>
+        <li><b>高可用要求极高：</b>营销、计量、调度等系统涉及民生与生产，7×24 不能停，RPO/RTO 有硬指标。</li>
+        <li><b>安全合规：</b>电力监控系统安全防护、等保 2.0、数据安全法，审计与权限要求严格。</li>
+        <li><b>人少库多：</b>必须靠自动化、标准化、预案化来兜底，而不是靠人堆。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>面试官真正想确认的 4 件事</h3>
+      <div class="kv"><b>① 敢不敢碰生产</b><span>变更前有没有备份、回退、窗口、双人复核；出问题能不能止损。</span></div>
+      <div class="kv"><b>② 会不会排障</b><span>不是背概念，而是给你一个现象，你能不能分层定位到根因。</span></div>
+      <div class="kv"><b>③ 是否真做过</b><span>迁移、RAC/DG、主备切换、K8s，讲得出细节、踩过的坑和量化结果。</span></div>
+      <div class="kv"><b>④ 能不能自动化</b><span>会不会用 Python/Shell 把重复劳动变成工具，而不是天天手工巡检。</span></div>
+      <div class="note gold" style="margin-bottom:0"><b>答题公式：</b>结论先行 → 分层定位（业务 / SQL / 实例 / OS / 存储）→ 证据（视图、日志、指标）→ 处置 → 复盘预防。每答一题都尽量落到这五步。</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>JD 逐条对应：你的“证据点”放在哪</h3>
+    <table>
+      <thead><tr><th style="width:26%">JD 要求</th><th style="width:37%">面试官可能怎么问</th><th>你要准备的证据</th></tr></thead>
+      <tbody>
+        <tr><td>日常运维、巡检、补丁升级、备份恢复</td><td>“你每天巡检看什么？补丁怎么上的？”</td><td>巡检清单、备份策略、补丁窗口与回退方案、一次恢复演练</td></tr>
+        <tr><td>主从复制、读写分离、分布式集群</td><td>“讲讲你搭过的主备/读写分离，延迟怎么处理？”</td><td>拓扑图、同步/异步选择、延迟监控、切换演练记录</td></tr>
+        <tr><td>性能瓶颈、SQL 调优、OS 适配</td><td>“一条 SQL 突然变慢，你怎么查？”</td><td>AWR/执行计划/索引/参数/OS 一条完整案例，带前后对比数字</td></tr>
+        <tr><td>Docker/K8s 下数据库稳定运行</td><td>“数据库上 K8s 要注意什么？PVC 挂不上怎么办？”</td><td>StatefulSet + PVC + Operator、探针、资源限制、一次排障</td></tr>
+        <tr><td>Python/Shell 自动化</td><td>“你写过什么工具？给我讲讲结构。”</td><td>巡检/备份校验/告警脚本，讲清幂等、日志、超时、告警收敛</td></tr>
+        <tr><td>规范、预案、容灾演练</td><td>“切换预案包含什么？演练怎么做？”</td><td>预案目录、切换步骤、验证点、回退条件、演练报告</td></tr>
+        <tr><td>国产库精通两种以上</td><td>“达梦和 Oracle 有什么区别？金仓呢？”</td><td>体系结构、备份工具、高可用方案、兼容性与差异点</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note warn"><b>别踩的坑：</b>不要把所有库都说“精通”。建议口径：<b>“Oracle 和达梦最熟，金仓/GaussDB 有实际运维和迁移经验，PolarDB 熟悉架构和云上运维。” </b>面试官追深时，答“这块我做过 X，但 Y 场景还没遇到，我的思路是……”比硬编更加分。</div>
+</section>
+
+<!-- ================= 1 各库对比 ================= -->
+<section id="s1">
+  <div class="sec-head"><div class="sec-no">1</div><h2>五类数据库一张表对比</h2><span class="desc">先建立全局地图，再进细节</span></div>
+
+  <div class="card" style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>维度</th><th>Oracle 19c</th><th>达梦 DM8</th><th>金仓 KingbaseES V8</th><th>GaussDB</th><th>PolarDB</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><b>内核/定位</b></td><td>商业集中式，功能最全</td><td>自研，Oracle 高度兼容</td><td>PostgreSQL 系，Oracle 兼容模式</td><td>华为，集中式 + 分布式</td><td>阿里云，计算存储分离</td></tr>
+        <tr><td><b>进程模型</b></td><td>多进程（实例 + 后台进程）</td><td>多线程（单进程多线程）</td><td>多进程（postmaster + backend）</td><td>多线程 + CN/DN/GTM 组件</td><td>计算节点 + 共享存储</td></tr>
+        <tr><td><b>内存结构</b></td><td>SGA + PGA</td><td>内存池、BUFFER、排序区、HASH 区等</td><td>shared_buffers、work_mem 等</td><td>shared_buffers、max_process_memory</td><td>节点内存 + 共享缓冲</td></tr>
+        <tr><td><b>物理存储</b></td><td>数据文件、控制文件、redo、归档</td><td>DBF、dm.ctl、联机日志、归档</td><td>data/base、pg_wal、pg_control</td><td>数据文件、WAL、双写</td><td>PolarFS 共享分布式存储</td></tr>
+        <tr><td><b>默认端口</b></td><td>1521</td><td>5236</td><td>54321</td><td>按部署配置（常见 8000/5432）</td><td>3306 / 5432（按兼容模式）</td></tr>
+        <tr><td><b>高可用</b></td><td>RAC、Data Guard、GoldenGate</td><td>Data Watch 主备、DSC 共享存储、MPP</td><td>流复制主备、RWC 读写分离、Sharding</td><td>CM 主备、分布式多副本、多数派</td><td>一写多读、多可用区、秒级切换</td></tr>
+        <tr><td><b>备份工具</b></td><td>RMAN、Data Pump</td><td>dmrman、dexp/dimp</td><td>sys_rman、sys_dump/sys_restore</td><td>Roach、gs_dump、gs_basebackup</td><td>快照备份、PITR、DTS</td></tr>
+        <tr><td><b>迁移工具</b></td><td>expdp/impdp</td><td>DTS、DMHS</td><td>KDTS、KFS</td><td>UGO、DRS</td><td>DTS</td></tr>
+        <tr><td><b>典型场景</b></td><td>存量核心、复杂事务</td><td>核心系统国产化替代</td><td>管理类、政务类系统</td><td>云化、分布式核心</td><td>云原生、读多写少、弹性</td></tr>
+      </tbody>
+    </table>
+    <div class="note"><b>一句话记忆：</b>Oracle 是“多进程 + SGA”，达梦是“多线程 + Oracle 语法”，金仓是“PG 内核 + Oracle 兼容”，GaussDB 是“CN/DN/GTM 分布式”，PolarDB 是“计算存储分离 + 共享存储”。</div>
+  </div>
+
+  <div class="grid g3">
+    <div class="card">
+      <h3>Oracle 关键词</h3>
+      <p class="small">SGA / PGA · DBWn / LGWR / CKPT / SMON / PMON / ARCn · 表空间—段—区—块 · RAC Cache Fusion · Data Guard · RMAN · AWR / ASH</p>
+    </div>
+    <div class="card">
+      <h3>达梦关键词</h3>
+      <p class="small">逻辑/物理/内存/线程 · 页—簇—段—表空间 · dmrman · dexp/dimp · Data Watch · DSC · MPP · V$ 动态视图</p>
+    </div>
+    <div class="card">
+      <h3>金仓关键词</h3>
+      <p class="small">PG 系 · sys_ 前缀工具 · 流复制 · RWC 读写分离 · Sharding · Oracle 兼容模式 · autovacuum · sys_stat_statements</p>
+    </div>
+    <div class="card">
+      <h3>GaussDB 关键词</h3>
+      <p class="small">CN / DN / GTM / CM · 分布键 · 多数派 · 全局事务 · Roach · gs_om / gs_ctl · dbe_perf</p>
+    </div>
+    <div class="card">
+      <h3>PolarDB 关键词</h3>
+      <p class="small">计算存储分离 · PolarFS · 一写多读 · 物理复制 · 秒级扩容 · 快照备份 · PITR · PolarDB-X</p>
+    </div>
+    <div class="card">
+      <h3>共同主线</h3>
+      <p class="small">无论哪种库，面试都绕不开五件事：<b>体系结构、高可用、备份恢复、性能调优、故障处理</b>。把这条主线套到每个库上。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 2 核心考点 ================= -->
+<section id="s2">
+  <div class="sec-head"><div class="sec-no">2</div><h2>各库核心考点（按“必答”整理）</h2><span class="desc">不求全，先把高频说清楚</span></div>
+
+  <div class="card">
+    <h3>2.1 Oracle：体系结构是地基 <span class="tag must">必背</span></h3>
+    <svg viewBox="0 0 980 330" width="100%" role="img" aria-label="Oracle 体系结构图">
+      <defs>
+        <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+          <path d="M0,0 L9,4.5 L0,9 z" fill="#0f7a60"/>
+        </marker>
+      </defs>
+      <rect x="8" y="10" width="560" height="300" rx="14" fill="#e6f2ee" stroke="#bfdcd2"/>
+      <text x="28" y="38" font-size="16" font-weight="700" fill="#0b5d4a">实例 Instance（内存 + 后台进程）</text>
+      <rect x="28" y="52" width="520" height="112" rx="10" fill="#fff" stroke="#cfe6de"/>
+      <text x="44" y="74" font-size="13" font-weight="700" fill="#0b5d4a">SGA</text>
+      <rect x="44" y="84" width="150" height="62" rx="8" fill="#f4faf7" stroke="#bfdcd2"/>
+      <text x="64" y="108" font-size="12.5" fill="#16241f">Shared Pool</text>
+      <text x="64" y="128" font-size="10.5" fill="#5d6f68">SQL / 数据字典缓存</text>
+      <rect x="204" y="84" width="160" height="62" rx="8" fill="#f4faf7" stroke="#bfdcd2"/>
+      <text x="224" y="108" font-size="12.5" fill="#16241f">Database Buffer</text>
+      <text x="224" y="128" font-size="10.5" fill="#5d6f68">数据块缓存</text>
+      <rect x="374" y="84" width="158" height="62" rx="8" fill="#f4faf7" stroke="#bfdcd2"/>
+      <text x="394" y="108" font-size="12.5" fill="#16241f">Redo Log Buffer</text>
+      <text x="394" y="128" font-size="10.5" fill="#5d6f68">重做日志缓冲</text>
+      <rect x="28" y="178" width="520" height="56" rx="10" fill="#fff" stroke="#cfe6de"/>
+      <text x="44" y="200" font-size="13" font-weight="700" fill="#0b5d4a">后台进程</text>
+      <text x="44" y="220" font-size="12" fill="#16241f">DBWn · LGWR · CKPT · SMON · PMON · ARCn · MMON</text>
+      <text x="28" y="264" font-size="12" fill="#5d6f68">PGA：排序区、Hash 区、会话私有内存</text>
+      <text x="28" y="288" font-size="12" fill="#5d6f68">SGA 是共享内存，PGA 是进程私有内存</text>
+
+      <rect x="600" y="10" width="372" height="300" rx="14" fill="#fbf3e4" stroke="#edd9b4"/>
+      <text x="620" y="38" font-size="16" font-weight="700" fill="#8a5f1c">数据库 Database（磁盘）</text>
+      <rect x="620" y="60" width="150" height="58" rx="8" fill="#fff" stroke="#edd9b4"/>
+      <text x="638" y="84" font-size="12.5">数据文件 Data File</text>
+      <text x="638" y="103" font-size="10.5" fill="#5d6f68">.dbf</text>
+      <rect x="788" y="60" width="164" height="58" rx="8" fill="#fff" stroke="#edd9b4"/>
+      <text x="806" y="84" font-size="12.5">控制文件 Control</text>
+      <text x="806" y="103" font-size="10.5" fill="#5d6f68">.ctl</text>
+      <rect x="620" y="134" width="150" height="58" rx="8" fill="#fff" stroke="#edd9b4"/>
+      <text x="638" y="158" font-size="12.5">联机重做日志</text>
+      <text x="638" y="177" font-size="10.5" fill="#5d6f68">Redo Log</text>
+      <rect x="788" y="134" width="164" height="58" rx="8" fill="#fff" stroke="#edd9b4"/>
+      <text x="806" y="158" font-size="12.5">归档日志</text>
+      <text x="806" y="177" font-size="10.5" fill="#5d6f68">Archive Log</text>
+      <rect x="620" y="208" width="332" height="72" rx="8" fill="#fff" stroke="#edd9b4"/>
+      <text x="638" y="232" font-size="12.5" font-weight="700">逻辑结构</text>
+      <text x="638" y="252" font-size="11.5" fill="#5d6f68">表空间 → 段 → 区 → 数据块</text>
+      <text x="638" y="270" font-size="11.5" fill="#5d6f68">一个表空间可对应多个数据文件</text>
+
+      <line x1="560" y1="196" x2="596" y2="196" stroke="#0f7a60" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="556" y="186" font-size="10.5" fill="#0f7a60">DBWn</text>
+      <line x1="560" y1="86" x2="596" y2="86" stroke="#0f7a60" stroke-width="2" marker-end="url(#ar)"/>
+      <text x="560" y="76" font-size="10.5" fill="#0f7a60">LGWR</text>
+    </svg>
+    <h4>必须能脱口而出的点</h4>
+    <ul>
+      <li><b>SGA：</b>Shared Pool（SQL 解析、执行计划、数据字典）、Database Buffer Cache、Redo Log Buffer、Large Pool、Java Pool。</li>
+      <li><b>PGA：</b>会话私有，排序、Hash Join、Bitmap 等；OLTP 常用 <code>PGA_AGGREGATE_TARGET</code> 自动管理。</li>
+      <li><b>后台进程：</b>DBWn 写数据块、LGWR 写 redo、CKPT 检查点、SMON 实例恢复、PMON 进程清理、ARCn 归档。</li>
+      <li><b>逻辑结构：</b>数据库 → 表空间 → 段 → 区 → 块；<b>物理结构：</b>数据文件、控制文件、redo、参数文件、密码文件、归档日志。</li>
+      <li><b>RAC：</b>多实例共享一份存储，通过 Cache Fusion（GCS/GES）在节点间传数据块；依赖私网 interconnect、OCR 和 Voting Disk；前端用 SCAN/VIP + TAF 做连接漂移。</li>
+      <li><b>Data Guard：</b>主库 LNS 传 redo，备库 RFS 接收、MRP 应用；三种保护模式的最大区别是<b>主库是否等待备库确认</b>。</li>
+    </ul>
+    <div class="note"><b>高频追问：</b>“RAC 是共享存储，那存储坏了怎么办？” 答：RAC 只解决实例级高可用，不解决存储单点；生产上要配 ASM 冗余、存储双活或 Data Guard 异地备库，形成“本地 RAC + 异地 DG”。</div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>2.2 达梦 DM8：最像 Oracle 的国产库 <span class="tag hot">高频</span></h3>
+      <h4>体系结构（四层）</h4>
+      <ul>
+        <li><b>逻辑结构：</b>数据库 → 表空间 → 段 → 簇 → 页；默认页大小 8KB、簇大小 16 页，<b>初始化后页大小不可改</b>。</li>
+        <li><b>物理结构：</b>数据文件 <code>.DBF</code>、控制文件 <code>dm.ctl</code>、联机日志 <code>dm01.log</code>、归档日志、参数文件 <code>dm.ini</code>、<code>dmarch.ini</code>、<code>dmwatcher.ini</code>。</li>
+        <li><b>内存结构：</b>内存池（MEMORY_POOL）、数据缓冲区（BUFFER）、排序区、Hash 区、日志缓冲区等。</li>
+        <li><b>线程结构：</b>监听线程、工作线程、IO 线程、日志 FLUSH 线程、日志归档线程、定时器线程、调度线程、TRACE 线程。</li>
+      </ul>
+      <h4>高可用三件套</h4>
+      <ul>
+        <li><b>Data Watch：</b>主备集群，实时主备（同步，RPO=0）、异步备、级联备、远距离备；由 DMWatcher 守护、DM Monitor 监控。</li>
+        <li><b>DSC：</b>共享存储多活集群，类似 Oracle RAC，节点间通过 MAL 网络通信。</li>
+        <li><b>MPP：</b>Shared Nothing 分布式，按分布键水平拆分，适合分析型 / 大规模数据。</li>
+      </ul>
+      <h4>常用命令 / 视图</h4>
+      <p class="small"><code>disql SYSDBA/SYSDBA@127.0.0.1:5236</code> · <code>V$INSTANCE</code> · <code>V$SESSIONS</code> · <code>V$TABLESPACE</code> · <code>V$ARCHIVED_LOG</code> · <code>V$BACKUPSET</code> · <code>V$LOCK</code> · <code>V$TRX</code></p>
+      <div class="note gold"><b>与 Oracle 的差异点（面试常问）：</b>DM 是多线程模型；默认端口 5236；备份用 dmrman/dexp；高可用是 Data Watch 而非 DG；没有 Oracle 的 SCN 机制，用 LSN；部分语法、函数、执行计划有差异，迁移必须做兼容性改造。</div>
+    </div>
+
+    <div class="card">
+      <h3>2.3 金仓 KingbaseES：PG 内核 + Oracle 兼容 <span class="tag hot">高频</span></h3>
+      <h4>体系结构</h4>
+      <ul>
+        <li><b>进程模型：</b>postmaster 主进程 + 每个连接一个 backend 进程；辅助进程包括 checkpointer、background writer、walwriter、archiver、autovacuum launcher、stats collector。</li>
+        <li><b>逻辑结构：</b>数据库簇（cluster）→ 数据库 → 模式（schema）→ 表 / 索引。</li>
+        <li><b>物理结构：</b>数据目录 <code>data/</code>、<code>base/</code>、<code>global/</code>、WAL 目录、控制文件 <code>pg_control</code>。</li>
+        <li><b>Oracle 兼容：</b>支持 Oracle 模式，兼容 PL/SQL、ROWNUM、DUAL、序列、同义词、包、DBLink 等，降低迁移改造量。</li>
+      </ul>
+      <h4>高可用</h4>
+      <ul>
+        <li><b>主备流复制：</b>同步 / 异步，一主多备；备库只读，可做报表和备份。</li>
+        <li><b>RWC 读写分离集群：</b>主库写、备库读，通过读写分离代理或中间件路由。</li>
+        <li><b>KES Sharding：</b>分布式水平拆分，适合海量数据。</li>
+      </ul>
+      <h4>工具与视图</h4>
+      <p class="small"><code>ksql</code> · <code>sys_ctl</code> · <code>sys_basebackup</code> · <code>sys_dump/sys_restore</code> · <code>sys_rman</code> · <code>sys_stat_statements</code> · <code>pg_stat_replication</code> · <code>pg_stat_activity</code></p>
+      <div class="note"><b>必答差异：</b>金仓底层是 PostgreSQL，所以它有 MVCC、VACUUM、WAL、单进程多连接；与 Oracle 最大的不同是<b>没有 undo 表空间、依赖 autovacuum 回收死元组</b>，长事务会导致表膨胀。</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>2.4 GaussDB：CN / DN / GTM / CM 分工 <span class="tag must">架构必背</span></h3>
+    <svg viewBox="0 0 980 300" width="100%" role="img" aria-label="GaussDB 分布式架构图">
+      <defs>
+        <marker id="ar2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+          <path d="M0,0 L9,4.5 L0,9 z" fill="#0f7a60"/>
+        </marker>
+      </defs>
+      <rect x="8" y="110" width="120" height="70" rx="10" fill="#e6f2ee" stroke="#bfdcd2"/>
+      <text x="30" y="140" font-size="13" font-weight="700" fill="#0b5d4a">应用</text>
+      <text x="30" y="160" font-size="11" fill="#5d6f68">JDBC / ODBC</text>
+
+      <rect x="170" y="60" width="170" height="70" rx="10" fill="#fff" stroke="#cfe6de"/>
+      <text x="196" y="88" font-size="13" font-weight="700" fill="#0b5d4a">CN 协调节点</text>
+      <text x="196" y="108" font-size="10.5" fill="#5d6f68">解析、优化、下发、汇总</text>
+      <rect x="170" y="160" width="170" height="70" rx="10" fill="#fff" stroke="#cfe6de"/>
+      <text x="196" y="188" font-size="13" font-weight="700" fill="#0b5d4a">CN 协调节点</text>
+      <text x="196" y="208" font-size="10.5" fill="#5d6f68">多 CN 负载均衡</text>
+
+      <rect x="390" y="20" width="170" height="60" rx="10" fill="#fbf3e4" stroke="#edd9b4"/>
+      <text x="414" y="45" font-size="12.5" font-weight="700" fill="#8a5f1c">GTM 全局事务</text>
+      <text x="414" y="64" font-size="10.5" fill="#5d6f68">全局事务 ID / 快照</text>
+      <rect x="390" y="96" width="170" height="60" rx="10" fill="#fbf3e4" stroke="#edd9b4"/>
+      <text x="414" y="121" font-size="12.5" font-weight="700" fill="#8a5f1c">CM 集群管理</text>
+      <text x="414" y="140" font-size="10.5" fill="#5d6f68">cm_agent / cm_server</text>
+      <rect x="390" y="172" width="170" height="60" rx="10" fill="#fbf3e4" stroke="#edd9b4"/>
+      <text x="414" y="197" font-size="12.5" font-weight="700" fill="#8a5f1c">OM 运维管理</text>
+      <text x="414" y="216" font-size="10.5" fill="#5d6f68">gs_om / 安装部署</text>
+
+      <rect x="620" y="44" width="160" height="86" rx="10" fill="#fff" stroke="#cfe6de"/>
+      <text x="642" y="70" font-size="12.5" font-weight="700" fill="#0b5d4a">DN1 主</text>
+      <text x="642" y="90" font-size="10.5" fill="#5d6f68">数据分片 1</text>
+      <text x="642" y="110" font-size="10.5" fill="#5d6f68">本地存储</text>
+      <rect x="800" y="44" width="160" height="86" rx="10" fill="#fff" stroke="#cfe6de"/>
+      <text x="822" y="70" font-size="12.5" font-weight="700" fill="#0b5d4a">DN1 备</text>
+      <text x="822" y="90" font-size="10.5" fill="#5d6f68">副本 / 日志同步</text>
+      <text x="822" y="110" font-size="10.5" fill="#5d6f68">故障可升主</text>
+      <rect x="620" y="156" width="160" height="86" rx="10" fill="#fff" stroke="#cfe6de"/>
+      <text x="642" y="182" font-size="12.5" font-weight="700" fill="#0b5d4a">DN2 主</text>
+      <text x="642" y="202" font-size="10.5" fill="#5d6f68">数据分片 2</text>
+      <text x="642" y="222" font-size="10.5" fill="#5d6f68">本地存储</text>
+      <rect x="800" y="156" width="160" height="86" rx="10" fill="#fff" stroke="#cfe6de"/>
+      <text x="822" y="182" font-size="12.5" font-weight="700" fill="#0b5d4a">DN2 备</text>
+      <text x="822" y="202" font-size="10.5" fill="#5d6f68">副本 / 日志同步</text>
+      <text x="822" y="222" font-size="10.5" fill="#5d6f68">故障可升主</text>
+
+      <line x1="128" y1="145" x2="166" y2="105" stroke="#0f7a60" stroke-width="2" marker-end="url(#ar2)"/>
+      <line x1="128" y1="145" x2="166" y2="195" stroke="#0f7a60" stroke-width="2" marker-end="url(#ar2)"/>
+      <line x1="340" y1="105" x2="386" y2="50" stroke="#0f7a60" stroke-width="2" marker-end="url(#ar2)"/>
+      <line x1="340" y1="120" x2="386" y2="126" stroke="#0f7a60" stroke-width="2" marker-end="url(#ar2)"/>
+      <line x1="340" y1="195" x2="386" y2="202" stroke="#0f7a60" stroke-width="2" marker-end="url(#ar2)"/>
+      <line x1="560" y1="126" x2="616" y2="95" stroke="#0f7a60" stroke-width="2" marker-end="url(#ar2)"/>
+      <line x1="560" y1="126" x2="616" y2="195" stroke="#0f7a60" stroke-width="2" marker-end="url(#ar2)"/>
+      <line x1="780" y1="87" x2="796" y2="87" stroke="#0f7a60" stroke-width="2" marker-end="url(#ar2)"/>
+      <line x1="780" y1="199" x2="796" y2="199" stroke="#0f7a60" stroke-width="2" marker-end="url(#ar2)"/>
+      <text x="620" y="278" font-size="11" fill="#5d6f68">分布键决定数据落在哪个 DN；CN 负责任务分解与并行调度；GTM 保证全局事务一致性；CM 负责故障检测与主备切换。</text>
+    </svg>
+    <div class="grid g2" style="margin-top:12px">
+      <div>
+        <h4>组件职责</h4>
+        <ul>
+          <li><b>CN（Coordinator Node）：</b>接收 SQL、解析优化、生成分布式计划、下发 DN 并行执行、汇总结果。</li>
+          <li><b>DN（Data Node）：</b>存储数据分片，执行本地查询；主备副本之间同步日志。</li>
+          <li><b>GTM：</b>全局事务管理器，生成全局事务 ID、快照、时间戳，保证跨 DN 事务一致性。</li>
+          <li><b>CM：</b>集群管理，cm_agent 上报状态，cm_server 决策主备切换；基于多数派（Quorum）避免脑裂。</li>
+        </ul>
+      </div>
+      <div>
+        <h4>高频考点</h4>
+        <ul>
+          <li><b>分布键怎么选：</b>高基数、分布均匀、常用于 Join / 过滤的字段；避免热点和严重数据倾斜。</li>
+          <li><b>高可用：</b>DN 一主多备，同步复制 RPO=0；CM 检测故障后自动升备，RTO 秒级。</li>
+          <li><b>备份：</b>Roach 并行物理备份（全量/增量），gs_dump 逻辑备份，支持 PITR。</li>
+          <li><b>调优：</b><code>EXPLAIN PERFORMANCE</code> 看分布式执行计划，关注 Broadcast / Redistribute / 数据倾斜。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>2.5 PolarDB：计算存储分离 <span class="tag plus">加分</span></h3>
+      <ul>
+        <li><b>架构：</b>计算节点（主 + 只读）与存储分离，底层共享分布式存储 PolarFS，多个计算节点共享同一份数据。</li>
+        <li><b>一写多读：</b>主节点写，只读节点通过物理复制读共享存储，延迟低；可扩展到多个只读节点。</li>
+        <li><b>弹性：</b>存储按量扩展，计算节点秒级扩容；备份使用存储快照，速度快、对业务影响小。</li>
+        <li><b>高可用：</b>多可用区部署，主节点故障自动切换；只读节点可承接读流量。</li>
+        <li><b>PolarDB-X：</b>分布式版，CN 计算节点 + DN 存储节点 + GMS 全局元数据，水平拆分与分布式事务。</li>
+        <li><b>运维：</b>控制台 / OpenAPI / DAS；关注慢 SQL、连接数、CPU、存储水位、只读延迟。</li>
+      </ul>
+      <div class="note"><b>面试话术：</b>“PolarDB 的核心是把存储做成共享池，计算节点无状态化，所以扩容、备份、读扩展都快；代价是强依赖底层存储和网络，排障时要同时看计算层和存储层指标。”</div>
+    </div>
+
+    <div class="card">
+      <h3>2.6 五库命令映射（迁移时最有用）</h3>
+      <table>
+        <thead><tr><th>操作</th><th>Oracle</th><th>达梦</th><th>金仓</th><th>GaussDB</th></tr></thead>
+        <tbody>
+          <tr><td>连接</td><td>sqlplus</td><td>disql</td><td>ksql</td><td>gsql</td></tr>
+          <tr><td>启停</td><td>srvctl / sqlplus</td><td>DmService / dmserver</td><td>sys_ctl</td><td>gs_om / gs_ctl</td></tr>
+          <tr><td>逻辑备份</td><td>expdp</td><td>dexp</td><td>sys_dump</td><td>gs_dump</td></tr>
+          <tr><td>物理备份</td><td>RMAN</td><td>dmrman</td><td>sys_rman / sys_basebackup</td><td>Roach / gs_basebackup</td></tr>
+          <tr><td>会话视图</td><td>v$session</td><td>v$sessions</td><td>pg_stat_activity</td><td>pg_stat_activity</td></tr>
+          <tr><td>锁视图</td><td>v$lock</td><td>v$lock</td><td>pg_locks</td><td>pg_locks</td></tr>
+          <tr><td>主备状态</td><td>v$dataguard_stats</td><td>v$dmwatcher</td><td>pg_stat_replication</td><td>pg_stat_replication</td></tr>
+        </tbody>
+      </table>
+      <p class="small muted">记忆技巧：达梦工具多以 dm 开头，金仓以 sys_ 开头，GaussDB 以 gs_ 开头；PG 系都用 pg_ 视图。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 3 高可用 ================= -->
+<section id="s3">
+  <div class="sec-head"><div class="sec-no">3</div><h2>高可用与容灾：面试的主战场</h2><span class="desc">RPO/RTO 是通用语言</span></div>
+
+  <div class="card">
+    <h3>3.1 六种方案对比 <span class="tag must">必背</span></h3>
+    <table>
+      <thead><tr><th>方案</th><th>原理</th><th>RPO</th><th>RTO</th><th>适用场景</th><th>注意点</th></tr></thead>
+      <tbody>
+        <tr><td><b>Oracle RAC</b></td><td>多实例共享存储，Cache Fusion</td><td>0（存储不坏）</td><td>分钟级</td><td>本地高可用、核心 OLTP</td><td>不防存储故障，需配 DG/双活</td></tr>
+        <tr><td><b>Oracle Data Guard</b></td><td>redo 传输 + 备库应用</td><td>0 / 接近 0</td><td>分钟级</td><td>同城/异地容灾</td><td>保护模式决定性能与 RPO 权衡</td></tr>
+        <tr><td><b>达梦 Data Watch</b></td><td>主备日志同步 + Watcher 仲裁</td><td>实时备 0，异步 &gt;0</td><td>秒级~分钟级</td><td>国产化核心库</td><td>防脑裂，需第三方仲裁/监视器</td></tr>
+        <tr><td><b>达梦 DSC</b></td><td>共享存储多活</td><td>0（存储不坏）</td><td>分钟级</td><td>高性能、本地多活</td><td>类似 RAC，仍不防存储单点</td></tr>
+        <tr><td><b>金仓流复制主备</b></td><td>WAL 日志同步/异步传输</td><td>同步 0，异步 &gt;0</td><td>秒级~分钟级</td><td>读写分离、容灾</td><td>同步备库故障会影响主库写入</td></tr>
+        <tr><td><b>GaussDB 主备/分布式</b></td><td>DN 多副本 + CM 仲裁</td><td>同步 0</td><td>秒级</td><td>云化核心、分布式</td><td>多数派可用才能选主</td></tr>
+        <tr><td><b>PolarDB 一写多读</b></td><td>共享存储 + 物理复制</td><td>0</td><td>秒级~分钟级</td><td>云原生、读扩展</td><td>依赖云平台和共享存储</td></tr>
+      </tbody>
+    </table>
+
+    <h4>RPO / RTO 四象限（答题时先定位业务属于哪一类）</h4>
+    <div class="matrix">
+      <div class="cell head">RTO 短 →</div><div class="cell head">RPO = 0</div><div class="cell head">RPO &gt; 0</div>
+      <div class="cell axis">RTO 短</div>
+      <div class="cell good"><b>同步复制 + 自动切换</b><br><span class="small">RAC / DG 最高可用 / DM 实时主备 / GaussDB 同步多副本</span></div>
+      <div class="cell"><b>异步复制 + 快速切换</b><br><span class="small">异步备库、云上跨区备份</span></div>
+      <div class="cell axis">RTO 长</div>
+      <div class="cell"><b>同步 + 人工演练切换</b><br><span class="small">同城双活，切换需审批</span></div>
+      <div class="cell"><b>备份 + 恢复</b><br><span class="small">异地备份、离线归档，成本最低</span></div>
+    </div>
+
+    <div class="note gold"><b>万能开场：</b>“先看业务能接受多少数据丢失（RPO）和多久恢复（RTO），再决定用同步还是异步、自动还是手动切换。核心交易类一般 RPO=0、RTO 分钟级；报表类可以放宽到小时级，用备份恢复更经济。”</div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>3.2 切换预案必须包含的 8 项 <span class="tag hot">高频</span></h3>
+      <ol>
+        <li><b>触发条件：</b>什么情况切（主库宕机、网络分区、存储故障），谁有权决策。</li>
+        <li><b>角色与分工：</b>指挥、执行、验证、业务确认、厂商支持，联系方式。</li>
+        <li><b>前置检查：</b>备库延迟、日志连续性、备份可用性、应用连接配置。</li>
+        <li><b>切换步骤：</b>停业务 → 确认无新写入 → 主备角色切换 → 启动 → 验证。</li>
+        <li><b>验证点：</b>数据一致性、复制状态、应用连通性、关键交易冒烟。</li>
+        <li><b>回退条件与步骤：</b>什么情况回退、回退窗口、数据反向同步。</li>
+        <li><b>业务影响：</b>停机时长、影响范围、通知模板。</li>
+        <li><b>复盘与演练：</b>演练频率、记录、问题闭环。</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>3.3 脑裂与延迟：两个必答追问</h3>
+      <h4>脑裂怎么防</h4>
+      <ul>
+        <li>引入<b>第三方仲裁</b>：Oracle Voting Disk、达梦 DM Monitor / 仲裁节点、GaussDB 多数派、金仓 witness。</li>
+        <li>网络分区时宁可<b>停止写入</b>，也不能双主写入；优先保证数据一致性。</li>
+        <li>切换前确认旧主已隔离（ fencing / STONITH / 存储屏蔽），再升备。</li>
+      </ul>
+      <h4>主备延迟怎么查、怎么处理</h4>
+      <ul>
+        <li>查：Oracle <code>v$dataguard_stats</code>；金仓 <code>pg_stat_replication</code> 的 <code>replay_lag</code>；达梦 <code>v$dmwatcher</code> / 归档日志差异；GaussDB <code>pg_stat_replication</code>。</li>
+        <li>原因：大事务、批量导入、网络带宽不足、备库 IO 慢、主库写入突增、同步复制等待。</li>
+        <li>处置：拆分大事务、限流、提升网络/IO、临时改异步（需评估 RPO）、扩容备库资源。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>3.4 两地三中心怎么讲</h3>
+    <p>“同城两个中心做<b>同步复制 + 自动切换</b>，保证 RPO=0、RTO 分钟级；异地第三个中心做<b>异步复制或备份</b>，防区域级灾难。生产上还要考虑链路带宽、复制延迟、切换顺序和回切方案。演练时按‘单实例故障 → 单机房故障 → 区域灾难’三级场景逐步验证。”</p>
+    <div class="note warn"><b>注意：</b>不要一上来就说“上 RAC 就高可用了”。RAC 只解决实例层，存储、机房、逻辑误删都不防；完整体系是“本地高可用 + 同城容灾 + 异地备份 + 定期演练”。</div>
+  </div>
+</section>
+
+<!-- ================= 4 性能调优 ================= -->
+<section id="s4">
+  <div class="sec-head"><div class="sec-no">4</div><h2>性能调优：用方法论而不是运气</h2><span class="desc">分层定位，拿证据说话</span></div>
+
+  <div class="card">
+    <h3>4.1 分层排查模型 <span class="tag must">答题框架</span></h3>
+    <svg viewBox="0 0 980 210" width="100%" role="img" aria-label="性能调优分层模型">
+      <rect x="10" y="20" width="180" height="70" rx="10" fill="#e6f2ee" stroke="#bfdcd2"/>
+      <text x="42" y="48" font-size="13" font-weight="700" fill="#0b5d4a">① 业务层</text>
+      <text x="42" y="68" font-size="10.5" fill="#5d6f68">慢在哪、量多大、能否拆分</text>
+      <rect x="208" y="20" width="180" height="70" rx="10" fill="#fff" stroke="#cfe6de"/>
+      <text x="240" y="48" font-size="13" font-weight="700" fill="#0b5d4a">② SQL 层</text>
+      <text x="240" y="68" font-size="10.5" fill="#5d6f68">执行计划、索引、统计信息</text>
+      <rect x="406" y="20" width="180" height="70" rx="10" fill="#fff" stroke="#cfe6de"/>
+      <text x="438" y="48" font-size="13" font-weight="700" fill="#0b5d4a">③ 实例层</text>
+      <text x="438" y="68" font-size="10.5" fill="#5d6f68">内存、参数、锁、等待事件</text>
+      <rect x="604" y="20" width="180" height="70" rx="10" fill="#fff" stroke="#cfe6de"/>
+      <text x="636" y="48" font-size="13" font-weight="700" fill="#0b5d4a">④ OS 层</text>
+      <text x="636" y="68" font-size="10.5" fill="#5d6f68">CPU、内存、IO、网络、内核</text>
+      <rect x="802" y="20" width="168" height="70" rx="10" fill="#fbf3e4" stroke="#edd9b4"/>
+      <text x="834" y="48" font-size="13" font-weight="700" fill="#8a5f1c">⑤ 存储层</text>
+      <text x="834" y="68" font-size="10.5" fill="#5d6f68">IOPS、时延、带宽、缓存</text>
+      <text x="10" y="130" font-size="12.5" fill="#16241f">排查顺序：先确认现象和影响面 → 定位是单条 SQL 还是整体负载 → 看等待事件 → 下钻到 SQL / 对象 → 再看 OS 和存储。</text>
+      <text x="10" y="154" font-size="12.5" fill="#5d6f68">常用命令：top / vmstat / iostat / pidstat / sar / dstat；Oracle AWR / ASH；DM V$ 视图；金仓 pg_stat_statements；GaussDB dbe_perf。</text>
+      <text x="10" y="178" font-size="12.5" fill="#5d6f68">原则：先止损（限流、杀会话、切备库），再根因（执行计划、索引、参数），最后沉淀（基线、告警、规范）。</text>
+    </svg>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>4.2 一条 SQL 变慢，标准排查 8 步 <span class="tag hot">必考</span></h3>
+      <ol>
+        <li><b>确认现象：</b>是所有 SQL 慢还是单条？从什么时候开始？有无变更/数据量突增？</li>
+        <li><b>拿到 SQL 和绑定变量：</b>不要只看平均，找最差执行、最高 DB Time 的 SQL。</li>
+        <li><b>看执行计划：</b>是否走错索引、全表扫描、笛卡尔积、排序溢出、并行度异常。</li>
+        <li><b>看统计信息：</b>是否过期、是否采样不足、是否有大量数据变更后未收集。</li>
+        <li><b>看等待事件：</b>DB CPU、db file sequential read、log file sync、enq: TX row lock、library cache 等。</li>
+        <li><b>看对象与锁：</b>索引是否失效、表是否膨胀、是否有锁等待/阻塞、是否有长事务。</li>
+        <li><b>看资源：</b>CPU、IO、内存、网络是否打满；是否被其他会话/备份任务抢占。</li>
+        <li><b>处置与验证：</b>加/改索引、改写 SQL、收集统计信息、调参数、限流；对比调优前后耗时和逻辑读。</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>4.3 索引失效的 8 个典型场景</h3>
+      <ul>
+        <li>在索引列上做函数/表达式：<code>where trunc(create_time)=...</code></li>
+        <li>隐式类型转换：字符串列传数字、数字列传字符串。</li>
+        <li>前导模糊查询：<code>like '%xx'</code>。</li>
+        <li>联合索引不满足最左前缀。</li>
+        <li>使用 <code>or</code> 且部分条件无索引。</li>
+        <li>使用 <code>not in</code>、<code>!=</code>、<code>is null</code>（视优化器和数据分布）。</li>
+        <li>数据分布倾斜，优化器判断全表扫描更便宜。</li>
+        <li>统计信息过期，优化器估算错误。</li>
+      </ul>
+      <div class="note"><b>反问加分：</b>“全表扫描一定差吗？” 不一定。小表、高比例返回、宽表顺序读时全扫可能更快；关键看<b>逻辑读、返回行数占比和实际耗时</b>，不能只看执行计划里的 TABLE ACCESS FULL。</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>4.4 各库调优抓手</h3>
+    <div class="grid g2">
+      <div>
+        <h4>Oracle</h4>
+        <ul>
+          <li><b>入口：</b>AWR（DB Time、Top Events、SQL ordered by Elapsed/CPU/Gets）、ASH、ADDM。</li>
+          <li><b>SQL：</b><code>dbms_xplan.display_cursor</code>、10046 trace、SQL Monitor、绑定变量窥探。</li>
+          <li><b>内存：</b>SGA_TARGET / PGA_AGGREGATE_TARGET / MEMORY_TARGET，关注 buffer cache 命中率、硬解析。</li>
+          <li><b>OS：</b>hugepages、shmmax、semaphores、ulimit、THP 关闭、IO 调度。</li>
+        </ul>
+      </div>
+      <div>
+        <h4>达梦 / 金仓 / GaussDB</h4>
+        <ul>
+          <li><b>达梦：</b>V$SQL、V$SESSIONS、执行计划、ET、MEMORY_POOL/BUFFER/SORT_BUF 等参数；关注 HASH 冲突、排序溢出。</li>
+          <li><b>金仓：</b><code>sys_stat_statements</code>、<code>explain (analyze,buffers)</code>、autovacuum、shared_buffers/work_mem、表膨胀。</li>
+          <li><b>GaussDB：</b><code>EXPLAIN PERFORMANCE</code>、分布键、数据倾斜、Broadcast/Redistribute、<code>analyze</code>、WLM 资源池。</li>
+          <li><b>PolarDB：</b>慢 SQL 洞察、只读节点延迟、连接数、共享存储 IO、并行查询。</li>
+        </ul>
+      </div>
+    </div>
+
+    <h4>一个可讲的调优案例（把数字换成你的）</h4>
+    <div class="note gold"><b>背景：</b>某核心查询从 0.5 秒劣化到 30 秒，业务超时。<br>
+    <b>定位：</b>AWR 发现该 SQL 逻辑读暴涨；执行计划由索引范围扫描变为全表扫描；统计信息显示表数据量一周增长 40%，且索引列被加了函数。<br>
+    <b>处置：</b>先加临时索引/改写 SQL 止损；再收集统计信息、将函数条件改为范围条件、调整联合索引顺序；最后加慢 SQL 告警和数据增长监控。<br>
+    <b>结果：</b>耗时从 30 秒降到 0.3 秒，逻辑读下降 90%，同类问题纳入巡检。</div>
+  </div>
+
+  <div class="card">
+    <h3>4.5 操作系统层适配调优（JD 明确提到）</h3>
+    <table>
+      <thead><tr><th>层面</th><th>关注项</th><th>常用命令 / 参数</th></tr></thead>
+      <tbody>
+        <tr><td>CPU</td><td>使用率、负载、上下文切换、NUMA</td><td>top、mpstat、pidstat、numactl</td></tr>
+        <tr><td>内存</td><td>可用内存、swap、page cache、HugePages</td><td>free、vmstat、/proc/meminfo、vm.swappiness</td></tr>
+        <tr><td>磁盘 IO</td><td>IOPS、吞吐、await、%util、队列深度</td><td>iostat -x 1、iotop、fio</td></tr>
+        <tr><td>网络</td><td>带宽、重传、延迟、丢包</td><td>sar -n DEV、ss、ping、tcpdump</td></tr>
+        <tr><td>内核参数</td><td>共享内存、信号量、文件句柄、脏页</td><td>shmmax、semmni、nofile、dirty_ratio</td></tr>
+        <tr><td>文件系统</td><td>挂载参数、预读、Direct IO</td><td>xfs/ext4、noatime、readahead</td></tr>
+      </tbody>
+    </table>
+    <div class="note"><b>话术：</b>“数据库调优不能只盯库内。很多‘数据库慢’其实是 IO 打满、内存不足换页、NUMA 绑核不合理或网络重传导致的。我一般先把 OS 指标和数据库等待事件对齐时间轴，再判断瓶颈在哪一层。”</div>
+  </div>
+</section>
+
+<!-- ================= 5 备份恢复 ================= -->
+<section id="s5">
+  <div class="sec-head"><div class="sec-no">5</div><h2>备份恢复：运维的底线能力</h2><span class="desc">没恢复过的备份 = 没有备份</span></div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>5.1 备份策略怎么答 <span class="tag must">必背</span></h3>
+      <p><b>先讲原则，再讲落地：</b></p>
+      <ul>
+        <li><b>3-2-1 原则：</b>至少 3 份数据、2 种介质、1 份异地。</li>
+        <li><b>全量 + 增量 + 归档：</b>每周全备、每天增量、归档日志持续备份，支撑任意时间点恢复（PITR）。</li>
+        <li><b>分层：</b>本地快速恢复（最近 7 天）+ 异地长期保留（按合规要求 6 个月~数年）。</li>
+        <li><b>验证：</b>定期做<b>恢复演练</b>，不是只看备份任务成功；校验备份集完整性、可恢复性、恢复耗时。</li>
+        <li><b>监控：</b>备份失败告警、归档空间水位、备份窗口超时。</li>
+      </ul>
+      <div class="note warn"><b>面试官最爱追问：</b>“备份成功就代表能恢复吗？” 答：不代表。要定期做<b>异机恢复演练</b>，验证备份介质、归档连续性、恢复脚本和耗时；核心库至少每季度一次，重要变更前额外做一次。</div>
+    </div>
+    <div class="card">
+      <h3>5.2 各库备份工具对照</h3>
+      <table>
+        <thead><tr><th>数据库</th><th>物理备份</th><th>逻辑备份</th><th>PITR</th></tr></thead>
+        <tbody>
+          <tr><td>Oracle</td><td>RMAN</td><td>Data Pump（expdp/impdp）</td><td>支持（归档 + 增量）</td></tr>
+          <tr><td>达梦 DM8</td><td>dmrman</td><td>dexp/dimp</td><td>支持（归档 + 时间点）</td></tr>
+          <tr><td>金仓</td><td>sys_rman / sys_basebackup</td><td>sys_dump/sys_restore</td><td>支持（WAL 归档）</td></tr>
+          <tr><td>GaussDB</td><td>Roach / gs_basebackup</td><td>gs_dump/gs_dumpall</td><td>支持</td></tr>
+          <tr><td>PolarDB</td><td>存储快照</td><td>逻辑导出</td><td>支持（日志备份）</td></tr>
+        </tbody>
+      </table>
+      <p class="small muted">共同点：物理备份快、适合整库恢复；逻辑备份灵活、适合单表/跨版本迁移；PITR 的前提都是<b>归档日志完整</b>。</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>5.3 误删数据怎么恢复（按场景答） <span class="tag hot">高频</span></h3>
+    <table>
+      <thead><tr><th>场景</th><th>Oracle</th><th>达梦 / 金仓 / GaussDB</th></tr></thead>
+      <tbody>
+        <tr><td>误删几张表</td><td>Flashback Table / Flashback Drop（回收站）</td><td>从逻辑备份导入单表；或基于备份 + 归档做表级时间点恢复</td></tr>
+        <tr><td>误更新/误删除部分数据</td><td>Flashback Query / Flashback Versions Query 找回旧值</td><td>用 PITR 恢复到临时库，再比对回写；金仓可用 MVCC 快照/逻辑解码辅助</td></tr>
+        <tr><td>误删表空间/数据文件</td><td>RMAN 还原 + 恢复 + recover</td><td>dmrman / sys_rman 还原；GaussDB Roach 恢复</td></tr>
+        <tr><td>整库误操作</td><td>RMAN 全库恢复 + 归档 PITR</td><td>全量恢复 + 归档/WAL 前滚到故障前</td></tr>
+        <tr><td>没有备份</td><td>尝试闪回/日志挖掘；否则只能业务重建</td><td>评估日志挖掘、厂商支持；核心是<b>事前预防</b></td></tr>
+      </tbody>
+    </table>
+    <div class="note gold"><b>标准答法：</b>“先确认误操作类型和影响范围 → 立即停止相关写入、保护现场 → 优先用闪回/回收站快速恢复 → 不行再用备份 + 归档恢复到临时库 → 校验后回写生产 → 复盘加权限和审计。” <b>顺序很重要：先止损，再恢复，别急着动生产。</b></div>
+  </div>
+
+  <div class="card">
+    <h3>5.4 备份恢复的 6 个实战细节</h3>
+    <div class="grid g2">
+      <div>
+        <ul>
+          <li><b>归档必须开：</b>没有归档就没有 PITR；归档空间要独立监控，满了会挂起数据库。</li>
+          <li><b>备份窗口：</b>避开业务高峰；物理备份对 IO 有压力，可限速/压缩。</li>
+          <li><b>加密与权限：</b>备份文件含敏感数据，需加密、最小权限、审计下载。</li>
+        </ul>
+      </div>
+      <div>
+        <ul>
+          <li><b>恢复顺序：</b>参数文件 → 控制文件 → 数据文件 → 归档/日志 → recover → open。</li>
+          <li><b>恢复验证：</b>检查数据文件头、归档连续性、SCN/LSN、告警日志。</li>
+          <li><b>演练报告：</b>记录 RTO 实测值、遇到的问题、改进项，形成闭环。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 6 迁移 ================= -->
+<section id="s6">
+  <div class="sec-head"><div class="sec-no">6</div><h2>国产化迁移：JD 加分项，也是最大亮点</h2><span class="desc">讲流程、讲工具、讲坑</span></div>
+
+  <div class="card">
+    <h3>6.1 六阶段迁移方法论 <span class="tag plus">加分项</span></h3>
+    <div class="grid g3">
+      <div class="card" style="box-shadow:none;margin:0">
+        <h4>① 评估</h4>
+        <p class="small">对象数量、数据量、SQL 复杂度、存储过程/触发器/包、字符集、时区、外部依赖。</p>
+      </div>
+      <div class="card" style="box-shadow:none;margin:0">
+        <h4>② 改造</h4>
+        <p class="small">数据类型映射、语法兼容、函数替换、分页/ROWNUM、序列、大小写、空字符串。</p>
+      </div>
+      <div class="card" style="box-shadow:none;margin:0">
+        <h4>③ 迁移</h4>
+        <p class="small">结构迁移 → 全量数据 → 增量同步 → 校验；工具：DTS/DMHS、KDTS/KFS、UGO/DRS、DTS。</p>
+      </div>
+      <div class="card" style="box-shadow:none;margin:0">
+        <h4>④ 验证</h4>
+        <p class="small">数据量、抽样比对、聚合校验、业务功能回归、性能压测、执行计划对比。</p>
+      </div>
+      <div class="card" style="box-shadow:none;margin:0">
+        <h4>⑤ 割接</h4>
+        <p class="small">停机窗口、停写、追平增量、切换连接、冒烟测试、开放业务。</p>
+      </div>
+      <div class="card" style="box-shadow:none;margin:0">
+        <h4>⑥ 回退</h4>
+        <p class="small">保留原库只读、反向同步、回退阈值、回退演练、责任人。</p>
+      </div>
+    </div>
+
+    <h4>工具映射</h4>
+    <table>
+      <thead><tr><th>源 → 目标</th><th>常用工具</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td>Oracle → 达梦</td><td>DTS（结构/数据迁移）、DMHS（实时同步）</td><td>DTS 做全量，DMHS 做增量追平与双跑</td></tr>
+        <tr><td>Oracle → 金仓</td><td>KDTS、KFS</td><td>KDTS 迁移结构与数据，KFS 做增量同步</td></tr>
+        <tr><td>Oracle → GaussDB</td><td>UGO（语法转换评估）、DRS（数据复制）</td><td>先用 UGO 评估兼容性，再 DRS 迁移</td></tr>
+        <tr><td>Oracle → PolarDB</td><td>阿里 DTS</td><td>支持结构、全量、增量一体</td></tr>
+        <tr><td>同构库之间</td><td>原生工具（expdp、sys_dump 等）</td><td>注意版本兼容和字符集</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>6.2 兼容性十坑（能讲出 3 个就很加分）</h3>
+      <ol>
+        <li><b>空字符串：</b>Oracle 中 <code>''</code> 等于 NULL，PG 系/部分国产库不这么认为。</li>
+        <li><b>大小写：</b>Oracle 默认大写对象名，PG 系默认小写，需统一引号策略。</li>
+        <li><b>ROWNUM / LIMIT：</b>分页写法不同，需改写。</li>
+        <li><b>序列：</b>Oracle 序列语法与自增列机制不同。</li>
+        <li><b>存储过程/包：</b>PL/SQL 到 PL/pgSQL 或达梦过程语言，需重写和回归。</li>
+        <li><b>数据类型：</b>NUMBER、VARCHAR2、DATE、CLOB/BLOB、TIMESTAMP 映射差异。</li>
+        <li><b>隐式转换：</b>字符串与数字比较行为不同，可能导致索引失效或报错。</li>
+        <li><b>外连接写法：</b>Oracle <code>(+)</code> 需改为标准 JOIN。</li>
+        <li><b>执行计划：</b>优化器不同，迁移后可能走错计划，需重新收集统计信息并调优。</li>
+        <li><b>字符集与时区：</b>迁移前确认源库字符集，避免乱码和时间偏移。</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>6.3 割接 Runbook 与回退</h3>
+      <h4>割接前</h4>
+      <ul>
+        <li>全量 + 增量已追平，延迟在秒级；应用连接串、驱动、账号权限已准备。</li>
+        <li>完成至少一轮全链路演练，记录各步骤耗时。</li>
+        <li>原库开启归档并保留，作为回退基础。</li>
+      </ul>
+      <h4>割接中</h4>
+      <ul>
+        <li>停写 → 确认无新事务 → 追平最后增量 → 校验 → 切换 DNS/连接串 → 冒烟。</li>
+        <li>每一步有人执行、有人复核、有人记录时间点。</li>
+      </ul>
+      <h4>回退条件</h4>
+      <ul>
+        <li>数据校验不一致、关键业务报错、性能不达标且短时间内无法解决。</li>
+        <li>回退要在窗口内完成，原库保持可写回或反向同步。</li>
+      </ul>
+      <div class="note warn"><b>面试表达：</b>“迁移不是‘导过去就行’，核心是<b>兼容性改造 + 数据一致性校验 + 可回退</b>。我一般会把割接拆成可验证的小步骤，每步都有回退点。”</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 7 云原生 ================= -->
+<section id="s7">
+  <div class="sec-head"><div class="sec-no">7</div><h2>云原生：Docker / Kubernetes 下的数据库</h2><span class="desc">有状态服务，重点在存储与稳定性</span></div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>7.1 Docker 部署数据库要点</h3>
+      <ul>
+        <li><b>数据持久化：</b>必须挂载 volume，不能把数据放在容器可写层；容器删除数据不丢。</li>
+        <li><b>网络：</b>使用 bridge / host / 自定义网络，注意端口映射和容器间 DNS。</li>
+        <li><b>资源限制：</b><code>--memory</code>、<code>--cpus</code>，避免数据库与宿主机其他容器争抢。</li>
+        <li><b>时区与字符集：</b>挂载 <code>/etc/localtime</code>，设置 <code>TZ</code>、字符集参数。</li>
+        <li><b>健康检查：</b>用 <code>healthcheck</code> 做存活探测，不要只看进程在不在。</li>
+        <li><b>镜像与版本：</b>固定版本 tag，禁止 latest；镜像漏洞扫描。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>7.2 K8s 部署数据库的关键对象</h3>
+      <table>
+        <thead><tr><th>对象</th><th>作用</th><th>数据库场景要点</th></tr></thead>
+        <tbody>
+          <tr><td>StatefulSet</td><td>有状态工作负载</td><td>稳定 Pod 名、有序启停、稳定存储</td></tr>
+          <tr><td>Headless Service</td><td>稳定网络标识</td><td>Pod 级 DNS，主备/集群成员发现</td></tr>
+          <tr><td>PVC / StorageClass</td><td>持久化存储</td><td>RWO/RWX、IO 性能、扩容、快照</td></tr>
+          <tr><td>Operator</td><td>自动化运维控制器</td><td>部署、备份、扩缩容、故障切换</td></tr>
+          <tr><td>ConfigMap / Secret</td><td>配置与密钥</td><td>参数文件、账号密码，避免硬编码</td></tr>
+          <tr><td>Probe</td><td>健康检查</td><td>readiness 摘流量，liveness 重启</td></tr>
+          <tr><td>PDB</td><td>中断预算</td><td>滚动维护时保证多数副本可用</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>7.3 数据库上 K8s 的 8 个坑 <span class="tag hot">高频追问</span></h3>
+    <div class="grid g2">
+      <div>
+        <ul>
+          <li><b>存储性能：</b>网络存储 IOPS/时延不达标，数据库变慢；核心库优先本地 SSD / 高性能云盘。</li>
+          <li><b>Pod 漂移：</b>节点故障后 Pod 重建，数据必须在 PVC 上；本地盘要用 local PV + 节点亲和。</li>
+          <li><b>资源争抢：</b>没有设置 request/limit，CPU 被其他 Pod 抢走，出现性能抖动。</li>
+          <li><b>时钟同步：</b>容器与宿主机时钟不一致会影响事务和日志，需 NTP/chrony。</li>
+        </ul>
+      </div>
+      <div>
+        <ul>
+          <li><b>网络延迟：</b>CNI 网络 + 存储网络叠加，主备复制延迟变大。</li>
+          <li><b>优雅终止：</b>terminationGracePeriodSeconds 太短，数据库来不及 checkpoint。</li>
+          <li><b>调度集中：</b>主备 Pod 被调度到同一节点，节点故障双挂；用反亲和分散。</li>
+          <li><b>备份缺失：</b>只备份 PV 不够，要用数据库原生备份到对象存储，并验证恢复。</li>
+        </ul>
+      </div>
+    </div>
+
+    <h4>弹性伸缩怎么答才专业</h4>
+    <div class="note gold"><b>不要直接说 HPA 扩数据库副本。</b>数据库是有状态服务，HPA 简单加副本会带来数据一致性和集群成员变更问题。正确做法：<b>读写分离扩只读副本、垂直扩容（升 CPU/内存）、存储扩容、用 Operator 做受控扩缩容</b>；业务侧配合连接池、限流和读写分离。无状态应用才适合 HPA。</div>
+
+    <h4>K8s 排障常用命令</h4>
+    <pre><code>kubectl get pod -n db -o wide
+kubectl describe pod db-0 -n db          # 看 Events：调度、挂载、探针失败
+kubectl logs db-0 -n db --previous       # 看上一个容器崩溃日志
+kubectl exec -it db-0 -n db -- bash       # 进容器排查
+kubectl get pvc -n db                    # Pending 多半是 StorageClass / 容量 / 亲和问题
+kubectl get events -n db --sort-by=.lastTimestamp
+kubectl top pod -n db                    # 资源使用，需 metrics-server</code></pre>
+    <p class="small muted"><b>PVC 挂不上的典型原因：</b>StorageClass 不存在、容量不足、访问模式不匹配（RWO 被多节点挂载）、节点亲和冲突、云盘与节点可用区不一致。</p>
+  </div>
+</section>
+
+<!-- ================= 8 自动化 ================= -->
+<section id="s8">
+  <div class="sec-head"><div class="sec-no">8</div><h2>Python / Shell 自动化：把重复劳动变成工具</h2><span class="desc">讲设计，也要能写出关键代码</span></div>
+
+  <div class="card">
+    <h3>8.1 脚本设计的 6 个原则 <span class="tag must">必答</span></h3>
+    <div class="grid g3">
+      <div class="card" style="box-shadow:none;margin:0"><h4>幂等</h4><p class="small">重复执行不产生副作用；安装、建表、补数据都要可重入。</p></div>
+      <div class="card" style="box-shadow:none;margin:0"><h4>可观测</h4><p class="small">结构化日志、执行耗时、成功/失败原因，便于排障。</p></div>
+      <div class="card" style="box-shadow:none;margin:0"><h4>超时与重试</h4><p class="small">连接、SQL、命令都要设超时；重试有次数上限和退避。</p></div>
+      <div class="card" style="box-shadow:none;margin:0"><h4>配置分离</h4><p class="small">连接信息、阈值放配置文件/环境变量，不硬编码。</p></div>
+      <div class="card" style="box-shadow:none;margin:0"><h4>密钥安全</h4><p class="small">密码走 Secret / 密钥管理，不写明文、不进 Git。</p></div>
+      <div class="card" style="box-shadow:none;margin:0"><h4>告警收敛</h4><p class="small">去重、抑制、分级，避免告警风暴；带上下文和处置建议。</p></div>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>8.2 Shell 巡检脚本（示例）</h3>
+      <p class="code-label">bash · Oracle 表空间 / 归档 / 会话巡检</p>
+      <pre><code>#!/bin/bash
+# db_health_check.sh - 日常巡检，输出异常项
+set -euo pipefail
+export ORACLE_SID="${ORACLE_SID:-orcl}"
+export ORACLE_HOME="${ORACLE_HOME:-/u01/app/oracle/product/19c/dbhome_1}"
+PATH="$ORACLE_HOME/bin:$PATH"
+LOG="/var/log/dbcheck/$(date +%F).log"
+mkdir -p "$(dirname "$LOG")"
+
+sqlplus -s "/ as sysdba" <<'SQL' | tee -a "$LOG"
+set pagesize 200 linesize 200 feedback off
+prompt === Tablespace Usage > 85% ===
+select tablespace_name,
+       round(used_percent,2) pct
+  from dba_tablespace_usage_metrics
+ where used_percent > 85
+ order by pct desc;
+
+prompt === Invalid Objects ===
+select owner, object_type, count(*) cnt
+  from dba_objects
+ where status = 'INVALID'
+ group by owner, object_type
+having count(*) > 0;
+
+prompt === Blocking Sessions ===
+select blocking_session, sid, serial#, event, seconds_in_wait
+  from v$session
+ where blocking_session is not null;
+
+prompt === Archive Log Space ===
+select * from v$recovery_area_usage
+ where file_type = 'ARCHIVED LOG';
+SQL
+
+echo "[$(date '+%F %T')] check done: $LOG" >> "$LOG"</code></pre>
+      <p class="small muted">要点：<code>set -euo pipefail</code>、日志落盘、只输出异常、退出码可用于监控平台采集。</p>
+    </div>
+
+    <div class="card">
+      <h3>8.3 Python 巡检 + 告警（示例）</h3>
+      <p class="code-label">python · 通用 JDBC/DB-API 巡检骨架</p>
+      <pre><code>import os, time, logging
+from contextlib import closing
+# pip install oracledb psycopg2-binary dmPython
+import oracledb
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s"
+)
+
+THRESHOLD = float(os.getenv("TS_THRESHOLD", "85"))
+
+def check_tablespace(conn):
+    sql = """select tablespace_name, round(used_percent, 2)
+               from dba_tablespace_usage_metrics
+              where used_percent > :th"""
+    with closing(conn.cursor()) as cur:
+        cur.execute(sql, th=THRESHOLD)
+        return cur.fetchall()
+
+def main():
+    dsn = os.environ["DB_DSN"]          # host:port/service
+    user = os.environ["DB_USER"]
+    pwd = os.environ["DB_PASS"]
+    with closing(oracledb.connect(user=user, password=pwd, dsn=dsn)) as conn:
+        rows = check_tablespace(conn)
+        for ts, pct in rows:
+            logging.warning("tablespace %s usage %.2f%%", ts, pct)
+            # send_alert(...)  # 对接企业微信/邮件/告警平台
+        if not rows:
+            logging.info("all tablespaces healthy")
+
+if __name__ == "__main__":
+    main()</code></pre>
+      <p class="small muted">要点：环境变量取密钥、连接上下文自动关闭、阈值可配置、告警带对象名和数值。Python 的优势是复杂逻辑、并发采集和多数据源统一。</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>8.4 监控告警该采哪些指标</h3>
+    <table>
+      <thead><tr><th>类别</th><th>指标</th><th>建议告警</th></tr></thead>
+      <tbody>
+        <tr><td>可用性</td><td>实例存活、监听、连接失败率</td><td>连续 3 次失败立即告警</td></tr>
+        <tr><td>容量</td><td>表空间使用率、数据目录、归档空间、连接数</td><td>85% 预警，95% 严重</td></tr>
+        <tr><td>性能</td><td>QPS/TPS、活跃会话、慢 SQL、DB Time、锁等待</td><td>同比/环比突增，慢 SQL 超阈值</td></tr>
+        <tr><td>复制</td><td>主备延迟、复制中断、日志差距</td><td>延迟 &gt; 30s 或持续增大</td></tr>
+        <tr><td>备份</td><td>备份任务状态、备份大小、恢复演练结果</td><td>失败立即告警，连续两次升级</td></tr>
+        <tr><td>OS</td><td>CPU、内存、IO await、网络重传</td><td>持续 5 分钟超阈值</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================= 9 问答 ================= -->
+<section id="s9">
+  <div class="sec-head"><div class="sec-no">9</div><h2>45 道高频问答（含答题要点）</h2><span class="desc">先看题，再遮住答案自测</span></div>
+
+  <div class="note gold"><b>使用方法：</b>先自己回答一遍，再看要点。面试时不必逐字背，记住每题的<b>关键词和结构</b>即可。标 <span class="tag hot">高频</span> 的优先看。</div>
+
+  <h3 style="margin:26px 0 12px;color:var(--brand);font-size:17px">A. 基础与架构</h3>
+
+  <div class="qa"><div class="q"><span class="num">Q1</span>Oracle 实例和数据库有什么区别？</div><div class="a">
+    <ul><li><b>实例</b>=内存（SGA）+ 后台进程，是运行时的、易失的；<b>数据库</b>=磁盘上的数据文件、控制文件、redo、归档等，是持久的。</li>
+    <li>一个实例通常对应一个数据库（非 RAC）；RAC 是多个实例共享一个数据库。</li>
+    <li>面试可补一句：关库后实例消失，数据库文件还在；启动是先 nomount（读参数、建实例）→ mount（读控制文件）→ open（打开数据文件）。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q2</span>SGA 由哪些部分组成？PGA 是干什么的？</div><div class="a">
+    <ul><li>SGA：Shared Pool（SQL/执行计划/数据字典）、Database Buffer Cache、Redo Log Buffer、Large Pool、Java Pool、Streams Pool。</li>
+    <li>PGA：会话私有内存，用于排序、Hash Join、Bitmap、游标等；OLTP 用 <code>PGA_AGGREGATE_TARGET</code> 自动管理。</li>
+    <li>要点：SGA 共享、PGA 私有；调优时看 buffer cache 命中率、硬解析、PGA 溢出到临时表空间。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q3</span>Oracle 的逻辑结构和物理结构分别是什么？</div><div class="a">
+    <ul><li>逻辑：数据库 → 表空间 → 段 → 区 → 数据块。</li>
+    <li>物理：数据文件、控制文件、联机重做日志、归档日志、参数文件、密码文件、告警日志。</li>
+    <li>关系：一个表空间由多个数据文件组成；一个段由一个或多个区组成；区由连续的数据块组成。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q4</span>达梦 DM8 的体系结构是什么？和 Oracle 最大的区别在哪？<span class="tag hot">高频</span></div><div class="a">
+    <ul><li>四层：逻辑结构（库→表空间→段→簇→页）、物理结构（DBF、dm.ctl、日志、归档、dm.ini）、内存结构（内存池、BUFFER、排序区、HASH 区）、线程结构（监听、工作、IO、日志 FLUSH、归档、定时器、调度、TRACE）。</li>
+    <li>最大区别：DM 是<b>单进程多线程</b>，Oracle 是多进程；DM 默认端口 5236，Oracle 1521。</li>
+    <li>高可用：DM 用 Data Watch 主备、DSC 共享存储、MPP，对应 Oracle 的 DG、RAC、分布式。</li>
+    <li>备份：dmrman / dexp，对应 RMAN / expdp。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q5</span>达梦的页大小和簇大小是什么？初始化后能改吗？</div><div class="a">
+    <ul><li>页是 DM 的最小 IO 单位，常用 8KB（可选 4/8/16/32KB）；簇（extent）由连续页组成，默认 16 页。</li>
+    <li><b>页大小在初始化实例时确定，之后不能修改</b>；簇大小也建议初始化时规划好。</li>
+    <li>引申：迁移前要评估大字段、行长度，页太小可能导致行迁移/溢出。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q6</span>金仓 KingbaseES 为什么能兼容 Oracle？底层是什么？<span class="tag hot">高频</span></div><div class="a">
+    <ul><li>底层基于 PostgreSQL，属于多进程、MVCC、WAL 架构；通过 Oracle 兼容模式支持 PL/SQL、ROWNUM、DUAL、序列、同义词、包、DBLink 等。</li>
+    <li>工具都是 sys_ 前缀：sys_ctl、sys_dump、sys_restore、sys_rman、sys_basebackup。</li>
+    <li>与 Oracle 的关键差异：没有 undo 表空间，依赖 autovacuum 回收死元组；长事务会导致表膨胀，这是迁移后重点。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q7</span>GaussDB 的 CN、DN、GTM、CM 分别负责什么？<span class="tag hot">高频</span></div><div class="a">
+    <ul><li><b>CN：</b>协调节点，接收 SQL、解析优化、生成分布式计划、下发 DN、汇总结果。</li>
+    <li><b>DN：</b>数据节点，存储分片数据、执行本地查询，主备副本同步。</li>
+    <li><b>GTM：</b>全局事务管理器，生成全局事务 ID、快照、时间戳，保证跨节点事务一致性。</li>
+    <li><b>CM：</b>集群管理，cm_agent 上报、cm_server 决策，基于多数派做故障检测和主备切换。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q8</span>PolarDB 计算存储分离有什么好处？</div><div class="a">
+    <ul><li>计算节点无状态，存储共享（PolarFS），扩容、备份、读扩展都快。</li>
+    <li>一写多读：只读节点共享同一份数据，物理复制延迟低，可承载报表/读流量。</li>
+    <li>备份用存储快照，速度快、对业务影响小；支持 PITR。</li>
+    <li>代价：强依赖底层存储和网络，排障要同时看计算层和存储层。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q9</span>分布式数据库的分布键/分片键怎么选？</div><div class="a">
+    <ul><li>高基数、分布均匀，避免数据倾斜和热点。</li>
+    <li>优先选业务查询和 Join 最常用的字段，减少跨节点数据重分布。</li>
+    <li>避免频繁更新的字段；避免单值过多的字段（如状态、性别）。</li>
+    <li>上线后持续监控 DN 数据量和 CPU 分布，发现倾斜及时调整。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q10</span>读写分离怎么做？读延迟怎么处理？</div><div class="a">
+    <ul><li>方案：主库写、备库/只读节点读；通过代理（如读写分离中间件）、应用多数据源或驱动路由。</li>
+    <li>延迟来源：主备复制延迟、备库负载高、大事务。</li>
+    <li>处理：强一致读走主库；弱一致读走备库；监控复制延迟，超阈值自动摘除只读节点；拆分大事务。</li>
+    <li>注意：读写分离不是高可用，主库挂了仍需切换方案。</li></ul>
+  </div></div>
+
+  <h3 style="margin:26px 0 12px;color:var(--brand);font-size:17px">B. 高可用与容灾</h3>
+
+  <div class="qa"><div class="q"><span class="num">Q11</span>Oracle RAC 的原理是什么？Cache Fusion 怎么工作？<span class="tag hot">高频</span></div><div class="a">
+    <ul><li>多个实例通过私网互联，共享同一份存储；每个实例有自己的 SGA，但数据文件共享。</li>
+    <li>Cache Fusion：一个实例需要另一个实例内存中的脏块时，通过 GCS/GES 在私网传输块镜像，避免直接写磁盘再读。</li>
+    <li>依赖：OCR（集群配置）、Voting Disk（仲裁防脑裂）、私网 interconnect、SCAN/VIP。</li>
+    <li>局限：只解决实例级高可用，不防存储故障，需要配 ASM 冗余、存储双活或 DG。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q12</span>RAC 脑裂是怎么产生的？OCR 和 Voting Disk 的作用？</div><div class="a">
+    <ul><li>节点间私网/心跳中断，但节点都还活着，各自认为对方挂了，可能出现双写。</li>
+    <li>Voting Disk 用于仲裁，多数派节点存活才能组成集群；少数派被驱逐，避免双主。</li>
+    <li>OCR 保存集群资源、实例、服务、VIP 等配置，需要定期备份。</li>
+    <li>处置：先确认心跳网络，再检查 Voting Disk 和集群日志，不要盲目重启所有节点。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q13</span>Data Guard 的三种保护模式有什么区别？<span class="tag hot">高频</span></div><div class="a">
+    <ul><li><b>最大保护（Maximum Protection）：</b>主库提交前必须收到至少一个同步备库确认，RPO=0；备库全挂时主库会宕，可用性最低。</li>
+    <li><b>最高可用（Maximum Availability）：</b>正常情况下 RPO=0；备库不可用时自动降级为最大性能，主库继续运行。</li>
+    <li><b>最大性能（Maximum Performance）：</b>异步传输，主库性能最好，RPO&gt;0。</li>
+    <li>选型：核心交易用最高可用；报表/容灾可最大性能。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q14</span>switchover 和 failover 有什么区别？</div><div class="a">
+    <ul><li><b>Switchover：</b>计划内切换，主备角色互换，不丢数据，可回切；用于演练、维护、升级。</li>
+    <li><b>Failover：</b>故障时强制切换，可能丢数据，原主库需要重建；用于灾难恢复。</li>
+    <li>答的时候补一句：切换前要确认日志追平、应用连接配置、切换后验证和回退方案。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q15</span>达梦 Data Watch 的原理是什么？实时主备和异步备的区别？<span class="tag hot">高频</span></div><div class="a">
+    <ul><li>主库把日志发送到备库，备库重演；DMWatcher 守护实例和复制状态，DM Monitor 做监控和仲裁。</li>
+    <li><b>实时主备：</b>同步复制，主库等待备库确认，RPO=0，但备库故障可能影响主库。</li>
+    <li><b>异步备：</b>主库不等待确认，性能好，RPO&gt;0，适合远距离容灾。</li>
+    <li>还有级联备（备库再带备库）和远距离备；切换要防脑裂，需仲裁/监视器。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q16</span>达梦 DSC 和 Oracle RAC 有什么区别？</div><div class="a">
+    <ul><li>相同点：共享存储、多节点多活、节点间通过高速网络同步缓存/锁信息。</li>
+    <li>不同点：DM DSC 基于 DM 自己的多线程架构和 MAL 网络；Oracle RAC 用 GCS/GES + Cache Fusion。</li>
+    <li>两者都不防存储单点，生产要配存储冗余和异地容灾。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q17</span>金仓主备流复制同步和异步怎么选？同步备库挂了主库会怎样？</div><div class="a">
+    <ul><li>同步：主库提交等待备库确认，RPO=0，但备库故障会影响主库写入，通常配一同步一异步。</li>
+    <li>异步：主库不等待，性能好，RPO&gt;0，适合跨机房。</li>
+    <li>同步备库挂了：主库可能 hang 住等待确认；需及时摘除同步备或降级为异步，恢复后再加回。</li>
+    <li>监控：<code>pg_stat_replication</code> 的 <code>state</code>、<code>sync_state</code>、<code>replay_lag</code>。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q18</span>两地三中心怎么设计？切换预案包含什么？</div><div class="a">
+    <ul><li>同城双中心同步复制 + 自动切换，RPO=0、RTO 分钟级；异地第三中心异步复制或备份，防区域灾难。</li>
+    <li>预案：触发条件、角色分工、前置检查、切换步骤、验证点、回退条件、业务通知、演练复盘。</li>
+    <li>演练按“单实例 → 单机房 → 区域灾难”分级，记录实测 RTO。</li></ul>
+  </div></div>
+
+  <h3 style="margin:26px 0 12px;color:var(--brand);font-size:17px">C. 备份恢复</h3>
+
+  <div class="qa"><div class="q"><span class="num">Q19</span>冷备和热备的区别？归档模式有什么用？</div><div class="a">
+    <ul><li>冷备：停库拷贝文件，一致性好但停机；热备：开库备份，依赖归档保证一致性。</li>
+    <li>归档模式把联机日志持久化，支持 PITR、Data Guard、在线备份。</li>
+    <li>生产核心库必须开归档；归档空间要独立监控，避免写满挂库。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q20</span>RMAN 的全备、增量、level 0/1 怎么理解？</div><div class="a">
+    <ul><li>全备：备份所有数据块；level 0 是全备的基准，可作为增量起点。</li>
+    <li>level 1：差异增量（自上次 level 0/1 以来的变化）和累积增量（自上次 level 0 以来的变化）。</li>
+    <li>配合块变更跟踪（Block Change Tracking）提升增量备份速度；归档日志单独备份。</li>
+    <li>恢复：还原数据文件 → 应用归档 → recover → open。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q21</span>误删表怎么恢复？<span class="tag hot">高频</span></div><div class="a">
+    <ul><li>Oracle：优先 <code>FLASHBACK TABLE ... TO BEFORE DROP</code>（回收站）；若已 purge，用备份 + 归档做表级时间点恢复。</li>
+    <li>达梦：从逻辑备份导入单表，或用 dmrman 备份 + 归档做表空间/表级还原。</li>
+    <li>金仓/GaussDB：PITR 恢复到临时库，再比对回写；不要直接在生产库上反复试。</li>
+    <li>通用顺序：止损 → 保护现场 → 评估影响 → 选最快恢复路径 → 校验 → 复盘。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q22</span>怎么验证备份是有效的？</div><div class="a">
+    <ul><li>检查备份任务状态、备份集大小、归档连续性。</li>
+    <li>定期做<b>异机恢复演练</b>，记录恢复耗时（实测 RTO）和数据校验结果。</li>
+    <li>Oracle 可用 <code>RESTORE VALIDATE</code>、<code>VALIDATE BACKUPSET</code>；其他库做实际还原验证。</li>
+    <li>核心库至少每季度一次，重大变更前额外做。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q23</span>RPO 和 RTO 怎么定？</div><div class="a">
+    <ul><li>由业务决定，不是 DBA 拍脑袋：交易类 RPO=0、RTO 分钟级；报表类可放宽。</li>
+    <li>RPO 决定复制方式（同步/异步）和备份频率；RTO 决定切换方式（自动/手动）和恢复方案。</li>
+    <li>成本和指标要平衡：RPO=0 + RTO 秒级通常意味着更高成本和更复杂的架构。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q24</span>归档日志满了怎么办？</div><div class="a">
+    <ul><li>先确认是否已备份：已备份的归档可按保留策略清理；未备份的绝不能删。</li>
+    <li>临时扩容归档空间或调整归档路径；必要时增加备份频率。</li>
+    <li>根因：大事务、批量导入、备份失败、保留策略不合理；从源头治理并加水位告警。</li>
+    <li>注意：Oracle 归档满可能导致数据库挂起，处置要快。</li></ul>
+  </div></div>
+
+  <h3 style="margin:26px 0 12px;color:var(--brand);font-size:17px">D. 性能调优与故障</h3>
+
+  <div class="qa"><div class="q"><span class="num">Q25</span>一条 SQL 突然变慢，你怎么排查？<span class="tag hot">必考</span></div><div class="a">
+    <ul><li>先确认影响面：单条还是整体？从何时开始？有无发布、数据量突增、统计信息变化。</li>
+    <li>拿 SQL 和执行计划：是否走错索引、全表扫描、笛卡尔积、排序溢出、并行度异常。</li>
+    <li>看等待事件和锁：DB CPU、db file sequential read、log file sync、行锁等待。</li>
+    <li>看统计信息和对象：统计信息过期、索引失效、表膨胀。</li>
+    <li>处置：加/改索引、改写 SQL、收集统计信息、调参数、限流；用前后耗时和逻辑读验证。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q26</span>执行计划怎么看？全表扫描一定差吗？</div><div class="a">
+    <ul><li>看访问路径（索引扫描/全表扫描）、Join 方式（Nested Loop/Hash Join/Merge Join）、成本、基数估算、实际行数。</li>
+    <li>重点看<b>估算行数与实际行数差异</b>，差异大通常是统计信息问题。</li>
+    <li>全表扫描不一定差：小表、高比例返回、宽表顺序读时可能更优；关键看逻辑读和实际耗时。</li>
+    <li>工具：Oracle <code>dbms_xplan.display_cursor</code> / SQL Monitor；金仓 <code>explain (analyze,buffers)</code>；GaussDB <code>EXPLAIN PERFORMANCE</code>。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q27</span>索引失效的常见场景有哪些？</div><div class="a">
+    <ul><li>索引列上做函数/运算；隐式类型转换；前导模糊 <code>like '%x'</code>。</li>
+    <li>联合索引不满足最左前缀；<code>or</code> 条件部分无索引；<code>not in</code>/<code>!=</code>。</li>
+    <li>数据分布倾斜、统计信息过期，优化器主动放弃索引。</li>
+    <li>应对：改写 SQL、建函数索引/组合索引、收集统计信息、检查隐式转换。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q28</span>统计信息和绑定变量对性能有什么影响？</div><div class="a">
+    <ul><li>统计信息让优化器估算行数和成本；过期或采样不足会导致走错计划。</li>
+    <li>绑定变量减少硬解析，但可能出现“绑定变量窥探”导致计划不适合所有值。</li>
+    <li>应对：定期收集统计信息、对倾斜列用直方图、必要时用 SQL Profile/Baseline 固定计划。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q29</span>AWR 里你最关注哪些指标？</div><div class="a">
+    <ul><li>DB Time、DB CPU、等待事件 Top 5、SQL ordered by Elapsed/CPU/Gets/Reads。</li>
+    <li>逻辑读、物理读、硬解析、执行次数、平均耗时。</li>
+    <li>结合 ASH 看时间段内的活跃会话分布，定位是某条 SQL 还是整体负载。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q30</span>数据库 CPU 100% 怎么定位？<span class="tag hot">高频</span></div><div class="a">
+    <ul><li>先看是数据库进程还是其他进程：<code>top -Hp &lt;pid&gt;</code> 找高 CPU 线程。</li>
+    <li>数据库内：查活跃会话、当前 SQL、执行计划、并行度、硬解析。</li>
+    <li>常见原因：低效 SQL 全表扫描、缺索引、并行度过高、硬解析、排序/Hash 溢出、锁自旋。</li>
+    <li>处置：抓 Top SQL → 调优/限流/杀会话 → 加索引/改 SQL → 复盘加慢 SQL 监控。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q31</span>锁等待和死锁怎么处理？</div><div class="a">
+    <ul><li>查锁：Oracle <code>v$lock</code>/<code>v$session</code>；金仓/GaussDB <code>pg_locks</code>/<code>pg_stat_activity</code>；达梦 <code>v$lock</code>。</li>
+    <li>找阻塞源：根据 blocking_session 找到根会话，确认业务是否可杀。</li>
+    <li>死锁：数据库通常自动检测并回滚一方；人工介入时优先杀代价小的事务。</li>
+    <li>根治：缩短事务、统一加锁顺序、减少大事务、加超时和重试。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q32</span>主备延迟越来越大，怎么排查？</div><div class="a">
+    <ul><li>查延迟指标：Oracle <code>v$dataguard_stats</code>；金仓/GaussDB <code>pg_stat_replication</code>；达梦 <code>v$dmwatcher</code>/日志差异。</li>
+    <li>看主库写入是否突增（大事务、批量导入）、网络带宽/延迟、备库 IO 和 CPU。</li>
+    <li>处置：拆分大事务、限流、提升网络/存储、临时改异步（评估 RPO）、扩容备库。</li>
+    <li>预防：延迟监控告警、批量任务错峰、定期演练。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q33</span>达梦/金仓/GaussDB 参数调优的重点分别是什么？</div><div class="a">
+    <ul><li><b>达梦：</b>MEMORY_POOL、BUFFER、SORT_BUF、HASH 区、工作线程数；关注 HASH 冲突和排序溢出。</li>
+    <li><b>金仓：</b>shared_buffers、work_mem、maintenance_work_mem、effective_cache_size、max_connections、autovacuum 相关。</li>
+    <li><b>GaussDB：</b>shared_buffers、work_mem、max_process_memory、并发控制、WLM 资源池、分布键和统计信息。</li>
+    <li>通用原则：先定位瓶颈，再调参数；每次只改一个，压测验证，记录基线。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q34</span>操作系统层怎么做适配调优？</div><div class="a">
+    <ul><li>内存：关闭/降低 swap，调整 <code>vm.swappiness</code>，大页 HugePages。</li>
+    <li>IO：IO 调度器（SSD 用 noop/none）、预读、文件系统挂载参数、独立磁盘放日志。</li>
+    <li>内核：共享内存 shmmax、信号量 semmni、文件句柄 nofile、进程数 nproc。</li>
+    <li>CPU/网络：NUMA 绑核、中断亲和、网络带宽和重传；用 top/vmstat/iostat/pidstat 对齐时间轴。</li></ul>
+  </div></div>
+
+  <h3 style="margin:26px 0 12px;color:var(--brand);font-size:17px">E. 云原生与自动化</h3>
+
+  <div class="qa"><div class="q"><span class="num">Q35</span>在 K8s 上跑数据库要注意什么？<span class="tag hot">高频</span></div><div class="a">
+    <ul><li>用 StatefulSet + Headless Service 保证稳定网络标识和有序启停。</li>
+    <li>数据必须落 PVC；核心库用高性能存储，注意 RWO/RWX 和节点亲和。</li>
+    <li>设置 request/limit、探针、优雅终止时间、反亲和分散主备。</li>
+    <li>用 Operator 管理部署、备份、扩缩容和切换；备份要落到对象存储并验证恢复。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q36</span>StatefulSet 和 Deployment 有什么区别？</div><div class="a">
+    <ul><li>StatefulSet 提供稳定 Pod 名（db-0、db-1）、稳定网络标识、稳定存储、有序部署/扩缩容。</li>
+    <li>Deployment 的 Pod 是无状态的、可互换的，不适合数据库主备角色。</li>
+    <li>数据库集群成员发现、主备角色、PVC 绑定都依赖 StatefulSet 的稳定性。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q37</span>PVC 挂载失败怎么排查？</div><div class="a">
+    <ul><li><code>kubectl describe pod</code> 看 Events；<code>kubectl get pvc</code> 看是否 Pending。</li>
+    <li>常见原因：StorageClass 不存在、容量不足、访问模式不匹配、节点亲和冲突、云盘可用区不一致。</li>
+    <li>再看 CSI 插件日志、后端存储权限和网络。</li>
+    <li>处置：修正 StorageClass/容量/亲和；不要直接删 PVC 以免数据丢失。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q38</span>数据库能不能用 HPA 做弹性伸缩？</div><div class="a">
+    <ul><li>不建议直接 HPA 扩数据库副本：有状态服务涉及数据一致性、集群成员变更、主备角色。</li>
+    <li>正确做法：扩只读副本、垂直扩容、存储扩容、Operator 受控扩缩容。</li>
+    <li>业务侧配合连接池、限流、读写分离；无状态应用才适合 HPA。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q39</span>你写过什么自动化脚本？怎么设计的？</div><div class="a">
+    <ul><li>举例：巡检（表空间、归档、会话、锁、主备延迟）、备份校验、日志清理、主备切换演练、数据迁移。</li>
+    <li>设计：配置分离、幂等、超时重试、结构化日志、异常告警、退出码。</li>
+    <li>落地：crontab / Jenkins / 运维平台定时调度；结果入库和可视化。</li>
+    <li>价值：把重复巡检从小时级降到分钟级，减少人为遗漏。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q40</span>监控告警体系怎么设计？</div><div class="a">
+    <ul><li>分层：基础资源（CPU/内存/IO/网络）、数据库（可用性、连接数、慢 SQL、锁、复制）、业务（交易量、失败率）。</li>
+    <li>分级：预警/严重/致命，不同通知渠道和升级策略。</li>
+    <li>收敛：去重、抑制、依赖收敛，避免告警风暴。</li>
+    <li>闭环：每条告警有处置手册和责任人，定期复盘误报漏报。</li></ul>
+  </div></div>
+
+  <h3 style="margin:26px 0 12px;color:var(--brand);font-size:17px">F. 迁移与项目经验</h3>
+
+  <div class="qa"><div class="q"><span class="num">Q41</span>Oracle 迁移到达梦，具体怎么做？<span class="tag plus">加分</span></div><div class="a">
+    <ul><li>评估：对象、数据量、SQL 复杂度、存储过程/包、字符集、时区。</li>
+    <li>改造：数据类型映射、语法兼容、函数替换、分页/ROWNUM、序列、大小写、空字符串。</li>
+    <li>迁移：DTS 做结构和全量，DMHS 做增量追平；先迁测试库做全链路验证。</li>
+    <li>验证：数据量/抽样/聚合校验、业务回归、性能压测、执行计划对比。</li>
+    <li>割接：停写 → 追平 → 校验 → 切连接 → 冒烟；保留原库和回退方案。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q42</span>迁移过程中最大的坑是什么？</div><div class="a">
+    <ul><li>兼容性：空字符串与 NULL、大小写、ROWNUM、存储过程、隐式转换。</li>
+    <li>性能：迁移后执行计划变化，原本走索引的 SQL 变成全表扫描。</li>
+    <li>数据一致性：增量追平后仍有少量差异，校验方案必须可量化。</li>
+    <li>回退：原库保留、反向同步、回退窗口，否则出问题很被动。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q43</span>迁移后怎么保证数据一致？</div><div class="a">
+    <ul><li>行数比对、主键/唯一键比对、金额/汇总类聚合校验、抽样明细比对。</li>
+    <li>增量阶段持续比对，割接前做最终一致性校验并留报告。</li>
+    <li>业务侧做功能回归和关键交易验证；异常数据有清单和处置方案。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q44</span>割接方案和回退方案怎么写？</div><div class="a">
+    <ul><li>割接：时间窗口、步骤、责任人、每步耗时、验证点、业务通知、应急预案。</li>
+    <li>回退：触发条件（校验不一致/关键报错/性能不达标）、回退步骤、数据反向同步、回退时限。</li>
+    <li>提前演练至少一轮，记录实际耗时；割接当天按 Runbook 执行，双人复核。</li></ul>
+  </div></div>
+
+  <div class="qa"><div class="q"><span class="num">Q45</span>讲一次你印象最深的故障处理。<span class="tag hot">必考</span></div><div class="a">
+    <ul><li>用 STAR：背景（系统/规模/影响）→ 现象（告警/报错/指标）→ 定位（分层排查、证据）→ 处置（止损、根治）→ 结果（量化恢复时间）→ 复盘（预防措施）。</li>
+    <li>建议选“主备延迟/CPU 打满/误删数据/迁移后性能下降”这类有技术含量的案例。</li>
+    <li>一定要有<b>量化结果</b>和<b>后续改进</b>，体现闭环意识。</li>
+    <li>不要编造；细节经不起追问反而扣分。</li></ul>
+  </div></div>
+</section>
+
+<!-- ================= 10 情景 ================= -->
+<section id="s10">
+  <div class="sec-head"><div class="sec-no">10</div><h2>6 个情景排障题</h2><span class="desc">先止损，再定位，后根治</span></div>
+
+  <div class="scene">
+    <h4>场景 1：应用突然报“数据库连接不上”</h4>
+    <ol>
+      <li><b>确认范围：</b>是所有应用还是单个应用？是所有节点还是单节点？</li>
+      <li><b>网络与监听：</b>ping/telnet 端口、监听状态、防火墙、VIP/SCAN、DNS。</li>
+      <li><b>实例状态：</b>进程是否在、告警日志、<code>v$instance</code>/<code>pg_isready</code>、是否处于 mount/恢复。</li>
+      <li><b>连接数：</b>是否达到 max_connections / processes 上限，是否有连接泄漏。</li>
+      <li><b>处置：</b>重启监听、清理空闲会话、扩容连接数、切备库；恢复后查根因并加连接池监控。</li>
+    </ol>
+  </div>
+
+  <div class="scene">
+    <h4>场景 2：数据库 CPU 持续 100%</h4>
+    <ol>
+      <li><b>止损：</b>确认影响业务后，先限流/杀高消耗会话/暂停批量任务。</li>
+      <li><b>定位：</b><code>top -Hp</code> 找线程 → 数据库内查活跃会话和当前 SQL → 看执行计划和等待事件。</li>
+      <li><b>常见根因：</b>缺索引全表扫描、并行度过高、硬解析、排序/Hash 溢出、锁自旋。</li>
+      <li><b>根治：</b>SQL 调优、加索引、收集统计信息、调整并行度和内存参数。</li>
+      <li><b>预防：</b>Top SQL 监控、慢 SQL 告警、发布前 SQL 审核。</li>
+    </ol>
+  </div>
+
+  <div class="scene">
+    <h4>场景 3：主备延迟持续增大</h4>
+    <ol>
+      <li><b>确认：</b>延迟从何时开始、是否持续、影响哪些只读业务。</li>
+      <li><b>查主库：</b>是否有大事务、批量导入、DDL、日志生成量突增。</li>
+      <li><b>查备库：</b>CPU/IO 是否打满、回放进程是否正常、是否有长查询阻塞回放。</li>
+      <li><b>查网络：</b>带宽、延迟、丢包、重传。</li>
+      <li><b>处置：</b>拆分大事务、限流、临时改异步（评估 RPO）、扩容备库、摘除延迟节点。</li>
+    </ol>
+  </div>
+
+  <div class="scene">
+    <h4>场景 4：表空间/归档空间快满了</h4>
+    <ol>
+      <li><b>确认：</b>哪个表空间、增长趋势、是否有临时段/大事务；归档是否已备份。</li>
+      <li><b>止损：</b>扩容数据文件/加盘；已备份归档按策略清理；暂停非核心批量任务。</li>
+      <li><b>根因：</b>数据增长、临时排序、归档保留策略、备份失败。</li>
+      <li><b>根治：</b>容量规划、分区/归档历史数据、加监控水位告警。</li>
+      <li><b>注意：</b>未备份的归档不能删；删数据前确认可恢复。</li>
+    </ol>
+  </div>
+
+  <div class="scene">
+    <h4>场景 5：误删了核心业务表</h4>
+    <ol>
+      <li><b>立即止损：</b>停止相关写入，避免覆盖可恢复窗口；通知业务和负责人。</li>
+      <li><b>保护现场：</b>记录操作时间、账号、SQL、影响范围。</li>
+      <li><b>快速恢复：</b>Oracle 回收站/Flashback；其他库用备份 + 归档恢复到临时库。</li>
+      <li><b>校验回写：</b>比对数据后回写生产，避免二次伤害。</li>
+      <li><b>复盘：</b>权限最小化、生产禁 delete 无 where、审计、变更审批。</li>
+    </ol>
+  </div>
+
+  <div class="scene">
+    <h4>场景 6：迁移后应用报错或性能下降</h4>
+    <ol>
+      <li><b>先回退还是先修：</b>看影响面和窗口，关键业务优先回退，非关键可快速修复。</li>
+      <li><b>报错：</b>看应用日志和数据库错误码，常见是类型、空字符串、大小写、函数不兼容。</li>
+      <li><b>性能：</b>对比迁移前后执行计划，检查统计信息、索引、参数、数据分布。</li>
+      <li><b>处置：</b>改写 SQL、补索引、收集统计信息、调整参数；必要时回退。</li>
+      <li><b>复盘：</b>兼容性评估清单、回归测试用例、割接前压测。</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ================= 11 南网特色 ================= -->
+<section id="s11">
+  <div class="sec-head"><div class="sec-no">11</div><h2>南方电网项目：特色与话术</h2><span class="desc">体现你做过功课</span></div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>11.1 项目背景关键词</h3>
+      <ul>
+        <li><b>数字电网 / 数字南网：</b>核心业务系统上云、数据集中、智能化运维。</li>
+        <li><b>信创国产化：</b>Oracle 存量逐步替代为达梦、金仓、GaussDB、PolarDB，多库并存。</li>
+        <li><b>业务范围：</b>覆盖广东、广西、云南、贵州、海南五省区，系统规模大、链路长。</li>
+        <li><b>稳定性要求：</b>营销、计量、调度等系统 7×24 运行，重大保供电期间零故障。</li>
+        <li><b>安全合规：</b>电力监控系统安全防护、等保 2.0、数据安全法、权限与审计。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>11.2 电力行业“十六字方针” <span class="tag plus">加分</span></h3>
+      <p style="font-size:16px;font-weight:700;color:var(--brand);letter-spacing:.06em">安全分区 · 网络专用 · 横向隔离 · 纵向认证</p>
+      <ul>
+        <li><b>安全分区：</b>生产控制大区与管理信息大区隔离，数据库部署位置要合规。</li>
+        <li><b>网络专用：</b>电力调度数据网等专用网络，禁止随意跨区访问。</li>
+        <li><b>横向隔离：</b>不同安全区之间用隔离装置，不是普通防火墙。</li>
+        <li><b>纵向认证：</b>上下级系统之间的身份认证和加密。</li>
+      </ul>
+      <div class="note"><b>怎么用：</b>被问到“电力行业数据库运维有什么特殊要求”时，先答这十六个字，再补“所以变更要审批、访问要最小权限、数据要分级分类、操作要审计”。</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>11.3 三条可直接用的话术</h3>
+    <div class="kv"><b>为什么选南网</b><span>“我一直做核心库运维和国产化迁移，南网正在做大规模信创替代和多库并存，这正好是我这几年积累的方向；而且电力行业对稳定性要求高，能把运维规范和高可用能力真正用起来。”</span></div>
+    <div class="kv"><b>怎么保证稳定</b><span>“我的做法是三件事：变更前有备份和回退、运行中有监控和巡检、故障后有预案和演练。核心库不做没验证过的变更，重要操作双人复核。”</span></div>
+    <div class="kv"><b>怎么面对 7×24</b><span>“我接受应急响应机制，也做过值班和夜间故障处理。我的习惯是把重复问题脚本化、把处置步骤预案化，这样夜间处理不依赖个人记忆，也能降低压力。”</span></div>
+    <div class="note gold"><b>提醒：</b>不要过度吹捧，也不要背稿感太重。用“我做过什么 + 和岗位怎么匹配”来表达，真实最重要。</div>
+  </div>
+</section>
+
+<!-- ================= 12 反问与禁忌 ================= -->
+<section id="s12">
+  <div class="sec-head"><div class="sec-no">12</div><h2>反问、收尾与面试禁忌</h2><span class="desc">最后 5 分钟也能加分</span></div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>12.1 三个高质量反问</h3>
+      <ol>
+        <li>“目前团队的数据库规模和技术栈分布大概是怎样的？国产化替代进行到哪个阶段了？”</li>
+        <li>“这个岗位入职后前三个月最重要的目标是什么？是保障存量稳定，还是推进迁移/自动化？”</li>
+        <li>“团队的值班和应急响应机制是怎样的？自动化运维平台建设到什么程度？”</li>
+      </ol>
+      <p class="small muted">不要一上来问薪资、加班、转正；这些可以等 HR 面或 offer 阶段再谈。</p>
+    </div>
+    <div class="card">
+      <h3>12.2 面试禁忌</h3>
+      <ul>
+        <li><b>不编造：</b>没做过的迁移/故障，不要硬说做过；被追问细节会露馅。</li>
+        <li><b>不抢功：</b>团队成果说清楚“我负责哪部分”，比“都是我做的”更可信。</li>
+        <li><b>不贬低：</b>不要说国产库“难用/不行”，也不要说前公司/前同事坏话。</li>
+        <li><b>不沉默：</b>不会的问题说“这块我了解不深，我的思路是……”，展示推理过程。</li>
+        <li><b>不空谈：</b>少说“精通”，多讲场景、动作、结果和数字。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>12.3 面试前 10 分钟速记</h3>
+    <div class="grid g2">
+      <div>
+        <ul>
+          <li>Oracle 端口 1521，DM 5236，金仓 54321。</li>
+          <li>DM 默认页 8KB、簇 16 页，初始化后页大小不可改。</li>
+          <li>Oracle 逻辑：表空间→段→区→块；内存：SGA+PGA。</li>
+          <li>RAC = 多实例共享存储 + Cache Fusion；不防存储单点。</li>
+          <li>DG 三模式：最大保护 / 最高可用 / 最大性能。</li>
+          <li>DM 高可用：Data Watch / DSC / MPP。</li>
+        </ul>
+      </div>
+      <div>
+        <ul>
+          <li>金仓 = PG 内核 + Oracle 兼容；工具 sys_ 前缀。</li>
+          <li>GaussDB = CN / DN / GTM / CM；分布键决定数据落点。</li>
+          <li>PolarDB = 计算存储分离 + 共享存储 + 一写多读。</li>
+          <li>备份 3-2-1；没恢复过的备份等于没有备份。</li>
+          <li>排障公式：止损 → 分层 → 证据 → 处置 → 复盘。</li>
+          <li>电力十六字：安全分区、网络专用、横向隔离、纵向认证。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 13 命令速查 ================= -->
+<section id="s13">
+  <div class="sec-head"><div class="sec-no">13</div><h2>命令速查表</h2><span class="desc">面试提到工具时能说出名字</span></div>
+
+  <div class="card" style="overflow-x:auto">
+    <table>
+      <thead><tr><th>任务</th><th>Oracle</th><th>达梦 DM8</th><th>金仓</th><th>GaussDB</th></tr></thead>
+      <tbody>
+        <tr><td>连接</td><td><code>sqlplus / as sysdba</code></td><td><code>disql SYSDBA/SYSDBA@ip:5236</code></td><td><code>ksql -U system -d test</code></td><td><code>gsql -d postgres -p 8000</code></td></tr>
+        <tr><td>启动</td><td><code>startup</code> / <code>srvctl start database</code></td><td><code>DmServiceDMSERVER start</code></td><td><code>sys_ctl start -D $DATA</code></td><td><code>gs_om -t start</code></td></tr>
+        <tr><td>停止</td><td><code>shutdown immediate</code></td><td><code>DmServiceDMSERVER stop</code></td><td><code>sys_ctl stop -D $DATA -m fast</code></td><td><code>gs_om -t stop</code></td></tr>
+        <tr><td>状态</td><td><code>select status from v$instance;</code></td><td><code>select status$ from v$instance;</code></td><td><code>sys_ctl status -D $DATA</code></td><td><code>gs_om -t status --detail</code></td></tr>
+        <tr><td>逻辑备份</td><td><code>expdp user/pwd directory=dp dumpfile=a.dmp</code></td><td><code>dexp user/pwd file=a.dmp</code></td><td><code>sys_dump -U user -f a.sql db</code></td><td><code>gs_dump -f a.sql db</code></td></tr>
+        <tr><td>物理备份</td><td><code>rman target /</code> → <code>backup database plus archivelog;</code></td><td><code>dmrman CTLSTMT="BACKUP DATABASE ..."</code></td><td><code>sys_rman -B ...</code> / <code>sys_basebackup</code></td><td><code>gs_basebackup</code> / Roach</td></tr>
+        <tr><td>会话</td><td><code>v$session</code> / <code>v$process</code></td><td><code>v$sessions</code></td><td><code>pg_stat_activity</code></td><td><code>pg_stat_activity</code></td></tr>
+        <tr><td>锁</td><td><code>v$lock</code> / <code>v$locked_object</code></td><td><code>v$lock</code> / <code>v$trx</code></td><td><code>pg_locks</code></td><td><code>pg_locks</code></td></tr>
+        <tr><td>主备</td><td><code>v$dataguard_stats</code> / <code>dgmgrl</code></td><td><code>v$dmwatcher</code> / <code>v$archived_log</code></td><td><code>pg_stat_replication</code></td><td><code>pg_stat_replication</code></td></tr>
+        <tr><td>执行计划</td><td><code>explain plan for ...</code> + <code>dbms_xplan</code></td><td><code>explain ...</code> / <code>v$sql</code></td><td><code>explain (analyze,buffers) ...</code></td><td><code>explain performance ...</code></td></tr>
+      </tbody>
+    </table>
+    <p class="small muted">命令细节以实际版本为准；面试时说清“工具名 + 用途”通常就够了，不必背全参数。</p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">南方电网 · 数据库运维工程师面试突击手册 · 内容依据公开技术资料与岗位 JD 整理，具体版本命令以实际环境为准</div>
+</footer>
+
+</body>
+</html>
