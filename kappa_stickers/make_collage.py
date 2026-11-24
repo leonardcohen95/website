@@ -1,7 +1,7 @@
 from PIL import Image
 import os
 
-PREVIEW = "/workspace/kappa_stickers/preview"
+PREVIEW = "/workspace/kappa_stickers/preview_hd"
 OUT = "/workspace/kappa_stickers/总览预览.png"
 
 files = [
